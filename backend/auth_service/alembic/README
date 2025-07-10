@@ -1,0 +1,33 @@
+Generic single-database configuration.
+
+This directory created by Alembic is where database migration scripts
+are stored.  See the Alembic tutorial at http://alembic.sqlalchemy.org
+for more information.
+
+Within the ``versions/`` subdirectory, each file is known as a "revision",
+and represents a series of steps to upgrade or downgrade a database -
+these files are historical, meaning, they are each processed in order
+to represent a particular version of the database.
+
+The file ``env.py`` is a Python script that is run whenever the ``alembic``
+command-line tool is invoked.   It provides a programmatic interface
+to the migration process, including the ability to read from a ``.ini``
+file as well as to set up the Python logging configuration.  Most importantly,
+it is the script that actually defines how migrations are to be run,
+providing a ``context`` object to revision scripts that provides the
+directives that actually issue SQL to the database.
+
+The file ``script.py.mako`` is a Mako template file which is used
+to generate new revision files.  Adjust this template to suit
+the needs of new revision files.
+
+When the ``alembic`` command-line tool is run, it first looks for an
+``alembic.ini`` file in the current directory.  This file is optional
+in modern versions of Alembic, as the ``-c`` option can be passed to
+the ``alembic`` command line tool.  However, it's convenient to have it
+present.
+
+The ``alembic.ini`` file normally refers to the ``env.py`` script,
+which in turn refers to the ``script.py.mako`` template, and it also
+contains the ``sqlalchemy.url`` configuration item which points to the
+target database.

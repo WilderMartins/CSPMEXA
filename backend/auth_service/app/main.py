@@ -1,8 +1,7 @@
 from fastapi import FastAPI
 from app.core.config import settings
 from app.db.session import engine, Base  # , create_db_and_tables
-
-# from app.api.v1 import auth_controller # Será importado quando o controller estiver pronto
+from app.api.v1 import auth_controller # Importado
 
 
 # --- Database table creation (for development) ---
@@ -39,7 +38,7 @@ async def health_check():
 
 
 # Incluir roteadores da API
-# app.include_router(auth_controller.router, prefix=settings.API_V1_STR, tags=["Auth"]) # Será descomentado
+app.include_router(auth_controller.router, prefix=settings.API_V1_STR, tags=["Authentication"])
 
 if __name__ == "__main__":
     import uvicorn

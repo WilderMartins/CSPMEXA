@@ -9,3 +9,5 @@ passlib[bcrypt]
 pyotp
 python-multipart
 httpx
+alembic
+python-dotenv

@@ -16,7 +16,8 @@ class User(Base):
     google_id = Column(String, unique=True, index=True, nullable=True)
 
     is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)  # RBAC simples: Admin/Superuser
+    is_superuser = Column(Boolean, default=False)  # Pode ser usado para um super admin
+    role = Column(String, default="user", nullable=False) # Papel do usuário: "user", "admin", etc.
 
     # MFA (TOTP)
     mfa_secret = Column(String, nullable=True)
