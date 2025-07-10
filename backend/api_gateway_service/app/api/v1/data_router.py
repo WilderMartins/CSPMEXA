@@ -7,8 +7,11 @@ from app.services.http_client import (
 from app.core.security import get_current_user, TokenData
 
 # Importar os schemas copiados/criados para o gateway
-from app.schemas import collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas, policy_engine_alert_schema
-
+from app.schemas import (
+    collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas,
+    collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas,
+    policy_engine_alert_schema
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -377,6 +380,181 @@ async def analyze_iam_users_data_orchestrated(
         raise HTTPException(status_code=500, detail=f"Gateway failed to analyze {service_name} data: {str(e)}")
     return alerts
 
-# TODO: Adicionar endpoints de orquestração para IAM Roles, IAM Policies.
-# TODO: Adicionar um endpoint "/analyze/aws/all" que chama todos os coletores e analisadores.
-# Ex: @router.post("/analyze/aws/all", response_model=Any, name="orchestrator:analyze_all_aws")
+# --- Endpoints de Coleta GCP (Proxy para Collector Service) ---
+GCP_COLLECT_ROUTER_PREFIX = "/collect/gcp"
+
+@router.get(f"{GCP_COLLECT_ROUTER_PREFIX}/storage/buckets", response_model=List[collector_gcp_storage_schemas.GCPStorageBucketData], name="gcp_collector:get_storage_buckets")
+async def collect_gcp_storage_buckets_gateway(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Google Cloud Storage buckets."""
+    # O collector_endpoint deve ser o path no collector service, não incluindo o prefixo do gateway.
+    # O _proxy_collector_request já adiciona o base_url do collector_service_client.
+    return await _proxy_collector_request("GET", "/collect/gcp/storage/buckets", current_user, request, params={"project_id": project_id} if project_id else None)
+
+@router.get(f"{GCP_COLLECT_ROUTER_PREFIX}/compute/instances", response_model=List[collector_gcp_compute_schemas.GCPComputeInstanceData], name="gcp_collector:get_compute_instances")
+async def collect_gcp_compute_instances_gateway(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de instâncias de VM do Google Compute Engine."""
+    return await _proxy_collector_request("GET", "/collect/gcp/compute/instances", current_user, request, params={"project_id": project_id} if project_id else None)
+
+@router.get(f"{GCP_COLLECT_ROUTER_PREFIX}/compute/firewalls", response_model=List[collector_gcp_compute_schemas.GCPFirewallData], name="gcp_collector:get_compute_firewalls")
+async def collect_gcp_compute_firewalls_gateway(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de regras de Firewall VPC do Google Cloud."""
+    return await _proxy_collector_request("GET", "/collect/gcp/compute/firewalls", current_user, request, params={"project_id": project_id} if project_id else None)
+
+@router.get(f"{GCP_COLLECT_ROUTER_PREFIX}/iam/project-policies", response_model=Optional[collector_gcp_iam_schemas.GCPProjectIAMPolicyData], name="gcp_collector:get_project_iam_policy")
+async def collect_gcp_project_iam_policy_gateway(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar a política IAM a nível de projeto do Google Cloud."""
+    return await _proxy_collector_request("GET", "/collect/gcp/iam/project-policies", current_user, request, params={"project_id": project_id} if project_id else None)
+
+
+# --- Endpoints de Análise GCP (Orquestração) ---
+GCP_ANALYZE_ROUTER_PREFIX = "/analyze/gcp"
+
+async def _orchestrate_gcp_analysis(
+    service_name_in_engine: str, # ex: "gcp_storage_buckets"
+    collector_path_suffix: str,  # ex: "storage/buckets" -> será prefixado com /collect/gcp/
+    request: Request,
+    project_id: Optional[str], # Este é o account_id para o policy engine
+    current_user: TokenData
+) -> List[policy_engine_alert_schema.Alert]:
+    downstream_headers = {}
+
+    # 1. Chamar o Collector Service
+    collected_data: Any
+    try:
+        collector_full_path = f"/collect/gcp/{collector_path_suffix}"
+        # Parâmetros para o collector service devem ser passados corretamente.
+        # O project_id aqui é o que o usuário final (ou frontend) fornece para a análise.
+        collector_params = {"project_id": project_id} if project_id else {}
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params, headers=downstream_headers)
+
+        if collector_response.status_code != 200:
+            error_detail = collector_response.text
+            try: error_detail = collector_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=collector_response.status_code,
+                detail=f"Error from Collector Service (GCP {collector_path_suffix}) for project {project_id or 'default'}: {error_detail}",
+            )
+        collected_data = collector_response.json()
+        # Para coleções de recursos, lista vazia é ok. Para IAM de projeto, None é ok se o collector não encontrar.
+        if not collected_data and service_name_in_engine != "gcp_iam_project_policies":
+             return []
+    except HTTPException as e:
+        logger.error(f"HTTPException during GCP {collector_path_suffix} collection for project {project_id or 'default'} in orchestration: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Error calling Collector Service (GCP {collector_path_suffix}) for project {project_id or 'default'} during orchestration")
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to collect GCP {collector_path_suffix} data for analysis: {str(e)}"
+        )
+
+    # 2. Enviar os dados coletados para o Policy Engine Service
+    analysis_payload = {
+        "provider": "gcp",
+        "service": service_name_in_engine,
+        "data": collected_data, # collected_data pode ser None para gcp_iam_project_policies
+        "account_id": project_id # Passar o project_id da query como account_id para o policy engine
+    }
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
+        if engine_response.status_code != 200:
+            error_detail = engine_response.text
+            try: error_detail = engine_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=engine_response.status_code,
+                detail=f"Error from Policy Engine Service (GCP {service_name_in_engine} analysis for project {project_id or 'default'}): {error_detail}",
+            )
+        alerts = engine_response.json()
+    except HTTPException as e:
+        logger.error(f"HTTPException during GCP {service_name_in_engine} analysis for project {project_id or 'default'} in orchestration: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Error calling Policy Engine Service (GCP {service_name_in_engine}) for project {project_id or 'default'} during orchestration")
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to analyze GCP {service_name_in_engine} data: {str(e)}"
+        )
+    return alerts
+
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/storage/buckets", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_storage_buckets")
+async def analyze_gcp_storage_buckets_orchestrated(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Google Cloud Storage buckets."""
+    if not project_id:
+        raise HTTPException(status_code=400, detail="GCP Project ID is required for analysis.")
+    return await _orchestrate_gcp_analysis(
+        service_name_in_engine="gcp_storage_buckets",
+        collector_path_suffix="storage/buckets",
+        request=request, project_id=project_id, current_user=current_user
+    )
+
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/instances", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_compute_instances")
+async def analyze_gcp_compute_instances_orchestrated(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de instâncias de VM do Google Compute Engine."""
+    if not project_id:
+        raise HTTPException(status_code=400, detail="GCP Project ID is required for analysis.")
+    return await _orchestrate_gcp_analysis(
+        service_name_in_engine="gcp_compute_instances",
+        collector_path_suffix="compute/instances",
+        request=request, project_id=project_id, current_user=current_user
+    )
+
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/firewalls", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_compute_firewalls")
+async def analyze_gcp_compute_firewalls_orchestrated(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de regras de Firewall VPC do Google Cloud."""
+    if not project_id:
+        raise HTTPException(status_code=400, detail="GCP Project ID is required for analysis.")
+    return await _orchestrate_gcp_analysis(
+        service_name_in_engine="gcp_compute_firewalls",
+        collector_path_suffix="compute/firewalls",
+        request=request, project_id=project_id, current_user=current_user
+    )
+
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/iam/project-policies", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_project_iam_policy")
+async def analyze_gcp_project_iam_policy_orchestrated(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise da política IAM a nível de projeto do Google Cloud."""
+    if not project_id:
+        raise HTTPException(status_code=400, detail="GCP Project ID is required for analysis.")
+    return await _orchestrate_gcp_analysis(
+        service_name_in_engine="gcp_iam_project_policies", # Deve corresponder ao 'service' esperado pelo Policy Engine
+        collector_path_suffix="iam/project-policies",
+        request=request, project_id=project_id, current_user=current_user
+    )
+
+
+# TODO: Adicionar endpoints de orquestração para AWS IAM Roles, IAM Policies.
+# TODO: Adicionar um endpoint "/analyze/aws/all" e "/analyze/gcp/all" que chamam todos os coletores e analisadores para o respectivo provedor.
+# Ex: @router.post("/analyze/gcp/all", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_all_gcp")

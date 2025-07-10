@@ -1,10 +1,22 @@
 from typing import List, Optional, Dict, Any
-from app.schemas.input_data_schema import AnalysisRequest, S3BucketDataInput, EC2InstanceDataInput, EC2SecurityGroupDataInput, IAMUserDataInput
+from app.schemas.input_data_schema import (
+    AnalysisRequest,
+    S3BucketDataInput, EC2InstanceDataInput, EC2SecurityGroupDataInput, IAMUserDataInput,
+    GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput # GCP Inputs
+)
 from app.schemas.alert_schema import Alert
 from app.engine import aws_s3_policies, aws_ec2_policies, aws_iam_policies
+from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies # GCP Policies
 import logging
 
 logger = logging.getLogger(__name__)
+# Helper para garantir que os tipos de dados para IAMRoleDataInput e IAMPolicyDataInput existam
+# (se não foram definidos completamente em input_data_schema.py, isso evitará NameError)
+try:
+    from app.schemas.input_data_schema import IAMRoleDataInput, IAMPolicyDataInput
+except ImportError:
+    IAMRoleDataInput = dict # Fallback
+    IAMPolicyDataInput = dict # Fallback
 
 class PolicyEngine:
     def __init__(self):
@@ -116,10 +128,55 @@ class PolicyEngine:
                     pass # Remover pass quando a avaliação de políticas gerenciadas estiver pronta
             else:
                 logger.warning(f"Unsupported AWS service for analysis: {service}")
+
+        elif provider == "gcp":
+            if service == "gcp_storage_buckets": # Nome do serviço como definido no AnalysisRequest
+                if not all(isinstance(item, GCPStorageBucketDataInput) for item in data):
+                    logger.error("Data for gcp_storage_buckets is not List[GCPStorageBucketDataInput]. Skipping.")
+                else:
+                    storage_alerts = gcp_storage_policies.evaluate_gcp_storage_policies(
+                        gcp_buckets_data=data, # type: ignore
+                        project_id=account_id # Passando o account_id como project_id
+                    )
+                    alerts.extend(storage_alerts)
+
+            elif service == "gcp_compute_instances":
+                if not all(isinstance(item, GCPComputeInstanceDataInput) for item in data):
+                    logger.error("Data for gcp_compute_instances is not List[GCPComputeInstanceDataInput]. Skipping.")
+                else:
+                    instance_alerts = gcp_compute_policies.evaluate_gcp_compute_instance_policies(
+                        instances_data=data, # type: ignore
+                        project_id=account_id
+                    )
+                    alerts.extend(instance_alerts)
+
+            elif service == "gcp_compute_firewalls":
+                if not all(isinstance(item, GCPFirewallDataInput) for item in data):
+                    logger.error("Data for gcp_compute_firewalls is not List[GCPFirewallDataInput]. Skipping.")
+                else:
+                    firewall_alerts = gcp_compute_policies.evaluate_gcp_firewall_policies(
+                        firewalls_data=data, # type: ignore
+                        project_id=account_id
+                    )
+                    alerts.extend(firewall_alerts)
+
+            elif service == "gcp_iam_project_policies":
+                # data aqui é Optional[GCPProjectIAMPolicyDataInput], não uma lista
+                if data is not None and not isinstance(data, GCPProjectIAMPolicyDataInput): # type: ignore
+                     logger.error("Data for gcp_iam_project_policies is not GCPProjectIAMPolicyDataInput. Skipping.")
+                else:
+                    # data pode ser None se a coleta falhou ou não retornou dados
+                    iam_alerts = gcp_iam_policies.evaluate_gcp_project_iam_policies(
+                        project_iam_data=data, # type: ignore
+                        project_id=account_id
+                    )
+                    alerts.extend(iam_alerts)
+            else:
+                logger.warning(f"Unsupported GCP service for analysis: {service}")
         else:
             logger.warning(f"Unsupported provider for analysis: {provider}")
 
-        logger.info(f"Analysis complete for {provider}/{service}. Found {len(alerts)} potential alerts.")
+        logger.info(f"Analysis complete for {provider}/{service} (Account: {account_id or 'N/A'}). Found {len(alerts)} potential alerts.")
         return alerts
 
 # Instância global do motor (pode ser gerenciada por dependência FastAPI se necessário)

@@ -17,10 +17,13 @@ const DashboardPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
-  const { t } = useTranslation(); // Hook de tradução
+  const { t } = useTranslation();
+
+  // Estado para o GCP Project ID
+  const [gcpProjectId, setGcpProjectId] = useState<string>('');
 
   const apiClient = axios.create({
-    baseURL: '', // O proxy do Vite cuidará do redirecionamento para /api/v1
+    baseURL: '',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('authToken')}`
     }
@@ -43,22 +46,32 @@ const DashboardPage: React.FC = () => {
 
   const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
 
-  const handleAnalysis = async (servicePath: string, analysisType: string) => {
+  const handleAnalysis = async (provider: 'aws' | 'gcp', servicePath: string, analysisType: string, projectId?: string) => {
     setIsLoading(true);
     setError(null);
-    setAlerts([]); // Limpa alertas anteriores antes de nova análise
+    setAlerts([]);
     setCurrentAnalysisType(analysisType);
+
+    let url = `/api/v1/analyze/${provider}/${servicePath}`;
+    if (provider === 'gcp') {
+      if (!projectId) {
+        setError(t('dashboardPage.gcpProjectIdRequired'));
+        setIsLoading(false);
+        return;
+      }
+      url += `?project_id=${encodeURIComponent(projectId)}`;
+    }
+
     try {
-      // O payload vazio {} é importante para POST se não houver corpo, mas a API espera.
-      const response = await apiClient.post(`/api/v1/analyze/aws/${servicePath}`, {});
+      const response = await apiClient.post(url, {}); // POST request, body is empty for now
       setAlerts(response.data || []);
       if (response.data.length === 0) {
         setError(t('dashboardPage.noAlertsFor', { type: analysisType }));
       }
     } catch (err: any) {
-      console.error(`Erro ao analisar ${analysisType}:`, err);
+      console.error(`Erro ao analisar ${analysisType} (${provider}):`, err);
       const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts');
-      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, error: errorMessage }));
+      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, provider: provider.toUpperCase(), error: errorMessage }));
     } finally {
       setIsLoading(false);
     }
@@ -73,20 +86,51 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      <div className="analysis-buttons" style={{ marginBottom: '20px' }}>
-        <button onClick={() => handleAnalysis('s3', 'S3 Buckets')} disabled={isLoading}>
-          {isLoading && currentAnalysisType === 'S3 Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeS3Button')}
-        </button>
-        <button onClick={() => handleAnalysis('ec2/instances', 'EC2 Instances')} disabled={isLoading} style={{ marginLeft: '10px' }}>
-          {isLoading && currentAnalysisType === 'EC2 Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2InstancesButton')}
-        </button>
-        <button onClick={() => handleAnalysis('ec2/security-groups', 'EC2 Security Groups')} disabled={isLoading} style={{ marginLeft: '10px' }}>
-          {isLoading && currentAnalysisType === 'EC2 Security Groups' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2SGsButton')}
-        </button>
-        <button onClick={() => handleAnalysis('iam/users', 'IAM Users')} disabled={isLoading} style={{ marginLeft: '10px' }}>
-          {isLoading && currentAnalysisType === 'IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
-        </button>
-        {/* Adicionar botões para IAM Roles e IAM Policies quando prontos */}
+      <div className="aws-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+        <h3>{t('dashboardPage.awsAnalysisTitle')}</h3>
+        <div className="analysis-buttons" style={{ marginTop: '10px' }}>
+          <button onClick={() => handleAnalysis('aws', 's3', 'AWS S3 Buckets')} disabled={isLoading}>
+            {isLoading && currentAnalysisType === 'AWS S3 Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeS3Button')}
+          </button>
+          <button onClick={() => handleAnalysis('aws', 'ec2/instances', 'AWS EC2 Instances')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'AWS EC2 Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2InstancesButton')}
+          </button>
+          <button onClick={() => handleAnalysis('aws', 'ec2/security-groups', 'AWS EC2 Security Groups')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'AWS EC2 Security Groups' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2SGsButton')}
+          </button>
+          <button onClick={() => handleAnalysis('aws', 'iam/users', 'AWS IAM Users')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'AWS IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
+          </button>
+        </div>
+      </div>
+
+      <div className="gcp-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+        <h3>{t('dashboardPage.gcpAnalysisTitle')}</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <label htmlFor="gcpProjectId" style={{ marginRight: '10px' }}>{t('dashboardPage.gcpProjectIdLabel')}:</label>
+          <input
+            type="text"
+            id="gcpProjectId"
+            value={gcpProjectId}
+            onChange={(e) => setGcpProjectId(e.target.value)}
+            placeholder={t('dashboardPage.gcpProjectIdPlaceholder')}
+            style={{ padding: '5px', minWidth: '250px' }}
+          />
+        </div>
+        <div className="analysis-buttons" style={{ marginTop: '10px' }}>
+          <button onClick={() => handleAnalysis('gcp', 'storage/buckets', 'GCP Storage Buckets', gcpProjectId)} disabled={isLoading || !gcpProjectId}>
+            {isLoading && currentAnalysisType === 'GCP Storage Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPStorageButton')}
+          </button>
+          <button onClick={() => handleAnalysis('gcp', 'compute/instances', 'GCP Compute Instances', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'GCP Compute Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPInstancesButton')}
+          </button>
+          <button onClick={() => handleAnalysis('gcp', 'compute/firewalls', 'GCP Compute Firewalls', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'GCP Compute Firewalls' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPFirewallsButton')}
+          </button>
+          <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+            {isLoading && currentAnalysisType === 'GCP Project IAM' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPIAMButton')}
+          </button>
+        </div>
       </div>
 
       {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentAnalysisType })}</p>}

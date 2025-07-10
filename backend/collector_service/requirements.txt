@@ -9,3 +9,10 @@ pytest
 pytest-asyncio # For testing async code with pytest
 moto[s3,ec2,iam] # Specify extras for the services we'll mock
 httpx # For TestClient in API tests
+
+# GCP Dependencies
+google-cloud-asset
+google-cloud-storage
+google-cloud-compute
+google-api-python-client
+google-auth

@@ -25,13 +25,21 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **S3:** Verificações para ACLs públicas, políticas públicas, versionamento desabilitado, logging desabilitado.
     *   **EC2:** Verificações para Security Groups com acesso público total ou a portas específicas (SSH, RDP), instâncias com IP público, instâncias sem perfil IAM.
     *   **IAM Users:** Verificações para MFA desabilitado, chaves de acesso não utilizadas, chaves de acesso ativas para usuário root.
+*   **Coleta de Dados GCP (Google Cloud Platform):**
+    *   **Cloud Storage:** Detalhes de buckets (IAM, versionamento, logging).
+    *   **Compute Engine:** Detalhes de VMs (IPs, Service Accounts, tags), Firewalls VPC (regras).
+    *   **IAM:** Políticas IAM a nível de projeto.
+*   **Motor de Políticas GCP (Básico):**
+    *   **Cloud Storage:** Verificações para buckets públicos (IAM), versionamento desabilitado, logging desabilitado.
+    *   **Compute Engine:** Verificações para VMs com IP público, VMs com Service Account padrão e acesso total, Firewalls VPC permitindo acesso público irrestrito.
+    *   **IAM (Projeto):** Verificações para membros externos (`allUsers`, `allAuthenticatedUsers`) com papéis primitivos (Owner, Editor, Viewer).
 *   **API Gateway:**
-    *   Proxy para todos os endpoints de coleta do `collector-service`.
-    *   Endpoints de orquestração para coletar e analisar dados de S3, EC2 (Instâncias e SGs) e Usuários IAM.
+    *   Proxy para endpoints de coleta AWS e GCP.
+    *   Endpoints de orquestração para coletar e analisar dados AWS (S3, EC2 Instâncias/SGs, Usuários IAM) e GCP (Storage Buckets, Compute VMs/Firewalls, IAM de Projeto).
     *   Proteção de endpoints relevantes com JWT.
 *   **Frontend (Básico):**
     *   Página de login e callback OAuth.
-    *   Dashboard para acionar análises (S3, EC2 Instâncias, SGs, Usuários IAM) e visualizar alertas em tabela.
+    *   Dashboard para acionar análises AWS e GCP (requer input do Project ID para GCP) e visualizar alertas.
     *   Internacionalização (Inglês, Português-BR).
 
 ## Primeiros Passos (Ambiente de Desenvolvimento)
@@ -44,8 +52,9 @@ Esta seção descreve como configurar e rodar o ambiente de desenvolvimento loca
 *   Python 3.9+ e Pip
 *   Node.js (v18+) e npm (ou yarn)
 *   Docker e Docker Compose (para rodar dependências como PostgreSQL e, opcionalmente, os serviços da aplicação).
-*   Credenciais AWS configuradas localmente (para o `collector-service` acessar a AWS). Configure via variáveis de ambiente (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` se aplicável, `AWS_REGION`) ou arquivo `~/.aws/credentials`.
-*   Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados para o `auth-service`.
+*   **Credenciais AWS:** Configuradas localmente para o `collector-service` acessar a AWS (via variáveis de ambiente ou `~/.aws/credentials`).
+*   **Credenciais GCP:** Um arquivo JSON de chave de Service Account do GCP. A Service Account deve ter permissões de leitura para os serviços a serem monitorados (Cloud Asset, Storage, Compute, IAM). Defina a variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS` para o caminho deste arquivo JSON.
+*   **Google OAuth (para `auth-service`):** Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados.
 
 ### 1. Clone o Repositório
 
@@ -80,6 +89,7 @@ Cada microsserviço backend está localizado em `backend/<nome_do_servico>/`.
         *   `AWS_REGION_NAME`: Região AWS padrão (ex: `us-east-1`).
         *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: Opcional se usando perfis IAM ou variáveis de ambiente globais da AWS.
         *   `POLICY_ENGINE_URL`: `http://localhost:8002/api/v1` (URL base do policy-engine).
+        *   **Nota para GCP:** A autenticação do `collector-service` para GCP é primariamente via variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS`. Não há entradas específicas no `.env.example` para chaves GCP.
     *   **`policy_engine_service/.env`:** Geralmente não requer configuração específica no `.env` para o MVP.
     *   **`api_gateway_service/.env`:**
         *   `AUTH_SERVICE_URL`, `COLLECTOR_SERVICE_URL`, `POLICY_ENGINE_SERVICE_URL`: Verifique se apontam para as portas corretas dos outros serviços locais.
@@ -141,9 +151,9 @@ O frontend é uma aplicação React (Vite) localizada em `frontend/webapp/`.
 
 Quando os serviços backend estiverem rodando, suas documentações OpenAPI (Swagger UI) estarão disponíveis nos seguintes endpoints:
 *   **Auth Service:** `http://localhost:8000/docs`
-*   **Collector Service:** `http://localhost:8001/docs`
+*   **Collector Service:** `http://localhost:8001/docs` (Inclui endpoints para AWS e GCP)
 *   **Policy Engine Service:** `http://localhost:8002/docs`
-*   **API Gateway Service:** `http://localhost:8050/docs` (Este é o mais relevante para o frontend)
+*   **API Gateway Service:** `http://localhost:8050/docs` (Ponto de entrada principal, documenta todos os endpoints proxy e de orquestração para AWS e GCP)
 
 *(Nota: Para um ambiente de produção, todos os serviços seriam containerizados e orquestrados de forma mais robusta, por exemplo, com um `docker-compose.yml` completo para todos os serviços ou Kubernetes.)*
 

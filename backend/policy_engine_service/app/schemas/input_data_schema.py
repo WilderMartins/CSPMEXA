@@ -156,23 +156,191 @@ SupportedDataTypes = Union[
     List[S3BucketDataInput],
     List[EC2InstanceDataInput],
     List[EC2SecurityGroupDataInput],
-    List[IAMUserDataInput]
-    # Adicionar List[IAMRoleDataInput], List[IAMPolicyDataInput] quando prontos
+    List[IAMUserDataInput],
+    # Adicionar List[IAMRoleDataInput], List[IAMPolicyDataInput] quando prontos para AWS
+
+    # Tipos de Dados GCP
+    List['GCPStorageBucketDataInput'],
+    List['GCPComputeInstanceDataInput'],
+    List['GCPFirewallDataInput'],
+    Optional['GCPProjectIAMPolicyDataInput'] # IAM de projeto é um objeto único, não uma lista
 ]
 
+# --- GCP Schemas (devem espelhar os do collector_service/app/schemas/gcp_*.py) ---
+
+# GCP Storage
+class GCPBucketIAMBindingInput(BaseModel):
+    role: str
+    members: List[str]
+    condition: Optional[Dict[str, Any]] = None
+
+class GCPBucketIAMPolicyInput(BaseModel):
+    version: Optional[int] = None
+    bindings: List[GCPBucketIAMBindingInput] = []
+    etag: Optional[str] = None
+
+class GCPBucketVersioningInput(BaseModel):
+    enabled: bool
+
+class GCPBucketLoggingInput(BaseModel):
+    log_bucket: Optional[str] = None
+    log_object_prefix: Optional[str] = None
+
+class GCPBucketWebsiteInput(BaseModel):
+    main_page_suffix: Optional[str] = None
+    not_found_page: Optional[str] = None
+
+class GCPBucketRetentionPolicyInput(BaseModel):
+    retention_period: Optional[int] = None
+    effective_time: Optional[datetime] = None
+    is_locked: Optional[bool] = None
+
+class GCPStorageBucketDataInput(BaseModel):
+    id: str
+    name: str
+    project_number: Optional[str] = None
+    location: str
+    storage_class: str = Field(alias="storageClass")
+    time_created: datetime = Field(alias="timeCreated")
+    updated: datetime
+    iam_policy: Optional[GCPBucketIAMPolicyInput] = None
+    versioning: Optional[GCPBucketVersioningInput] = None
+    logging: Optional[GCPBucketLoggingInput] = None
+    website_configuration: Optional[GCPBucketWebsiteInput] = Field(None, alias="website")
+    retention_policy: Optional[GCPBucketRetentionPolicyInput] = Field(None, alias="retentionPolicy")
+    is_public_by_iam: Optional[bool] = None
+    public_iam_details: List[str] = []
+    labels: Optional[Dict[str, str]] = None
+    error_details: Optional[str] = None
+    class Config:
+        populate_by_name = True
+
+# GCP Compute Instances
+class GCPComputeNetworkInterfaceAccessConfigInput(BaseModel):
+    type: Optional[str] = None
+    name: Optional[str] = None
+    nat_ip: Optional[str] = Field(None, alias="natIP")
+    class Config:
+        populate_by_name = True
+
+class GCPComputeNetworkInterfaceInput(BaseModel):
+    name: Optional[str] = None
+    network: Optional[str] = None
+    subnetwork: Optional[str] = None
+    network_ip: Optional[str] = Field(None, alias="networkIP")
+    access_configs: Optional[List[GCPComputeNetworkInterfaceAccessConfigInput]] = Field(None, alias="accessConfigs")
+    class Config:
+        populate_by_name = True
+
+class GCPComputeAttachedDiskInitializeParamsInput(BaseModel):
+    disk_name: Optional[str] = Field(None, alias="diskName")
+    disk_size_gb: Optional[str] = Field(None, alias="diskSizeGb")
+    disk_type: Optional[str] = Field(None, alias="diskType")
+    source_image: Optional[str] = Field(None, alias="sourceImage")
+    class Config:
+        populate_by_name = True
+
+class GCPComputeAttachedDiskInput(BaseModel):
+    type: Optional[str] = None
+    mode: Optional[str] = None
+    source: Optional[str] = None
+    device_name: Optional[str] = Field(None, alias="deviceName")
+    boot: Optional[bool] = None
+    auto_delete: Optional[bool] = Field(None, alias="autoDelete")
+    initialize_params: Optional[GCPComputeAttachedDiskInitializeParamsInput] = Field(None, alias="initializeParams")
+    class Config:
+        populate_by_name = True
+
+class GCPComputeServiceAccountInput(BaseModel):
+    email: Optional[str] = None
+    scopes: Optional[List[str]] = None
+
+class GCPComputeSchedulingInput(BaseModel):
+    on_host_maintenance: Optional[str] = Field(None, alias="onHostMaintenance")
+    automatic_restart: Optional[bool] = Field(None, alias="automaticRestart")
+    preemptible: Optional[bool] = None
+    class Config:
+        populate_by_name = True
+
+class GCPComputeInstanceDataInput(BaseModel):
+    id: str
+    name: str
+    zone: str # No collector é a URL completa, aqui esperamos o nome extraído.
+    machine_type: str = Field(alias="machineType") # No collector é a URL, aqui esperamos o nome extraído.
+    status: str
+    creation_timestamp: datetime = Field(alias="creationTimestamp")
+    can_ip_forward: Optional[bool] = Field(None, alias="canIpForward")
+    deletion_protection: Optional[bool] = Field(None, alias="deletionProtection")
+    network_interfaces: Optional[List[GCPComputeNetworkInterfaceInput]] = Field(None, alias="networkInterfaces")
+    disks: Optional[List[GCPComputeAttachedDiskInput]] = None
+    service_accounts: Optional[List[GCPComputeServiceAccountInput]] = Field(None, alias="serviceAccounts")
+    scheduling: Optional[GCPComputeSchedulingInput] = None
+    tags_items: Optional[List[str]] = None # No collector é tags_items
+    labels: Optional[Dict[str, str]] = None
+    project_id: str
+    # Campos que o collector extrai e adiciona:
+    extracted_zone: str
+    extracted_machine_type: str
+    public_ip_addresses: List[str] = []
+    private_ip_addresses: List[str] = []
+    error_details: Optional[str] = None
+    class Config:
+        populate_by_name = True
+
+# GCP Compute Firewalls
+class GCPFirewallAllowedRuleInput(BaseModel):
+    ip_protocol: str = Field(alias="IPProtocol")
+    ports: Optional[List[str]] = None
+    class Config:
+        populate_by_name = True
+
+class GCPFirewallDeniedRuleInput(BaseModel):
+    ip_protocol: str = Field(alias="IPProtocol")
+    ports: Optional[List[str]] = None
+    class Config:
+        populate_by_name = True
+
+class GCPFirewallLogConfigInput(BaseModel):
+    enable: bool
+    metadata: Optional[str] = None
+
+class GCPFirewallDataInput(BaseModel):
+    id: str
+    name: str
+    network: str # No collector é a URL, aqui esperamos o nome extraído.
+    priority: int
+    direction: str
+    allowed: Optional[List[GCPFirewallAllowedRuleInput]] = None
+    denied: Optional[List[GCPFirewallDeniedRuleInput]] = None
+    source_ranges: Optional[List[str]] = Field(None, alias="sourceRanges")
+    destination_ranges: Optional[List[str]] = Field(None, alias="destinationRanges")
+    source_tags: Optional[List[str]] = Field(None, alias="sourceTags")
+    target_tags: Optional[List[str]] = Field(None, alias="targetTags")
+    disabled: bool
+    log_config: Optional[GCPFirewallLogConfigInput] = Field(None, alias="logConfig")
+    creation_timestamp: datetime = Field(alias="creationTimestamp")
+    project_id: str
+    # Campo que o collector extrai:
+    extracted_network_name: str
+    error_details: Optional[str] = None
+    class Config:
+        populate_by_name = True
+
+# GCP Project IAM Policy
+class GCPProjectIAMPolicyDataInput(BaseModel): # Note: Este não é uma Lista no Union, é Optional[GCPProjectIAMPolicyDataInput]
+    project_id: str
+    iam_policy: GCPBucketIAMPolicyInput # Reutilizando o schema de política de bucket para a estrutura geral
+    has_external_members_with_primitive_roles: Optional[bool] = None
+    external_primitive_role_details: List[str] = []
+    error_details: Optional[str] = None
+
+
 class AnalysisRequest(BaseModel):
-    provider: str = Field(default="aws", description="Cloud provider name, e.g., 'aws'.")
-    service: str = Field(description="Service name, e.g., 's3', 'ec2_instances', 'iam_users'.")
-    # data: List[Dict[str, Any]] # Alterado para ser mais específico com Union
+    provider: str = Field(description="Cloud provider name, e.g., 'aws', 'gcp'.")
+    service: str = Field(description="Service name, e.g., 's3', 'ec2_instances', 'gcp_storage_buckets'.")
     data: SupportedDataTypes
-    account_id: Optional[str] = Field(None, description="AWS Account ID, if available.")
-    # region: Optional[str] = Field(None, description="AWS Region, if the data is region-specific and not included in each item.")
-    # No nosso caso, EC2InstanceDataInput já tem 'region'. S3 tem 'region'. IAM é global.
-    # Este campo 'region' de nível superior pode não ser necessário se os dados já forem contextualizados.
+    account_id: Optional[str] = Field(None, description="Cloud account ID (e.g., AWS Account ID, GCP Project ID/Number).")
+    # Para GCP, 'account_id' pode ser o Project ID. Os dados de recurso já devem ter project_id neles.
 
     class Config:
-        # Exemplo para Pydantic v2, se necessário para validação de discriminador
-        # model_config = {
-        #     "discriminator": "service",
-        # }
         pass
