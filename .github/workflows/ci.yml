@@ -1,0 +1,118 @@
+name: Basic CI
+
+on:
+  push:
+    branches: [ main ] # Ajustar para o nome da sua branch principal se for diferente
+  pull_request:
+    branches: [ main ] # Ajustar para o nome da sua branch principal
+
+jobs:
+  lint-backend:
+    name: Lint Backend (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install Python Linters
+        run: pip install flake8 black
+      - name: Run flake8
+        # Idealmente, cada microsserviço teria seu próprio linting step
+        # ou um script na raiz para lintar todos. Por simplicidade no MVP:
+        run: flake8 backend/
+      - name: Check black formatting
+        run: black --check backend/
+
+  lint-frontend:
+    name: Lint Frontend (React/TS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/webapp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18' # Usar a mesma versão do Dockerfile do frontend
+          cache: 'npm'
+          cache-dependency-path: frontend/webapp/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci # Usar ci para instalações mais rápidas e consistentes em CI
+      - name: Run ESLint
+        run: npm run lint
+
+  # --- Testes Unitários (Estrutura) ---
+  # Adicionaremos testes mais concretos depois. Por enquanto, só a estrutura do job.
+
+  test-backend-auth-service: # Exemplo para um serviço
+    name: Test Auth Service (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend/auth_service
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx pytest-asyncio # httpx para testes de cliente API, pytest-asyncio para testes async com FastAPI
+      - name: Run Pytest
+        # Precisamos criar alguns testes primeiro.
+        # Ex: pytest app/tests
+        run: echo "Pytest for auth-service to be implemented. Creating dummy test file for now." && mkdir -p app/tests && touch app/tests/test_example.py && echo -e "import pytest\n\ndef test_true():\n  assert True" > app/tests/test_example.py && pytest app/tests
+
+  test-frontend:
+    name: Test Frontend (React/TS)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/webapp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/webapp/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Run frontend tests
+        # O Vite configura o Vitest. `npm test` deve rodá-los.
+        # Precisamos criar um arquivo de teste de exemplo.
+        # E adicionar o script "test": "vitest" ao package.json se não existir.
+        run: |
+          echo "Frontend tests to be implemented. Creating dummy test file for now."
+          mkdir -p src/__tests__
+          echo -e "import { describe, it, expect } from 'vitest';\ndescribe('example', () => { it('should pass', () => { expect(true).toBe(true); }); });" > src/__tests__/example.test.tsx
+          if ! grep -q "\"test\":" package.json; then \
+            npm pkg set scripts.test="vitest"; \
+          fi
+          npm install --save-dev vitest @vitejs/plugin-react jsdom # jsdom para ambiente de teste do vitest
+          npm test -- --run # --run para não ficar em watch mode
+
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend/webapp
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: frontend/webapp/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build React App
+        run: npm run build

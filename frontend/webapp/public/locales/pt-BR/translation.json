@@ -1,0 +1,36 @@
+{
+  "loginPage": {
+    "title": "Login",
+    "greeting": "Por favor, faça login para continuar.",
+    "button": "Login com Google",
+    "redirectMessage": "Você será redirecionado para a página de login do Google.",
+    "errorMessage": "Ocorreu um erro durante o login: {{error}}"
+  },
+  "dashboardPage": {
+    "title": "Painel de Controle",
+    "welcomeMessage": "Bem-vindo(a)! (ID do Usuário: {{userId}})",
+    "analyzeButton": "Analisar Configurações S3",
+    "analyzingButton": "Analisando S3...",
+    "alertsFound": "Alertas S3 Encontrados:",
+    "noAlerts": "Nenhum alerta encontrado ou nenhum recurso S3 para analisar.",
+    "errorFetchingAlerts": "Falha ao buscar alertas S3."
+  },
+  "alertItem": {
+    "resource": "Recurso:",
+    "severity": "Severidade:"
+  },
+  "header": {
+    "title": "CSPMEXA",
+    "navLogin": "Login",
+    "navDashboard": "Painel",
+    "btnLogout": "Sair"
+  },
+  "footer": {
+    "copyright": "© {{year}} CSPMEXA. Todos os direitos reservados."
+  },
+  "oauthCallback": {
+    "processing": "Processando login...",
+    "error": "Erro OAuth: {{error}}",
+    "invalidCallback": "Estado de callback inválido."
+  }
+}

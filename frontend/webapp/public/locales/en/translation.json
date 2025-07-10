@@ -1,0 +1,36 @@
+{
+  "loginPage": {
+    "title": "Login",
+    "greeting": "Please log in to continue.",
+    "button": "Login with Google",
+    "redirectMessage": "You will be redirected to the Google login page.",
+    "errorMessage": "An error occurred during login: {{error}}"
+  },
+  "dashboardPage": {
+    "title": "Dashboard",
+    "welcomeMessage": "Welcome! (User ID: {{userId}})",
+    "analyzeButton": "Analyze S3 Configurations",
+    "analyzingButton": "Analyzing S3...",
+    "alertsFound": "S3 Alerts Found:",
+    "noAlerts": "No alerts found or no S3 resources to analyze.",
+    "errorFetchingAlerts": "Failed to fetch S3 alerts."
+  },
+  "alertItem": {
+    "resource": "Resource:",
+    "severity": "Severity:"
+  },
+  "header": {
+    "title": "CSPMEXA",
+    "navLogin": "Login",
+    "navDashboard": "Dashboard",
+    "btnLogout": "Logout"
+  },
+  "footer": {
+    "copyright": "© {{year}} CSPMEXA. All rights reserved."
+  },
+  "oauthCallback": {
+    "processing": "Processing login...",
+    "error": "OAuth Error: {{error}}",
+    "invalidCallback": "Invalid callback state."
+  }
+}
