@@ -196,14 +196,19 @@ async def get_huawei_vpc_security_groups(project_id: str, region_id: str) -> Lis
 
 # Nota: A coleta de regras de SG pode ser feita com ListSecurityGroupRulesRequest se não vierem com ListSecurityGroups.
 # A API da Huawei `ListSecurityGroups` já inclui as `security_group_rules`.
-```
 
-Ajustes e observações durante a implementação:
-*   A função `_parse_huawei_timestamp` foi adicionada para lidar com os formatos de data/hora da Huawei Cloud.
-*   O SDK da Huawei para ECS (`ListServersDetailsRequest`) e VPC (`ListSecurityGroupsRequest`) retorna os dados diretamente, sem necessidade de paginação manual explícita nos exemplos básicos, mas pode ter parâmetros de `marker`/`limit` para grandes conjuntos de dados. Os exemplos atuais não implementam essa paginação avançada.
-*   Os nomes dos campos no SDK da Huawei podem ser um pouco diferentes dos da AWS/GCP (ex: `OS-EXT-AZ:availability_zone`, `os-extended-volumes:volumes_attached`). Os schemas Pydantic usam `alias` ou acesso via `getattr` para lidar com isso.
-*   A estrutura de `addresses` em ECS e `security_groups` em ECS é processada para extrair IPs e nomes de SG de forma simplificada.
-*   As chamadas ao SDK são bloqueantes. Para uso em FastAPI assíncrono, o ideal seria envolvê-las com `asyncio.to_thread` ou similar para não bloquear o event loop. Isso foi omitido para simplicidade no MVP, mas é uma consideração importante para produção.
-*   O `project_id` é crucial. O `huawei_client_manager` obtém um `project_id` das credenciais, e os coletores recebem `project_id` e `region_id` como parâmetros para garantir o escopo correto.
-
-Este arquivo estabelece a base para coletar dados de VMs e SGs da Huawei Cloud.
+# Ajustes e observações durante a implementação:
+# *   A função `_parse_huawei_timestamp` foi adicionada para lidar com os formatos de data/hora da Huawei Cloud.
+# *   O SDK da Huawei para ECS (`ListServersDetailsRequest`) e VPC (`ListSecurityGroupsRequest`) retorna os dados diretamente,
+#     sem necessidade de paginação manual explícita nos exemplos básicos, mas pode ter parâmetros de `marker`/`limit` para grandes conjuntos de dados.
+#     Os exemplos atuais não implementam essa paginação avançada.
+# *   Os nomes dos campos no SDK da Huawei podem ser um pouco diferentes dos da AWS/GCP (ex: `OS-EXT-AZ:availability_zone`, `os-extended-volumes:volumes_attached`).
+#     Os schemas Pydantic usam `alias` ou acesso via `getattr` para lidar com isso.
+# *   A estrutura de `addresses` em ECS e `security_groups` em ECS é processada para extrair IPs e nomes de SG de forma simplificada.
+# *   As chamadas ao SDK são bloqueantes. Para uso em FastAPI assíncrono, o ideal seria envolvê-las com `asyncio.to_thread`
+#     ou similar para não bloquear o event loop. Isso foi omitido para simplicidade no MVP, mas é uma consideração importante para produção.
+# *   O `project_id` é crucial. O `huawei_client_manager` obtém um `project_id` das credenciais,
+#     e os coletores recebem `project_id` e `region_id` como parâmetros para garantir o escopo correto.
+#
+# Este arquivo estabelece a base para coletar dados de VMs e SGs da Huawei Cloud.
+# Fim do arquivo.

@@ -1,12 +1,13 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from typing import List, Optional, Any, Coroutine
+from typing import List, Optional, Any, Coroutine, Dict # Adicionado Dict
 from datetime import datetime, timezone, timedelta
 
 from app.gcp import gcp_compute_collector
 from app.schemas.gcp_compute import GCPComputeInstanceData, GCPFirewallData, GCPComputeNetworkInterface, GCPComputeNetworkInterfaceAccessConfig, GCPComputeServiceAccount, GCPComputeScheduling, GCPComputeAttachedDisk, GCPFirewallAllowedRule, GCPFirewallLogConfig
 from app.core.config import Settings
 from google.cloud.exceptions import Forbidden, NotFound, GoogleCloudError
+from google.cloud import compute_v1 # Adicionado import compute_v1
 from google.cloud.compute_v1.types import Instance, Firewall, Tags # Para tipos de resposta mockados
 
 # --- Fixtures ---
@@ -17,10 +18,13 @@ def mock_gcp_settings() -> Settings:
 
 @pytest.fixture(autouse=True)
 def override_gcp_collector_settings(mock_gcp_settings: Settings):
-    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict):
-        with patch('app.gcp.gcp_compute_collector.settings', mock_gcp_settings), \
-             patch('app.gcp.gcp_client_manager.settings', mock_gcp_settings):
-            yield
+    # Patching app.core.config.settings will affect all modules importing it.
+    # Também fazemos patch do cache do client_manager para garantir isolamento.
+    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict), \
+         patch('app.core.config.settings', mock_gcp_settings):
+        # Se gcp_compute_collector ou gcp_client_manager importam 'settings' de app.core.config,
+        # este patch global os afetará durante a execução deste fixture.
+        yield
 
 @pytest.fixture
 def mock_compute_instances_client():
@@ -72,12 +76,18 @@ def create_mock_gcp_instance(
     mock_instance.creation_timestamp = creation_timestamp_str # String no objeto Instance
 
     ni = compute_v1.types.NetworkInterface()
-    ni.network_ip = private_ip
+    # Corrigido para o nome de campo correto do protobuf (geralmente snake_case com 'IP' capitalizado se parte do nome)
+    # O campo correto é 'network_i_p' ou verificar a definição exata no tipo NetworkInterface
+    # No entanto, a biblioteca google-cloud-compute para Python mapeia os campos protobuf para atributos Python.
+    # O nome do atributo Python para networkIP é network_i_p.
+    # Se o objeto ni for um MagicMock, podemos apenas atribuir. Se for um objeto real, precisa ser o nome correto.
+    # Vamos assumir que o objeto ni é uma instância real de compute_v1.types.NetworkInterface para o mock
+    ni.network_i_p = private_ip # Campo correto é network_i_p
     if public_ip:
         ac = compute_v1.types.AccessConfig()
-        ac.nat_ip = public_ip
+        ac.nat_i_p = public_ip # Campo correto é nat_i_p
         ac.name = "External NAT"
-        ac.type_ = "ONE_TO_ONE_NAT" # type é palavra reservada
+        ac.type = "ONE_TO_ONE_NAT" # type_ é usado se 'type' for uma palavra reservada, mas aqui 'type' é o campo
         ni.access_configs = [ac]
     mock_instance.network_interfaces = [ni]
 
@@ -207,7 +217,7 @@ async def test_get_gcp_firewall_rules_one_rule(mock_project_id_resolver_success,
     mock_firewall_native.creation_timestamp = now_str
 
     allowed_rule = compute_v1.types.Allowed()
-    allowed_rule.ip_protocol = "tcp"
+    allowed_rule.i_p_protocol = "tcp" # Corrigido para i_p_protocol
     allowed_rule.ports = ["22"]
     mock_firewall_native.allowed = [allowed_rule]
     mock_firewall_native.source_ranges = ["0.0.0.0/0"]
@@ -235,8 +245,8 @@ async def test_get_gcp_firewall_rules_one_rule(mock_project_id_resolver_success,
     assert fw_data.allowed[0].ports == ["22"]
     assert fw_data.log_config.enable is True
     assert fw_data.error_details is None
-```
 
-A função `_parse_gcp_timestamp` no `gcp_compute_collector.py` foi ajustada para lidar melhor com o formato de timestamp do GCP, especialmente com o 'Z', e para normalizar para UTC. Se o timestamp for naive, ele será considerado UTC.
-
-Estes testes fornecem uma cobertura básica para os coletores de Compute Engine. Mais testes podem ser adicionados para cobrir outros campos e cenários de erro.
+# A função `_parse_gcp_timestamp` no `gcp_compute_collector.py` foi ajustada para lidar melhor com o formato de timestamp do GCP,
+# especialmente com o 'Z', e para normalizar para UTC. Se o timestamp for naive, ele será considerado UTC.
+# Estes testes fornecem uma cobertura básica para os coletores de Compute Engine.
+# Mais testes podem ser adicionados para cobrir outros campos e cenários de erro.

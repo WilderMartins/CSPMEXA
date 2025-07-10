@@ -30,6 +30,10 @@ const DashboardPage: React.FC = () => {
   // Estado para Azure Subscription ID
   const [azureSubscriptionId, setAzureSubscriptionId] = useState<string>('');
 
+  // Estados para Google Workspace
+  const [googleWorkspaceCustomerId, setGoogleWorkspaceCustomerId] = useState<string>('my_customer'); // Default 'my_customer'
+  const [googleWorkspaceAdminEmail, setGoogleWorkspaceAdminEmail] = useState<string>('');
+
   const apiClient = axios.create({
     baseURL: '',
     headers: {
@@ -55,10 +59,17 @@ const DashboardPage: React.FC = () => {
   const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
 
   const handleAnalysis = async (
-    provider: 'aws' | 'gcp' | 'huawei' | 'azure', // Adicionado 'azure'
+    provider: 'aws' | 'gcp' | 'huawei' | 'azure' | 'googleworkspace', // Adicionado 'googleworkspace'
     servicePath: string,
     analysisType: string,
-    idParams?: { projectId?: string; regionId?: string; domainId?: string; subscriptionId?: string } // Adicionado subscriptionId
+    idParams?: {
+      projectId?: string;
+      regionId?: string;
+      domainId?: string;
+      subscriptionId?: string;
+      gwsCustomerId?: string; // Para Google Workspace
+      gwsAdminEmail?: string; // Para Google Workspace
+    }
   ) => {
     setIsLoading(true);
     setError(null);
@@ -103,6 +114,21 @@ const DashboardPage: React.FC = () => {
         return;
       }
       queryParams.append('subscription_id', idParams.subscriptionId);
+    } else if (provider === 'googleworkspace') {
+      // customerId é opcional no backend (default 'my_customer'), mas adminEmail é crucial se não configurado no backend.
+      // O frontend deve enviar ambos se o usuário os preencher.
+      if (!idParams?.gwsAdminEmail && !idParams?.gwsCustomerId) { // Se ambos vazios, pode dar erro se backend não tiver defaults.
+         // Relaxar essa checagem por agora, assumindo que o backend pode ter defaults ou o usuário sabe que precisa de um deles.
+         // setError(t('dashboardPage.gwsAdminEmailRequired')); // Adicionar tradução
+         // setIsLoading(false);
+         // return;
+      }
+      if (idParams?.gwsCustomerId) {
+        queryParams.append('customer_id', idParams.gwsCustomerId);
+      }
+      if (idParams?.gwsAdminEmail) {
+        queryParams.append('delegated_admin_email', idParams.gwsAdminEmail);
+      }
     }
 
     const queryString = queryParams.toString();
@@ -240,6 +266,42 @@ const DashboardPage: React.FC = () => {
           >
             {isLoading && currentAnalysisType === 'Azure Storage Accounts' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureStorageButton')}
           </button>
+        </div>
+      </div>
+
+      {/* Seção de Análise Google Workspace */}
+      <div className="gws-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+        <h3>{t('dashboardPage.gwsAnalysisTitle')}</h3>
+        <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+          <div>
+            <label htmlFor="gwsCustomerId" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsCustomerIdLabel')}:</label>
+            <input
+              type="text" id="gwsCustomerId"
+              value={googleWorkspaceCustomerId}
+              onChange={(e) => setGoogleWorkspaceCustomerId(e.target.value)}
+              placeholder={t('dashboardPage.gwsCustomerIdPlaceholder')}
+              style={{ padding: '5px' }}
+            />
+          </div>
+          <div>
+            <label htmlFor="gwsAdminEmail" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsAdminEmailLabel')}:</label>
+            <input
+              type="email" id="gwsAdminEmail"
+              value={googleWorkspaceAdminEmail}
+              onChange={(e) => setGoogleWorkspaceAdminEmail(e.target.value)}
+              placeholder={t('dashboardPage.gwsAdminEmailPlaceholder')}
+              style={{ padding: '5px', minWidth: '250px' }}
+            />
+          </div>
+        </div>
+        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <button
+            onClick={() => handleAnalysis('googleworkspace', 'users', 'Google Workspace Users', { gwsCustomerId: googleWorkspaceCustomerId, gwsAdminEmail: googleWorkspaceAdminEmail })}
+            disabled={isLoading || (!googleWorkspaceCustomerId && !googleWorkspaceAdminEmail) /* Pelo menos um deve ser informado ou backend ter defaults */}
+          >
+            {isLoading && currentAnalysisType === 'Google Workspace Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSUsersButton')}
+          </button>
+          {/* Adicionar botões para Drive, Gmail, etc. aqui no futuro */}
         </div>
       </div>
 

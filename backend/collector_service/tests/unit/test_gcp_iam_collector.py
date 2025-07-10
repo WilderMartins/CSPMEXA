@@ -17,9 +17,8 @@ def mock_gcp_settings() -> Settings:
 
 @pytest.fixture(autouse=True)
 def override_gcp_collector_settings(mock_gcp_settings: Settings):
-    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict):
-        with patch('app.gcp.gcp_iam_collector.settings', mock_gcp_settings), \
-             patch('app.gcp.gcp_client_manager.settings', mock_gcp_settings):
+    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict), \
+         patch('app.core.config.settings', mock_gcp_settings):
             # Limpar cache do cliente IAM específico no módulo do coletor, se ele tiver um próprio
             if hasattr(gcp_iam_collector, 'iam_client_cache'): # Verificar se o cache existe no módulo
                 gcp_iam_collector.iam_client_cache = None
@@ -166,6 +165,7 @@ async def test_get_gcp_project_iam_policy_no_bindings_key(mock_project_id_resolv
     assert result is not None
     assert result.iam_policy.bindings == [] # Espera lista vazia
     assert result.error_details is None
-```
 
-A função `_parse_native_iam_policy_bindings` no `gcp_iam_collector.py` foi ajustada para retornar uma lista vazia se `native_bindings` for `None`, e o `_check_external_members_in_primitive_roles` também foi ajustado para lidar com `iam_policy.bindings` potencialmente vazio. O coletor principal também foi ajustado para criar um `GCPIAMPolicy` com `bindings=[]` se a chave `bindings` não estiver na resposta da API, em vez de falhar.
+# A função `_parse_native_iam_policy_bindings` no `gcp_iam_collector.py` foi ajustada para retornar uma lista vazia se `native_bindings` for `None`,
+# e o `_check_external_members_in_primitive_roles` também foi ajustado para lidar com `iam_policy.bindings` potencialmente vazio.
+# O coletor principal também foi ajustado para criar um `GCPIAMPolicy` com `bindings=[]` se a chave `bindings` não estiver na resposta da API, em vez de falhar.

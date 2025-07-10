@@ -48,21 +48,41 @@ def get_asset_client() -> asset_v1.AssetServiceClient:
         except Exception as e:
             logger.error(f"Failed to initialize Cloud Asset Inventory client: {e}")
             raise
+from google.auth.credentials import Credentials # Importar Credentials
+
+# ... (código anterior) ...
+
+def get_asset_client(credentials: Optional[Credentials] = None) -> asset_v1.AssetServiceClient:
+    """Retorna um cliente para o Cloud Asset Inventory API."""
+    if "asset" not in _clients_cache:
+        try:
+            creds_to_use = credentials or google.auth.default()[0]
+            _clients_cache["asset"] = asset_v1.AssetServiceClient(credentials=creds_to_use)
+            logger.info("Cloud Asset Inventory client initialized.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Cloud Asset Inventory client: {e}")
+            raise
     return _clients_cache["asset"]
 
-def get_storage_client(project_id: str = None) -> storage.Client:
+def get_storage_client(project_id: Optional[str] = None, credentials: Optional[Credentials] = None) -> storage.Client:
     """Retorna um cliente para o Cloud Storage API."""
-    # O cliente de storage pode ser inicializado com um projeto específico ou usar o padrão das credenciais.
     client_key = f"storage_{project_id or 'default'}"
     if client_key not in _clients_cache:
         try:
-            if project_id:
-                _clients_cache[client_key] = storage.Client(project=project_id)
-            else:
-                _clients_cache[client_key] = storage.Client() # Usa o projeto das credenciais
-            logger.info(f"Cloud Storage client initialized for project '{project_id or 'default'}'.")
+            creds_to_use = credentials
+            final_project_id = project_id
+            if not creds_to_use:
+                creds_to_use, default_project_from_auth = google.auth.default()
+                if not final_project_id: # Se project_id não foi passado, usa o das credenciais default
+                    final_project_id = default_project_from_auth
+
+            # Se ainda não houver project_id (ex: credenciais mockadas sem project_id),
+            # e o storage.Client() precisar dele, pode dar erro.
+            # O construtor do storage.Client aceita 'project'.
+            _clients_cache[client_key] = storage.Client(project=final_project_id, credentials=creds_to_use)
+            logger.info(f"Cloud Storage client initialized for project '{final_project_id or 'default from credentials'}'.")
         except Exception as e:
-            logger.error(f"Failed to initialize Cloud Storage client: {e}")
+            logger.error(f"Failed to initialize Cloud Storage client for project '{project_id}': {e}")
             raise
     return _clients_cache[client_key]
 
@@ -77,11 +97,12 @@ def get_compute_client() -> compute_v1.InstancesClient: # Ou outros clientes com
             raise
     return _clients_cache["compute_instances"]
 
-def get_compute_firewalls_client() -> compute_v1.FirewallsClient:
+def get_compute_firewalls_client(credentials: Optional[Credentials] = None) -> compute_v1.FirewallsClient:
     """Retorna um cliente para o Compute Engine API (FirewallsClient)."""
     if "compute_firewalls" not in _clients_cache:
         try:
-            _clients_cache["compute_firewalls"] = compute_v1.FirewallsClient()
+            creds_to_use = credentials or google.auth.default()[0]
+            _clients_cache["compute_firewalls"] = compute_v1.FirewallsClient(credentials=creds_to_use)
             logger.info("Compute Engine Firewalls client initialized.")
         except Exception as e:
             logger.error(f"Failed to initialize Compute Engine Firewalls client: {e}")
@@ -89,20 +110,18 @@ def get_compute_firewalls_client() -> compute_v1.FirewallsClient:
     return _clients_cache["compute_firewalls"]
 
 
-def get_cloud_resource_manager_client(): # type: ignore
+def get_cloud_resource_manager_client(credentials: Optional[Credentials] = None): # type: ignore
     """Retorna um cliente para o Cloud Resource Manager API (v1 ou v3)."""
-    # Esta API é mais antiga e usa googleapiclient.discovery
-    # Pode ser necessário especificar a versão (v1, v3)
-    # As credenciais ADC devem funcionar aqui também.
     if "cloudresourcemanager" not in _clients_cache:
         try:
-            # Tentar v3 primeiro, pois é mais recente
-            _clients_cache["cloudresourcemanager"] = discovery_build('cloudresourcemanager', 'v3')
+            creds_to_use = credentials or google.auth.default()[0]
+            _clients_cache["cloudresourcemanager"] = discovery_build('cloudresourcemanager', 'v3', credentials=creds_to_use)
             logger.info("Cloud Resource Manager v3 client initialized.")
         except Exception as e_v3:
             logger.warning(f"Failed to initialize Cloud Resource Manager v3 client: {e_v3}. Trying v1.")
             try:
-                _clients_cache["cloudresourcemanager"] = discovery_build('cloudresourcemanager', 'v1')
+                creds_to_use_v1 = credentials or google.auth.default()[0]
+                _clients_cache["cloudresourcemanager"] = discovery_build('cloudresourcemanager', 'v1', credentials=creds_to_use_v1)
                 logger.info("Cloud Resource Manager v1 client initialized.")
             except Exception as e_v1:
                 logger.error(f"Failed to initialize Cloud Resource Manager v1 client: {e_v1}")

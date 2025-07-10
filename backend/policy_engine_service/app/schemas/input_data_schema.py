@@ -171,10 +171,44 @@ SupportedDataTypes = Union[
     List['HuaweiVPCSecurityGroupInput'],
     List['HuaweiIAMUserDataInput'],
 
-    # Tipos de Dados Azure (a serem adicionados)
+    # Tipos de Dados Azure
     List['AzureVirtualMachineDataInput'],
-    List['AzureStorageAccountDataInput']
+    List['AzureStorageAccountDataInput'],
+
+    # Tipos de Dados Google Workspace (a serem adicionados)
+    List['GoogleWorkspaceUserDataInput']
+    # Adicionar outros tipos do Workspace (Drive, Gmail) quando os coletores estiverem prontos
 ]
+
+# --- Google Workspace Schemas (espelham collector_service/app/schemas/google_workspace_*.py) ---
+
+class GoogleWorkspaceUserNameInput(BaseModel):
+    given_name: Optional[str] = Field(None, alias="givenName")
+    family_name: Optional[str] = Field(None, alias="familyName")
+    full_name: Optional[str] = Field(None, alias="fullName")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleWorkspaceUserEmailInput(BaseModel): # Adicionado Input no nome para consistência
+    address: Optional[str] = None # EmailStr removido para input, validação pode ser mais flexível aqui
+    primary: Optional[bool] = None
+    class Config: extra = 'ignore'
+
+class GoogleWorkspaceUserDataInput(BaseModel):
+    id: str
+    primary_email: str = Field(alias="primaryEmail") # EmailStr removido
+    name: GoogleWorkspaceUserNameInput # Usar o Input schema
+    is_admin: bool = Field(False, alias="isAdmin")
+    is_delegated_admin: Optional[bool] = Field(None, alias="isDelegatedAdmin")
+    last_login_time: Optional[datetime] = Field(None, alias="lastLoginTime")
+    creation_time: Optional[datetime] = Field(None, alias="creationTime")
+    suspended: Optional[bool] = False
+    archived: Optional[bool] = False
+    org_unit_path: Optional[str] = Field(None, alias="orgUnitPath")
+    is_enrolled_in_2sv: bool = Field(False, alias="isEnrolledIn2Sv")
+    emails: Optional[List[GoogleWorkspaceUserEmailInput]] = None
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True; extra = 'ignore'
+
 
 # --- Azure Schemas (espelham collector_service/app/schemas/azure_*.py) ---
 

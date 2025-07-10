@@ -1,9 +1,10 @@
 from huaweicloudsdkcore.exceptions import exceptions as sdk_exceptions
 from huaweicloudsdkiam.v3.model import (
-    ListUsersRequest, KeystoneListUsersRequest, # ListUsersRequest é para IAM global, KeystoneListUsersRequest para IAM de projeto/domínio
-    ShowUserRequest, KeystoneShowUserRequest,
-    ListPermanentAccessKeysRequest,
-    ListUserMfaDevicesRequest # Para obter MFA devices do usuário
+    KeystoneListUsersRequest, # Mantido - usado para listar usuários no domínio
+    KeystoneShowUserRequest,  # Mantido - usado para detalhes do usuário
+    ListPermanentAccessKeysRequest, # Mantido - usado para listar chaves de acesso
+    ListUserMfaDevicesRequest # Mantido - embora não usado ativamente, pode ser útil no futuro
+    # ListUsersRequest e ShowUserRequest foram removidos pois não são usados e ListUsersRequest causava ImportError
 )
 # Outros imports de request/response podem ser necessários
 
@@ -253,15 +254,15 @@ if __name__ == '__main__':
     # Se for rodar este arquivo diretamente para teste, descomente a linha abaixo:
     # asyncio.run(main())
     pass
-```
 
-Observações durante a implementação do `huawei_iam_collector.py`:
-*   **Domain ID vs Project ID:** Para IAM, o `domain_id` (ID da conta) é geralmente o escopo principal para listar usuários. O `project_id` é mais para recursos dentro de um projeto. O SDK e as APIs podem usar um ou outro dependendo do contexto. O código tenta obter `domain_id` de `HUAWEICLOUD_SDK_DOMAIN_ID` ou usa o `project_id` das credenciais como fallback, com um aviso.
-*   **Tipos de Request IAM:** O SDK IAM da Huawei tem diferentes objetos de Request para listar usuários, por exemplo, `ListUsersRequest` (parece ser para uma versão mais antiga ou API IAM global) e `KeystoneListUsersRequest` (para listar usuários em um domínio específico, que é o que queremos). O código usa `KeystoneListUsersRequest`.
-*   **Detalhes do Usuário:** Para obter informações como `login_protect` (status do MFA), é necessário fazer uma chamada adicional `keystone_show_user` para cada usuário.
-*   **Chaves de Acesso (AK/SK):** A listagem de chaves de acesso (`ListPermanentAccessKeysRequest`) é feita por `user_id`.
-*   **Dispositivos MFA:** A informação principal de MFA (se está habilitado) vem de `login_protect`. Uma chamada `ListUserMfaDevicesRequest` poderia, teoricamente, listar os dispositivos, mas para o MVP, o status de `login_protect.enabled` é o mais importante. A implementação atual foca no `login_protect`.
-*   **Parse de Timestamps:** Adicionada uma função `_parse_huawei_iam_timestamp` para converter os formatos de data/hora da API IAM.
-*   **Chamadas Bloqueantes:** Assim como outros coletores Huawei, as chamadas ao SDK são bloqueantes e precisariam de `asyncio.to_thread` em um ambiente de produção FastAPI.
-
-Este coletor estabelece a base para obter informações de usuários IAM da Huawei Cloud.
+# Observações durante a implementação do `huawei_iam_collector.py`:
+# *   **Domain ID vs Project ID:** Para IAM, o `domain_id` (ID da conta) é geralmente o escopo principal para listar usuários. O `project_id` é mais para recursos dentro de um projeto. O SDK e as APIs podem usar um ou outro dependendo do contexto. O código tenta obter `domain_id` de `HUAWEICLOUD_SDK_DOMAIN_ID` ou usa o `project_id` das credenciais como fallback, com um aviso.
+# *   **Tipos de Request IAM:** O SDK IAM da Huawei tem diferentes objetos de Request para listar usuários, por exemplo, `ListUsersRequest` (parece ser para uma versão mais antiga ou API IAM global) e `KeystoneListUsersRequest` (para listar usuários em um domínio específico, que é o que queremos). O código usa `KeystoneListUsersRequest`.
+# *   **Detalhes do Usuário:** Para obter informações como `login_protect` (status do MFA), é necessário fazer uma chamada adicional `keystone_show_user` para cada usuário.
+# *   **Chaves de Acesso (AK/SK):** A listagem de chaves de acesso (`ListPermanentAccessKeysRequest`) é feita por `user_id`.
+# *   **Dispositivos MFA:** A informação principal de MFA (se está habilitado) vem de `login_protect`. Uma chamada `ListUserMfaDevicesRequest` poderia, teoricamente, listar os dispositivos, mas para o MVP, o status de `login_protect.enabled` é o mais importante. A implementação atual foca no `login_protect`.
+# *   **Parse de Timestamps:** Adicionada uma função `_parse_huawei_iam_timestamp` para converter os formatos de data/hora da API IAM.
+# *   **Chamadas Bloqueantes:** Assim como outros coletores Huawei, as chamadas ao SDK são bloqueantes e precisariam de `asyncio.to_thread` em um ambiente de produção FastAPI.
+#
+# Este coletor estabelece a base para obter informações de usuários IAM da Huawei Cloud.
+# Fim do arquivo.

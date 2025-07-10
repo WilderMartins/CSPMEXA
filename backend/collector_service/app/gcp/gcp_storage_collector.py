@@ -1,6 +1,7 @@
 from google.cloud import storage
 from google.cloud.exceptions import NotFound, Forbidden, GoogleCloudError
 from typing import List, Optional, Dict, Any
+from datetime import datetime, timezone, timedelta # Adicionado import
 from app.schemas.gcp_storage import (
     GCPStorageBucketData, GCPBucketIAMPolicy, GCPBucketIAMBinding,
     GCPBucketVersioning, GCPBucketLogging, GCPBucketWebsite, GCPBucketRetentionPolicy
@@ -67,7 +68,7 @@ async def get_gcp_storage_buckets(project_id: Optional[str] = None) -> List[GCPS
         )]
 
     try:
-        storage_client = get_storage_client(project=actual_project_id)
+        storage_client = get_storage_client(project_id=actual_project_id) # Corrigido: project -> project_id
         gcp_buckets_native = storage_client.list_buckets(project=actual_project_id) # Iterador
     except GoogleCloudError as e:
         logger.error(f"Failed to list GCP Storage buckets for project {actual_project_id}: {e}")

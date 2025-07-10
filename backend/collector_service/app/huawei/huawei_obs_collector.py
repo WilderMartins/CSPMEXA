@@ -1,6 +1,8 @@
-from huaweicloudsdkobs.v1.model import ListBucketsRequest, GetBucketPolicyRequest, GetBucketAclRequest, GetBucketVersioningRequest, GetBucketLoggingRequest
-# Exceções específicas do SDK OBS podem ser necessárias
-from huaweicloudsdkcore.exceptions import exceptions as sdk_exceptions # SdkException, ServiceResponseException
+# from huaweicloudsdkobs.v1.model import ListBucketsRequest, GetBucketPolicyRequest, GetBucketAclRequest, GetBucketVersioningRequest, GetBucketLoggingRequest
+# Acima removido pois os métodos do cliente são usados diretamente.
+# ListBucketsRequest pode ser necessário se listBuckets() o exigir, mas parece que não.
+from huaweicloudsdkobs.v1.model import ListBucketsResponse # Para mock de tipo de resposta
+from huaweicloudsdkcore.exceptions import exceptions as sdk_exceptions
 from typing import List, Optional, Dict, Any
 from app.schemas.huawei_obs import (
     HuaweiOBSBucketData, HuaweiOBSBucketPolicy, HuaweiOBSBucketPolicyStatement,

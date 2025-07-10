@@ -21,10 +21,9 @@ def mock_huawei_settings() -> Settings:
 
 @pytest.fixture(autouse=True)
 def override_huawei_collector_settings(mock_huawei_settings: Settings):
-    with patch('app.huawei.huawei_client_manager._clients_cache', new_callable=dict):
-        with patch('app.huawei.huawei_ecs_collector.settings', mock_huawei_settings, _if_exists=True), \
-             patch('app.huawei.huawei_client_manager.settings', mock_huawei_settings):
-            if hasattr(huawei_ecs_collector, '_clients_cache'):
+    with patch('app.huawei.huawei_client_manager._clients_cache', new_callable=dict), \
+         patch('app.core.config.settings', mock_huawei_settings): # Patch global settings
+            if hasattr(huawei_ecs_collector, '_clients_cache'): # Cache específico do módulo do coletor
                  huawei_ecs_collector._clients_cache = {}
             yield
             if hasattr(huawei_ecs_collector, '_clients_cache'):
@@ -67,7 +66,7 @@ async def test_get_huawei_ecs_instances_no_creds(mock_ecs_client):
 
 @pytest.mark.asyncio
 async def test_get_huawei_ecs_instances_sdk_error(mock_huawei_credentials_success, mock_ecs_client):
-    mock_ecs_client.list_servers_details.side_effect = sdk_exceptions.SdkException(error_code="ECS.0001", error_message="Simulated ECS SDK failure")
+    mock_ecs_client.list_servers_details.side_effect = sdk_exceptions.SdkException("ECS.0001", "Simulated ECS SDK failure") # Corrigido
     result = await huawei_ecs_collector.get_huawei_ecs_instances(project_id="proj-ecs", region_id="reg-ecs")
     assert len(result) == 1
     assert result[0].id == "ERROR_LIST_ECS_SDK_reg-ecs"
@@ -97,13 +96,13 @@ async def test_get_huawei_ecs_instances_one_instance(mock_huawei_credentials_suc
         updated=updated_time_str, # SDK espera string
         user_id="user-creator-id",
         image=ServerImage(id="image-uuid"),
-        flavor=ServerFlavor(id="flavor-s6.large.2", name="s6.large.2"), # Adicionar name aqui
+        flavor=ServerFlavor(id="flavor-s6.large.2", name="s6.large.2"),
         addresses={
-            "private_net_1": [ServerAddress(version=4, addr="192.168.1.10", os_ext_ips_mac_mac_addr="fa:16:3e:xx:yy:zz", os_ext_ips_type="fixed")],
-            "public_eip_net": [ServerAddress(version=4, addr="120.0.0.10", os_ext_ips_mac_mac_addr="fa:16:3e:aa:bb:cc", os_ext_ips_type="floating")]
+            "private_net_1": [ServerAddress(version=4, addr="192.168.1.10", mac_addr="fa:16:3e:xx:yy:zz", type="fixed")], # Corrigido: os_ext_ips_mac_mac_addr -> mac_addr, os_ext_ips_type -> type
+            "public_eip_net": [ServerAddress(version=4, addr="120.0.0.10", mac_addr="fa:16:3e:aa:bb:cc", type="floating")] # Corrigido
         },
         key_name="ssh-keypair-name",
-        os_ext_az_availability_zone="cn-north-4a",
+        os_ext_az_availability_zone="cn-north-4a", # No SDK, os_ext_az_availability_zone é o campo
         os_ext_srv_attr_host="host-id-xyz",
         os_ext_srv_attr_hypervisor_hostname="hypervisor.example.com",
         security_groups=[NovaSecurityGroup(name="sg-uuid-1"), NovaSecurityGroup(name="sg-uuid-2")], # Lista de objetos com atributo 'name'
@@ -150,7 +149,7 @@ async def test_get_huawei_vpc_sgs_no_creds(mock_vpc_client):
 
 @pytest.mark.asyncio
 async def test_get_huawei_vpc_sgs_sdk_error(mock_huawei_credentials_success, mock_vpc_client):
-    mock_vpc_client.list_security_groups.side_effect = sdk_exceptions.SdkException(error_code="VPC.0001", error_message="Simulated VPC SDK failure")
+    mock_vpc_client.list_security_groups.side_effect = sdk_exceptions.SdkException("VPC.0001", "Simulated VPC SDK failure") # Corrigido
     result = await huawei_ecs_collector.get_huawei_vpc_security_groups(project_id="proj-vpc", region_id="reg-vpc")
     assert len(result) == 1
     assert result[0].id == "ERROR_LIST_SGS_SDK_reg-vpc"
@@ -183,9 +182,11 @@ async def test_get_huawei_vpc_sgs_one_sg_with_rules(mock_huawei_credentials_succ
         id="sg-uuid-parent",
         name="allow-ssh-sg",
         description="Allows SSH from anywhere",
-        project_id="proj-vpc", # O SDK retorna project_id aqui
+        # project_id="proj-vpc", # Removido - não é parâmetro do construtor do objeto SdkSecurityGroup
         security_group_rules=[mock_rule_native]
     )
+    # Adicionar project_id como atributo se o código do coletor espera ler dele diretamente
+    # mock_sg_native.project_id = "proj-vpc" # O coletor já lê sg_native.project_id
 
     mock_response = MagicMock(spec=ListSecurityGroupsResponse)
     mock_response.security_groups = [mock_sg_native]
@@ -207,19 +208,20 @@ async def test_get_huawei_vpc_sgs_one_sg_with_rules(mock_huawei_credentials_succ
     assert rule_data.port_range_min == 22
     assert rule_data.remote_ip_prefix == "0.0.0.0/0"
     assert sg_data.error_details is None
-```
 
-Ajustes feitos durante a escrita dos testes em `huawei_ecs_collector.py`:
-*   Na função `_parse_huawei_timestamp`: Adicionado tratamento para quando o input já é um objeto `datetime`. Melhorado o parse de strings com e sem 'Z' e com e sem microssegundos, e garantia de que o resultado seja timezone-aware (UTC).
-*   Na função `get_huawei_ecs_instances`:
-    *   Corrigido o acesso a `server_native.image` e `server_native.flavor` para checar se existem antes de acessar `id`.
-    *   Corrigido o acesso a `server_native.os_ext_az_availability_zone` e outros campos com hífen/dois-pontos usando `getattr` para segurança.
-    *   Tratamento para `server_native.security_groups` para garantir que é uma lista de dicts com a chave 'name'.
-    *   O `flavor` no schema `HuaweiECSServerData` agora espera `HuaweiECSFlavor` que tem `id` e `name` opcionais.
-    *   O `project_id` e `region_id` são adicionados ao objeto `HuaweiECSServerData` final.
-*   Na função `get_huawei_vpc_security_groups`:
-    *   Corrigido o acesso a `sg_native.project_id` e `rule_native.description` usando `getattr` ou verificando existência.
-    *   O `project_id` coletado da API é mapeado para `project_id_from_collector` no schema Pydantic.
-    *   O `region_id` da chamada é adicionado ao objeto `HuaweiVPCSecurityGroup`.
-
-Estes testes cobrem cenários básicos e de erro para os coletores ECS e VPC SG.
+# Ajustes feitos durante a escrita dos testes em `huawei_ecs_collector.py`:
+# *   Na função `_parse_huawei_timestamp`: Adicionado tratamento para quando o input já é um objeto `datetime`.
+#     Melhorado o parse de strings com e sem 'Z' e com e sem microssegundos, e garantia de que o resultado seja timezone-aware (UTC).
+# *   Na função `get_huawei_ecs_instances`:
+#     *   Corrigido o acesso a `server_native.image` e `server_native.flavor` para checar se existem antes de acessar `id`.
+#     *   Corrigido o acesso a `server_native.os_ext_az_availability_zone` e outros campos com hífen/dois-pontos usando `getattr` para segurança.
+#     *   Tratamento para `server_native.security_groups` para garantir que é uma lista de dicts com a chave 'name'.
+#     *   O `flavor` no schema `HuaweiECSServerData` agora espera `HuaweiECSFlavor` que tem `id` e `name` opcionais.
+#     *   O `project_id` e `region_id` são adicionados ao objeto `HuaweiECSServerData` final.
+# *   Na função `get_huawei_vpc_security_groups`:
+#     *   Corrigido o acesso a `sg_native.project_id` e `rule_native.description` usando `getattr` ou verificando existência.
+#     *   O `project_id` coletado da API é mapeado para `project_id_from_collector` no schema Pydantic.
+#     *   O `region_id` da chamada é adicionado ao objeto `HuaweiVPCSecurityGroup`.
+#
+# Estes testes cobrem cenários básicos e de erro para os coletores ECS e VPC SG.
+# Fim do arquivo, garantindo que não há comentários de markdown.

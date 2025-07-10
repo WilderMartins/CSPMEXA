@@ -2,15 +2,17 @@ from typing import List, Optional, Dict, Any
 from app.schemas.input_data_schema import (
     AnalysisRequest,
     S3BucketDataInput, EC2InstanceDataInput, EC2SecurityGroupDataInput, IAMUserDataInput,
-    GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput, # GCP Inputs
-    HuaweiOBSBucketDataInput, HuaweiECSServerDataInput, HuaweiVPCSecurityGroupInput, HuaweiIAMUserDataInput, # Huawei Inputs
-    AzureVirtualMachineDataInput, AzureStorageAccountDataInput # Azure Inputs
+    GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput,
+    HuaweiOBSBucketDataInput, HuaweiECSServerDataInput, HuaweiVPCSecurityGroupInput, HuaweiIAMUserDataInput,
+    AzureVirtualMachineDataInput, AzureStorageAccountDataInput,
+    GoogleWorkspaceUserDataInput # Google Workspace Inputs
 )
 from app.schemas.alert_schema import Alert
 from app.engine import aws_s3_policies, aws_ec2_policies, aws_iam_policies
 from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies
-from app.engine import huawei_obs_policies, huawei_ecs_policies, huawei_iam_policies # Huawei Policies
-from app.engine import azure_vm_policies, azure_storage_policies # Azure Policies
+from app.engine import huawei_obs_policies, huawei_ecs_policies, huawei_iam_policies
+from app.engine import azure_vm_policies, azure_storage_policies
+from app.engine import google_workspace_user_policies # Google Workspace Policies
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,24 +68,22 @@ class PolicyEngine:
                 generated_alerts_schemas.extend(s3_alerts)
 
             elif service == "ec2_instances":
-                ec2_instance_alerts = aws_ec2_policies.evaluate_ec2_instance_policies(
-                    instances_data=data, # type: ignore
-                    account_id=account_id
-                )
                 # Removida linha duplicada: alerts.extend(ec2_instance_alerts)
                 # Esta seção é para 'ec2_instances', a próxima é para 'ec2_security_groups'
-                generated_alerts_schemas.extend(ec2_instance_alerts) # Corrigido para adicionar à lista correta
-
-            elif service == "ec2_security_groups":
-                # A lógica original parecia ter uma cópia da avaliação de ec2_instances aqui.
-                # Corrigido para avaliar security groups.
-                # ec2_instance_alerts = aws_ec2_policies.evaluate_ec2_instance_policies( # Linha incorreta removida
-                    instances_data=data, # type: ignore
-                    account_id=account_id
-                )
                 generated_alerts_schemas.extend(ec2_instance_alerts)
 
-            elif service == "ec2_security_groups":
+            # Correção: Removida a duplicata da seção ec2_security_groups que chamava evaluate_ec2_instance_policies
+            # A seção correta para ec2_security_groups já existe abaixo e está correta.
+            # elif service == "ec2_security_groups":
+            #     # A lógica original parecia ter uma cópia da avaliação de ec2_instances aqui.
+            #     # Corrigido para avaliar security groups.
+            #     # ec2_instance_alerts = aws_ec2_policies.evaluate_ec2_instance_policies( # Linha incorreta removida
+            #         instances_data=data, # type: ignore
+            #         account_id=account_id
+            #     )
+            #     generated_alerts_schemas.extend(ec2_instance_alerts)
+
+            elif service == "ec2_security_groups": # Esta é a seção correta que já existia.
                 if not all(isinstance(item, EC2SecurityGroupDataInput) for item in data): # type: ignore
                      logger.error("Data for ec2_security_groups is not of type List[EC2SecurityGroupDataInput]. Skipping.")
                 else:
@@ -219,6 +219,20 @@ class PolicyEngine:
                     generated_alerts_schemas.extend(storage_alerts)
             else:
                 logger.warning(f"Unsupported Azure service for analysis: {service}")
+
+        elif provider == "google_workspace":
+            if service == "google_workspace_users":
+                if not all(isinstance(item, GoogleWorkspaceUserDataInput) for item in data): # type: ignore
+                    logger.error("Data for google_workspace_users is not List[GoogleWorkspaceUserDataInput]. Skipping.")
+                else:
+                    gw_user_alerts = google_workspace_user_policies.evaluate_google_workspace_user_policies(
+                        users_data=data, # type: ignore
+                        account_id=account_id # customer_id
+                    )
+                    generated_alerts_schemas.extend(gw_user_alerts)
+            # Adicionar outros serviços do Google Workspace aqui (Drive, Gmail, etc.)
+            else:
+                logger.warning(f"Unsupported Google Workspace service for analysis: {service}")
         else:
             logger.warning(f"Unsupported provider for analysis: {provider}")
 

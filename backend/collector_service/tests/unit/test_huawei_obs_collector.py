@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, PropertyMock
+import json # Adicionado import
 from typing import List, Optional, Any
 from datetime import datetime, timezone, timedelta
 
@@ -10,11 +11,15 @@ from app.schemas.huawei_obs import (
     HuaweiOBSBucketVersioning, HuaweiOBSBucketLogging
 )
 from app.core.config import Settings
-from huaweicloudsdkcore.exceptions import exceptions as sdk_exceptions # SdkException, ServiceResponseException
-from huaweicloudsdkobs.v1.model import Bucket, ListBucketsResponse, GetBucketPolicyResponse, \
-                                       GetBucketAclResponse, GetBucketVersioningResponse, \
-                                       GetBucketLoggingResponse, Owner as ObsOwner, Grantee as ObsGrantee, \
-                                       Grant as ObsGrant, LoggingEnabled, PolicyStatement # Importar tipos de resposta do SDK
+from huaweicloudsdkcore.exceptions import exceptions as sdk_exceptions
+# Removendo GetBucketPolicyResponse, etc., se não forem essenciais para o spec do mock.
+# O código do coletor usa métodos diretos (ex: client.getBucketPolicy).
+# Manter ListBucketsResponse e Bucket se forem usados para mockar a estrutura da resposta de listagem.
+from huaweicloudsdkobs.v1.model import Bucket, ListBucketsResponse, \
+                                       Owner as ObsOwner, Grantee as ObsGrantee, \
+                                       Grant as ObsGrant # PolicyStatement e LoggingEnabled não são usados aqui
+# Se os tipos de resposta detalhados não forem importáveis ou necessários para spec,
+# podemos usar MagicMock() sem spec ou com spec=dict.
 
 # --- Fixtures ---
 
@@ -24,9 +29,8 @@ def mock_huawei_settings() -> Settings:
 
 @pytest.fixture(autouse=True)
 def override_huawei_collector_settings(mock_huawei_settings: Settings):
-    with patch('app.huawei.huawei_client_manager._clients_cache', new_callable=dict):
-        with patch('app.huawei.huawei_obs_collector.settings', mock_huawei_settings,_if_exists=True), \
-             patch('app.huawei.huawei_client_manager.settings', mock_huawei_settings):
+    with patch('app.huawei.huawei_client_manager._clients_cache', new_callable=dict), \
+         patch('app.core.config.settings', mock_huawei_settings): # Patch global settings
             # Limpar cache do cliente OBS específico no módulo do coletor, se ele tiver um próprio
             if hasattr(huawei_obs_collector, '_clients_cache'): # Verificar se o cache existe no módulo
                  huawei_obs_collector._clients_cache = {}
@@ -72,7 +76,7 @@ async def test_get_huawei_obs_buckets_no_creds(mock_obs_client):
 
 @pytest.mark.asyncio
 async def test_get_huawei_obs_buckets_list_buckets_sdk_error(mock_huawei_credentials_success, mock_obs_client):
-    mock_obs_client.listBuckets.side_effect = sdk_exceptions.SdkException(error_code="SDK.ClientError", error_message="Simulated SDK list buckets failure")
+    mock_obs_client.listBuckets.side_effect = sdk_exceptions.SdkException("SDK.ClientError", "Simulated SDK list buckets failure") # Corrigido
 
     result = await huawei_obs_collector.get_huawei_obs_buckets(project_id="proj1", region_id="reg1")
     assert len(result) == 1
@@ -174,11 +178,18 @@ async def test_get_huawei_obs_buckets_policy_no_such_policy(mock_huawei_credenti
     mock_obs_client.listBuckets.return_value = mock_list_response
 
     # Simular erro "NoSuchBucketPolicy"
+    # ServiceResponseException pode não aceitar error_code e error_message como keywords.
+    # Geralmente é (status_code, error_code=None, error_message=None, header=None, body=None)
+    # ou apenas (status_code, body) e o resto é parseado do body.
+    # Para mock, uma SdkException genérica pode ser mais simples se os detalhes não são testados.
     mock_obs_client.getBucketPolicy.side_effect = sdk_exceptions.ServiceResponseException(
-        status_code=404, error_code="NoSuchBucketPolicy", error_message="Policy does not exist."
+        status_code=404,
+        # error_code="NoSuchBucketPolicy", # Removido se não for parâmetro válido
+        # error_message="Policy does not exist." # Removido se não for parâmetro válido
+        body='{"error_code": "NoSuchBucketPolicy", "error_message": "Policy does not exist."}' # Simular corpo do erro
     )
     # Outras chamadas de detalhe retornam mocks vazios/padrão
-    mock_acl_response_body = MagicMock(); mock_acl_response_body.owner = ObsOwner(id="oid"); mock_acl_response_body.grants = []
+    mock_acl_response_body = MagicMock(); mock_acl_response_body.owner = ObsOwner(id="oid"); mock_acl_response_body.grants = [] # Grantee é um objeto, não string
     mock_acl_response = MagicMock(spec=GetBucketAclResponse); type(mock_acl_response).body = PropertyMock(return_value=mock_acl_response_body)
     mock_obs_client.getBucketAcl.return_value = mock_acl_response
     mock_versioning_response_body = MagicMock(); type(mock_versioning_response_body).status = PropertyMock(return_value=None)
@@ -207,18 +218,18 @@ async def test_get_huawei_obs_buckets_policy_no_such_policy(mock_huawei_credenti
 # - Parse de diferentes formatos de Principal e Condition em políticas
 # - Parse de diferentes formatos de Grantee em ACLs
 # - Paginação se listBuckets for mockado para retornar múltiplos "pages" (mais complexo)
-```
 
-Ajustes feitos durante a escrita dos testes em `huawei_obs_collector.py`:
-*   A função `_parse_obs_policy`: Adicionado tratamento para o caso de `policy_str` ser `None` e um log de erro mais detalhado para `json.JSONDecodeError`. Tratamento de exceção genérica adicionado.
-*   A função `_parse_obs_acl`: Adicionado `getattr` para acesso mais seguro aos atributos do objeto `grant_native.grantee`, e tratamento de exceção genérico.
-*   Na função `get_huawei_obs_buckets`:
-    *   Melhorado o tratamento da resposta de `listBuckets`. O SDK pode retornar um único objeto `Bucket` ou uma lista. O código agora garante que `native_buckets` seja sempre uma lista.
-    *   Ajustado o tratamento de exceção para `SdkException` para logar `error_code` e `error_message`.
-    *   No loop de processamento de cada bucket, adicionado `getattr` para campos opcionais como `storage_class` e `description` para evitar `AttributeError` se não estiverem presentes na resposta da API para um bucket específico.
-    *   O parse da `creation_date` foi melhorado para tentar múltiplos formatos (com e sem milissegundos).
-    *   Para `getBucketPolicy`, se `policy_resp.body` for a string da política diretamente (em vez de um objeto com um atributo `policy`), o código tenta usá-lo.
-    *   Para `getBucketVersioning`, se `status` não estiver presente, assume-se que não está configurado (`None`).
-    *   Para `getBucketLogging`, verifica-se `target_bucket` ou `targetBucket` (nomes podem variar ligeiramente entre versões/docs do SDK) para determinar se o logging está habilitado.
-
-Estes testes e ajustes fornecem uma base para o coletor OBS. A precisão do parse de políticas e ACLs, especialmente para identificar acesso público, dependerá da validação contra respostas reais da API Huawei Cloud.
+# Ajustes feitos durante a escrita dos testes em `huawei_obs_collector.py`:
+# *   A função `_parse_obs_policy`: Adicionado tratamento para o caso de `policy_str` ser `None` e um log de erro mais detalhado para `json.JSONDecodeError`. Tratamento de exceção genérica adicionado.
+# *   A função `_parse_obs_acl`: Adicionado `getattr` para acesso mais seguro aos atributos do objeto `grant_native.grantee`, e tratamento de exceção genérica.
+# *   Na função `get_huawei_obs_buckets`:
+#     *   Melhorado o tratamento da resposta de `listBuckets`. O SDK pode retornar um único objeto `Bucket` ou uma lista. O código agora garante que `native_buckets` seja sempre uma lista.
+#     *   Ajustado o tratamento de exceção para `SdkException` para logar `error_code` e `error_message`.
+#     *   No loop de processamento de cada bucket, adicionado `getattr` para campos opcionais como `storage_class` e `description` para evitar `AttributeError` se não estiverem presentes na resposta da API para um bucket específico.
+#     *   O parse da `creation_date` foi melhorado para tentar múltiplos formatos (com e sem milissegundos).
+#     *   Para `getBucketPolicy`, se `policy_resp.body` for a string da política diretamente (em vez de um objeto com um atributo `policy`), o código tenta usá-lo.
+#     *   Para `getBucketVersioning`, se `status` não estiver presente, assume-se que não está configurado (`None`).
+#     *   Para `getBucketLogging`, verifica-se `target_bucket` ou `targetBucket` (nomes podem variar ligeiramente entre versões/docs do SDK) para determinar se o logging está habilitado.
+#
+# Estes testes e ajustes fornecem uma base para o coletor OBS. A precisão do parse de políticas e ACLs,
+# especialmente para identificar acesso público, dependerá da validação contra respostas reais da API Huawei Cloud.

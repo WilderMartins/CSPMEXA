@@ -29,3 +29,8 @@ azure-identity~=1.15.0
 azure-mgmt-compute~=30.0.0
 azure-mgmt-storage~=21.0.0
 azure-mgmt-resource~=23.0.0
+
+# Google Workspace SDK
+google-api-python-client~=2.90.0
+google-auth-httplib2~=0.1.0
+google-auth-oauthlib~=1.0.0

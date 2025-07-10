@@ -24,10 +24,9 @@ def override_gcp_collector_settings(mock_gcp_settings: Settings):
     # para garantir que mocks sejam aplicados corretamente.
     # Isso é um pouco mais complexo porque o cache está em outro módulo.
     # Uma abordagem é mockar as funções get_X_client diretamente.
-    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict):
-         # Patch settings no módulo do collector se ele usar settings globais
-        with patch('app.gcp.gcp_storage_collector.settings', mock_gcp_settings), \
-             patch('app.gcp.gcp_client_manager.settings', mock_gcp_settings): # Patch também no client_manager
+    with patch('app.gcp.gcp_client_manager._clients_cache', new_callable=dict), \
+         patch('app.core.config.settings', mock_gcp_settings):
+            # Se os coletores e client manager usam app.core.config.settings, este patch os afetará.
             yield
 
 @pytest.fixture
