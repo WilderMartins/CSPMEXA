@@ -10,6 +10,7 @@ from app.core.security import get_current_user, TokenData
 from app.schemas import (
     collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas,
     collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas,
+    collector_huawei_obs_schemas, collector_huawei_ecs_schemas, collector_huawei_iam_schemas, # Huawei Schemas
     policy_engine_alert_schema
 )
 import logging
@@ -556,5 +557,205 @@ async def analyze_gcp_project_iam_policy_orchestrated(
 
 
 # TODO: Adicionar endpoints de orquestração para AWS IAM Roles, IAM Policies.
-# TODO: Adicionar um endpoint "/analyze/aws/all" e "/analyze/gcp/all" que chamam todos os coletores e analisadores para o respectivo provedor.
-# Ex: @router.post("/analyze/gcp/all", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_all_gcp")
+
+# --- Endpoints de Coleta Huawei Cloud (Proxy) ---
+HUAWEI_COLLECT_ROUTER_PREFIX = "/collect/huawei"
+
+@router.get(f"{HUAWEI_COLLECT_ROUTER_PREFIX}/obs/buckets", response_model=List[collector_huawei_obs_schemas.HuaweiOBSBucketData], name="huawei_collector:get_obs_buckets")
+async def collect_huawei_obs_buckets_gateway(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Huawei Cloud OBS buckets."""
+    params = {"project_id": project_id, "region_id": region_id}
+    return await _proxy_collector_request("GET", "/collect/huawei/obs/buckets", current_user, request, params=params)
+
+@router.get(f"{HUAWEI_COLLECT_ROUTER_PREFIX}/ecs/instances", response_model=List[collector_huawei_ecs_schemas.HuaweiECSServerData], name="huawei_collector:get_ecs_instances")
+async def collect_huawei_ecs_instances_gateway(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de instâncias ECS (VMs) da Huawei Cloud."""
+    params = {"project_id": project_id, "region_id": region_id}
+    return await _proxy_collector_request("GET", "/collect/huawei/ecs/instances", current_user, request, params=params)
+
+@router.get(f"{HUAWEI_COLLECT_ROUTER_PREFIX}/vpc/security-groups", response_model=List[collector_huawei_ecs_schemas.HuaweiVPCSecurityGroup], name="huawei_collector:get_vpc_sgs")
+async def collect_huawei_vpc_sgs_gateway(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Security Groups VPC da Huawei Cloud."""
+    params = {"project_id": project_id, "region_id": region_id}
+    return await _proxy_collector_request("GET", "/collect/huawei/vpc/security-groups", current_user, request, params=params)
+
+@router.get(f"{HUAWEI_COLLECT_ROUTER_PREFIX}/iam/users", response_model=List[collector_huawei_iam_schemas.HuaweiIAMUserData], name="huawei_collector:get_iam_users")
+async def collect_huawei_iam_users_gateway(
+    request: Request,
+    region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de usuários IAM da Huawei Cloud."""
+    params = {"region_id": region_id}
+    if domain_id:
+        params["domain_id"] = domain_id
+    return await _proxy_collector_request("GET", "/collect/huawei/iam/users", current_user, request, params=params)
+
+
+# --- Endpoints de Análise Huawei Cloud (Orquestração) ---
+HUAWEI_ANALYZE_ROUTER_PREFIX = "/analyze/huawei"
+
+async def _orchestrate_huawei_analysis(
+    service_name_in_engine: str, # ex: "huawei_obs_buckets"
+    collector_path_suffix: str,  # ex: "obs/buckets"
+    request: Request,
+    project_id: str, # Para Huawei, pode ser Project ID ou Domain ID dependendo do serviço
+    region_id: str, # Necessário para a maioria dos coletores Huawei
+    current_user: TokenData,
+    domain_id_for_iam: Optional[str] = None # Específico para IAM Users
+) -> List[policy_engine_alert_schema.Alert]:
+    downstream_headers = {}
+
+    collected_data: Any
+    try:
+        collector_full_path = f"/collect/huawei/{collector_path_suffix}"
+        collector_params = {"project_id": project_id, "region_id": region_id}
+        if service_name_in_engine == "huawei_iam_users": # IAM usa domain_id
+            collector_params = {"region_id": region_id}
+            if domain_id_for_iam: # Se domain_id específico for fornecido para IAM
+                collector_params["domain_id"] = domain_id_for_iam
+            # Se domain_id_for_iam não for fornecido, o coletor IAM tentará usar HUAWEICLOUD_SDK_DOMAIN_ID
+            # ou o project_id das credenciais como fallback. O account_id para o policy engine será o project_id.
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params, headers=downstream_headers)
+
+        if collector_response.status_code != 200:
+            error_detail = collector_response.text
+            try: error_detail = collector_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=collector_response.status_code,
+                detail=f"Error from Collector Service (Huawei {collector_path_suffix}) for account {project_id}/{domain_id_for_iam or 'N/A'} in region {region_id}: {error_detail}",
+            )
+        collected_data = collector_response.json()
+        if not collected_data: return []
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to collect Huawei {collector_path_suffix} data: {str(e)}"
+        )
+
+    analysis_payload = {
+        "provider": "huawei",
+        "service": service_name_in_engine,
+        "data": collected_data,
+        "account_id": domain_id_for_iam if service_name_in_engine == "huawei_iam_users" else project_id,
+        # Adicionar region_id ao payload se as políticas precisarem dele e não estiver no 'data' individual.
+        # Para Huawei, ECS e SGs têm region_id no schema. OBS tem location. IAM é global.
+    }
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
+        if engine_response.status_code != 200:
+            error_detail = engine_response.text
+            try: error_detail = engine_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=engine_response.status_code,
+                detail=f"Error from Policy Engine Service (Huawei {service_name_in_engine} analysis): {error_detail}",
+            )
+        alerts = engine_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to analyze Huawei {service_name_in_engine} data: {str(e)}"
+        )
+    return alerts
+
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/obs/buckets", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_obs_buckets")
+async def analyze_huawei_obs_buckets_orchestrated(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud onde os buckets serão listados/verificados."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Huawei Cloud OBS buckets."""
+    return await _orchestrate_huawei_analysis(
+        service_name_in_engine="huawei_obs_buckets",
+        collector_path_suffix="obs/buckets",
+        request=request, project_id=project_id, region_id=region_id, current_user=current_user
+    )
+
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/ecs/instances", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_ecs_instances")
+async def analyze_huawei_ecs_instances_orchestrated(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de instâncias ECS (VMs) da Huawei Cloud."""
+    return await _orchestrate_huawei_analysis(
+        service_name_in_engine="huawei_ecs_instances",
+        collector_path_suffix="ecs/instances",
+        request=request, project_id=project_id, region_id=region_id, current_user=current_user
+    )
+
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/vpc/security-groups", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_vpc_sgs")
+async def analyze_huawei_vpc_sgs_orchestrated(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Security Groups VPC da Huawei Cloud."""
+    return await _orchestrate_huawei_analysis(
+        service_name_in_engine="huawei_vpc_security_groups",
+        collector_path_suffix="vpc/security-groups",
+        request=request, project_id=project_id, region_id=region_id, current_user=current_user
+    )
+
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/iam/users", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_iam_users")
+async def analyze_huawei_iam_users_orchestrated(
+    request: Request,
+    region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM (endpoint)."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud. Se não fornecido, o coletor tentará usar variáveis de ambiente ou o project_id das credenciais."),
+    # O project_id da conta/credenciais principal é usado como 'account_id' para o policy engine se domain_id não for o foco.
+    # Para IAM, o 'account_id' no payload do policy engine será o domain_id.
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de usuários IAM da Huawei Cloud."""
+    # O `_orchestrate_huawei_analysis` espera `project_id` para o account_id geral.
+    # Para IAM, passamos o `domain_id` (ou um placeholder se não fornecido) como `domain_id_for_iam`.
+    # O `account_id` no payload para o policy engine será o `domain_id` para `huawei_iam_users`.
+    # Se `domain_id` for None, o coletor tentará resolver.
+    # O `project_id` aqui é o da conta principal, que pode ser o mesmo que o `domain_id` ou um `project_id` dentro desse domínio.
+    # Para consistência, o `account_id` que o motor de políticas recebe para IAM deve ser o `domain_id`.
+    # O `project_id` passado para `_orchestrate_huawei_analysis` será usado como `account_id` no payload para o motor,
+    # exceto para o caso de IAM Users onde o `domain_id_for_iam` tomará precedência.
+
+    # Usar um project_id dummy para a chamada _orchestrate_huawei_analysis, pois ele será
+    # sobrescrito pelo domain_id_for_iam para o `account_id` do payload do Policy Engine.
+    # O importante é que o collector_params para IAM use o domain_id.
+    dummy_project_id_for_orchestrator = domain_id or "huawei-iam-domain-scope"
+
+    return await _orchestrate_huawei_analysis(
+        service_name_in_engine="huawei_iam_users",
+        collector_path_suffix="iam/users",
+        request=request,
+        project_id=dummy_project_id_for_orchestrator, # Usado como account_id geral, mas para IAM, domain_id_for_iam é mais específico.
+        region_id=region_id,
+        current_user=current_user,
+        domain_id_for_iam=domain_id
+    )
+
+# TODO: Adicionar um endpoint "/analyze/aws/all", "/analyze/gcp/all" e "/analyze/huawei/all"
+# que chamam todos os coletores e analisadores para o respectivo provedor.
+# Ex: @router.post("/analyze/huawei/all", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_all_huawei")

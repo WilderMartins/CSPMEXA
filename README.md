@@ -33,13 +33,22 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **Cloud Storage:** Verificações para buckets públicos (IAM), versionamento desabilitado, logging desabilitado.
     *   **Compute Engine:** Verificações para VMs com IP público, VMs com Service Account padrão e acesso total, Firewalls VPC permitindo acesso público irrestrito.
     *   **IAM (Projeto):** Verificações para membros externos (`allUsers`, `allAuthenticatedUsers`) com papéis primitivos (Owner, Editor, Viewer).
+*   **Coleta de Dados Huawei Cloud:**
+    *   **OBS (Object Storage Service):** Detalhes de buckets (política, ACL, versionamento, logging).
+    *   **ECS (Elastic Cloud Server):** Detalhes de VMs (IPs, SGs associados, etc.).
+    *   **VPC (Virtual Private Cloud):** Detalhes de Security Groups e suas regras.
+    *   **IAM:** Detalhes de Usuários (status de MFA para console, AK/SKs).
+*   **Motor de Políticas Huawei Cloud (Básico):**
+    *   **OBS:** Verificações para buckets públicos (política/ACL), versionamento e logging desabilitados.
+    *   **ECS/VPC:** Verificações para VMs ECS com IP público, SGs VPC com acesso público.
+    *   **IAM Users:** Verificações para MFA de console desabilitado, chaves de acesso inativas.
 *   **API Gateway:**
-    *   Proxy para endpoints de coleta AWS e GCP.
-    *   Endpoints de orquestração para coletar e analisar dados AWS (S3, EC2 Instâncias/SGs, Usuários IAM) e GCP (Storage Buckets, Compute VMs/Firewalls, IAM de Projeto).
+    *   Proxy para endpoints de coleta AWS, GCP e Huawei Cloud.
+    *   Endpoints de orquestração para coletar e analisar dados de AWS, GCP e Huawei Cloud.
     *   Proteção de endpoints relevantes com JWT.
 *   **Frontend (Básico):**
     *   Página de login e callback OAuth.
-    *   Dashboard para acionar análises AWS e GCP (requer input do Project ID para GCP) e visualizar alertas.
+    *   Dashboard para acionar análises AWS, GCP (requer Project ID) e Huawei Cloud (requer Project/Domain ID e Region ID) e visualizar alertas.
     *   Internacionalização (Inglês, Português-BR).
 
 ## Primeiros Passos (Ambiente de Desenvolvimento)
@@ -53,7 +62,8 @@ Esta seção descreve como configurar e rodar o ambiente de desenvolvimento loca
 *   Node.js (v18+) e npm (ou yarn)
 *   Docker e Docker Compose (para rodar dependências como PostgreSQL e, opcionalmente, os serviços da aplicação).
 *   **Credenciais AWS:** Configuradas localmente para o `collector-service` acessar a AWS (via variáveis de ambiente ou `~/.aws/credentials`).
-*   **Credenciais GCP:** Um arquivo JSON de chave de Service Account do GCP. A Service Account deve ter permissões de leitura para os serviços a serem monitorados (Cloud Asset, Storage, Compute, IAM). Defina a variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS` para o caminho deste arquivo JSON.
+*   **Credenciais GCP:** Um arquivo JSON de chave de Service Account do GCP. A Service Account deve ter permissões de leitura para os serviços a serem monitorados. Defina a variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS` para o caminho deste arquivo JSON.
+*   **Credenciais Huawei Cloud:** Access Key ID (AK), Secret Access Key (SK), Project ID e Domain ID (para IAM) da Huawei Cloud. Configure as variáveis de ambiente: `HUAWEICLOUD_SDK_AK`, `HUAWEICLOUD_SDK_SK`, `HUAWEICLOUD_SDK_PROJECT_ID`, `HUAWEICLOUD_SDK_DOMAIN_ID`.
 *   **Google OAuth (para `auth-service`):** Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados.
 
 ### 1. Clone o Repositório
@@ -88,8 +98,9 @@ Cada microsserviço backend está localizado em `backend/<nome_do_servico>/`.
     *   **`collector_service/.env`:**
         *   `AWS_REGION_NAME`: Região AWS padrão (ex: `us-east-1`).
         *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: Opcional se usando perfis IAM ou variáveis de ambiente globais da AWS.
-        *   `POLICY_ENGINE_URL`: `http://localhost:8002/api/v1` (URL base do policy-engine).
-        *   **Nota para GCP:** A autenticação do `collector-service` para GCP é primariamente via variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS`. Não há entradas específicas no `.env.example` para chaves GCP.
+        *   `POLICY_ENGINE_URL`: `http://localhost:8002/api/v1` (URL base do policy-engine). (Nota: Este é para comunicação direta, o fluxo principal é via Gateway).
+        *   **Nota para GCP:** A autenticação é via `GOOGLE_APPLICATION_CREDENTIALS`.
+        *   **Nota para Huawei Cloud:** A autenticação é via variáveis de ambiente `HUAWEICLOUD_SDK_AK`, `HUAWEICLOUD_SDK_SK`, `HUAWEICLOUD_SDK_PROJECT_ID`, `HUAWEICLOUD_SDK_DOMAIN_ID`.
     *   **`policy_engine_service/.env`:** Geralmente não requer configuração específica no `.env` para o MVP.
     *   **`api_gateway_service/.env`:**
         *   `AUTH_SERVICE_URL`, `COLLECTOR_SERVICE_URL`, `POLICY_ENGINE_SERVICE_URL`: Verifique se apontam para as portas corretas dos outros serviços locais.
@@ -151,9 +162,9 @@ O frontend é uma aplicação React (Vite) localizada em `frontend/webapp/`.
 
 Quando os serviços backend estiverem rodando, suas documentações OpenAPI (Swagger UI) estarão disponíveis nos seguintes endpoints:
 *   **Auth Service:** `http://localhost:8000/docs`
-*   **Collector Service:** `http://localhost:8001/docs` (Inclui endpoints para AWS e GCP)
+*   **Collector Service:** `http://localhost:8001/docs` (Inclui endpoints para AWS, GCP e Huawei Cloud)
 *   **Policy Engine Service:** `http://localhost:8002/docs`
-*   **API Gateway Service:** `http://localhost:8050/docs` (Ponto de entrada principal, documenta todos os endpoints proxy e de orquestração para AWS e GCP)
+*   **API Gateway Service:** `http://localhost:8050/docs` (Ponto de entrada principal, documenta todos os endpoints proxy e de orquestração para AWS, GCP e Huawei Cloud)
 
 *(Nota: Para um ambiente de produção, todos os serviços seriam containerizados e orquestrados de forma mais robusta, por exemplo, com um `docker-compose.yml` completo para todos os serviços ou Kubernetes.)*
 

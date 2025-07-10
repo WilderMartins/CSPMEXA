@@ -16,3 +16,10 @@ google-cloud-storage
 google-cloud-compute
 google-api-python-client
 google-auth
+
+# Huawei Cloud Dependencies
+huaweicloudsdkcore # Core SDK
+huaweicloudsdkiam # IAM Service
+huaweicloudsdkobs # Object Storage Service (OBS)
+huaweicloudsdkecs # Elastic Cloud Server (ECS)
+huaweicloudsdkvpc # Virtual Private Cloud (VPC)

@@ -22,6 +22,11 @@ const DashboardPage: React.FC = () => {
   // Estado para o GCP Project ID
   const [gcpProjectId, setGcpProjectId] = useState<string>('');
 
+  // Estados para Huawei Cloud
+  const [huaweiProjectId, setHuaweiProjectId] = useState<string>('');
+  const [huaweiRegionId, setHuaweiRegionId] = useState<string>(''); // e.g., ap-southeast-1
+  const [huaweiDomainId, setHuaweiDomainId] = useState<string>(''); // Para IAM Users
+
   const apiClient = axios.create({
     baseURL: '',
     headers: {
@@ -46,24 +51,57 @@ const DashboardPage: React.FC = () => {
 
   const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
 
-  const handleAnalysis = async (provider: 'aws' | 'gcp', servicePath: string, analysisType: string, projectId?: string) => {
+  const handleAnalysis = async (
+    provider: 'aws' | 'gcp' | 'huawei',
+    servicePath: string,
+    analysisType: string,
+    idParams?: { projectId?: string; regionId?: string; domainId?: string }
+  ) => {
     setIsLoading(true);
     setError(null);
     setAlerts([]);
     setCurrentAnalysisType(analysisType);
 
     let url = `/api/v1/analyze/${provider}/${servicePath}`;
+    const queryParams = new URLSearchParams();
+
     if (provider === 'gcp') {
-      if (!projectId) {
+      if (!idParams?.projectId) {
         setError(t('dashboardPage.gcpProjectIdRequired'));
         setIsLoading(false);
         return;
       }
-      url += `?project_id=${encodeURIComponent(projectId)}`;
+      queryParams.append('project_id', idParams.projectId);
+    } else if (provider === 'huawei') {
+      if (!idParams?.projectId && servicePath !== 'iam/users') { // IAM users usa domain_id
+        setError(t('dashboardPage.huaweiProjectIdRequired'));
+        setIsLoading(false);
+        return;
+      }
+      if (!idParams?.regionId) {
+        setError(t('dashboardPage.huaweiRegionIdRequired'));
+        setIsLoading(false);
+        return;
+      }
+      if (idParams.projectId) queryParams.append('project_id', idParams.projectId);
+      queryParams.append('region_id', idParams.regionId);
+      if (servicePath === 'iam/users' && idParams.domainId) { // Domain ID é opcional mas preferido para IAM users
+        queryParams.append('domain_id', idParams.domainId);
+      } else if (servicePath === 'iam/users' && !idParams.domainId) {
+        // Se domain_id não for fornecido para IAM users, o backend tentará usar variáveis de ambiente
+        // ou o project_id como fallback, o que pode não ser o ideal mas permite a chamada.
+        // Adicionar um aviso ou exigir domain_id para IAM é uma opção.
+        // Por enquanto, permitimos a chamada. O backend logará um aviso se o domain_id não for claro.
+      }
+    }
+
+    const queryString = queryParams.toString();
+    if (queryString) {
+      url += `?${queryString}`;
     }
 
     try {
-      const response = await apiClient.post(url, {}); // POST request, body is empty for now
+      const response = await apiClient.post(url, {});
       setAlerts(response.data || []);
       if (response.data.length === 0) {
         setError(t('dashboardPage.noAlertsFor', { type: analysisType }));
@@ -88,17 +126,17 @@ const DashboardPage: React.FC = () => {
 
       <div className="aws-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
         <h3>{t('dashboardPage.awsAnalysisTitle')}</h3>
-        <div className="analysis-buttons" style={{ marginTop: '10px' }}>
+        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           <button onClick={() => handleAnalysis('aws', 's3', 'AWS S3 Buckets')} disabled={isLoading}>
             {isLoading && currentAnalysisType === 'AWS S3 Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeS3Button')}
           </button>
-          <button onClick={() => handleAnalysis('aws', 'ec2/instances', 'AWS EC2 Instances')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('aws', 'ec2/instances', 'AWS EC2 Instances')} disabled={isLoading}>
             {isLoading && currentAnalysisType === 'AWS EC2 Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2InstancesButton')}
           </button>
-          <button onClick={() => handleAnalysis('aws', 'ec2/security-groups', 'AWS EC2 Security Groups')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('aws', 'ec2/security-groups', 'AWS EC2 Security Groups')} disabled={isLoading}>
             {isLoading && currentAnalysisType === 'AWS EC2 Security Groups' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2SGsButton')}
           </button>
-          <button onClick={() => handleAnalysis('aws', 'iam/users', 'AWS IAM Users')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('aws', 'iam/users', 'AWS IAM Users')} disabled={isLoading}>
             {isLoading && currentAnalysisType === 'AWS IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
           </button>
         </div>
@@ -117,18 +155,50 @@ const DashboardPage: React.FC = () => {
             style={{ padding: '5px', minWidth: '250px' }}
           />
         </div>
-        <div className="analysis-buttons" style={{ marginTop: '10px' }}>
-          <button onClick={() => handleAnalysis('gcp', 'storage/buckets', 'GCP Storage Buckets', gcpProjectId)} disabled={isLoading || !gcpProjectId}>
+        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <button onClick={() => handleAnalysis('gcp', 'storage/buckets', 'GCP Storage Buckets', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
             {isLoading && currentAnalysisType === 'GCP Storage Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPStorageButton')}
           </button>
-          <button onClick={() => handleAnalysis('gcp', 'compute/instances', 'GCP Compute Instances', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('gcp', 'compute/instances', 'GCP Compute Instances', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
             {isLoading && currentAnalysisType === 'GCP Compute Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPInstancesButton')}
           </button>
-          <button onClick={() => handleAnalysis('gcp', 'compute/firewalls', 'GCP Compute Firewalls', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('gcp', 'compute/firewalls', 'GCP Compute Firewalls', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
             {isLoading && currentAnalysisType === 'GCP Compute Firewalls' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPFirewallsButton')}
           </button>
-          <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', gcpProjectId)} disabled={isLoading || !gcpProjectId} style={{ marginLeft: '10px' }}>
+          <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
             {isLoading && currentAnalysisType === 'GCP Project IAM' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPIAMButton')}
+          </button>
+        </div>
+      </div>
+
+      <div className="huawei-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+        <h3>{t('dashboardPage.huaweiAnalysisTitle')}</h3>
+        <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+          <div>
+            <label htmlFor="huaweiProjectId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiProjectIdLabel')}:</label>
+            <input type="text" id="huaweiProjectId" value={huaweiProjectId} onChange={(e) => setHuaweiProjectId(e.target.value)} placeholder={t('dashboardPage.huaweiProjectIdPlaceholder')} style={{ padding: '5px' }}/>
+          </div>
+          <div>
+            <label htmlFor="huaweiRegionId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiRegionIdLabel')}:</label>
+            <input type="text" id="huaweiRegionId" value={huaweiRegionId} onChange={(e) => setHuaweiRegionId(e.target.value)} placeholder={t('dashboardPage.huaweiRegionIdPlaceholder')} style={{ padding: '5px' }}/>
+          </div>
+          <div>
+            <label htmlFor="huaweiDomainId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiDomainIdLabel')}:</label>
+            <input type="text" id="huaweiDomainId" value={huaweiDomainId} onChange={(e) => setHuaweiDomainId(e.target.value)} placeholder={t('dashboardPage.huaweiDomainIdPlaceholder')} style={{ padding: '5px' }}/>
+          </div>
+        </div>
+        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <button onClick={() => handleAnalysis('huawei', 'obs/buckets', 'Huawei OBS Buckets', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
+            {isLoading && currentAnalysisType === 'Huawei OBS Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiOBSButton')}
+          </button>
+          <button onClick={() => handleAnalysis('huawei', 'ecs/instances', 'Huawei ECS Instances', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
+            {isLoading && currentAnalysisType === 'Huawei ECS Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiECSButton')}
+          </button>
+          <button onClick={() => handleAnalysis('huawei', 'vpc/security-groups', 'Huawei VPC SGs', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
+            {isLoading && currentAnalysisType === 'Huawei VPC SGs' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiSGsButton')}
+          </button>
+          <button onClick={() => handleAnalysis('huawei', 'iam/users', 'Huawei IAM Users', { projectId: huaweiProjectId, regionId: huaweiRegionId, domainId: huaweiDomainId })} disabled={isLoading || !huaweiRegionId /* Domain ID é opcional, mas region é crucial para o client IAM */}>
+            {isLoading && currentAnalysisType === 'Huawei IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiIAMButton')}
           </button>
         </div>
       </div>

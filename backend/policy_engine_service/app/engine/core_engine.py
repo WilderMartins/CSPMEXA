@@ -2,11 +2,13 @@ from typing import List, Optional, Dict, Any
 from app.schemas.input_data_schema import (
     AnalysisRequest,
     S3BucketDataInput, EC2InstanceDataInput, EC2SecurityGroupDataInput, IAMUserDataInput,
-    GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput # GCP Inputs
+    GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput, # GCP Inputs
+    HuaweiOBSBucketDataInput, HuaweiECSServerDataInput, HuaweiVPCSecurityGroupInput, HuaweiIAMUserDataInput # Huawei Inputs
 )
 from app.schemas.alert_schema import Alert
 from app.engine import aws_s3_policies, aws_ec2_policies, aws_iam_policies
-from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies # GCP Policies
+from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies
+from app.engine import huawei_obs_policies, huawei_ecs_policies, huawei_iam_policies # Huawei Policies
 import logging
 
 logger = logging.getLogger(__name__)
@@ -173,6 +175,53 @@ class PolicyEngine:
                     alerts.extend(iam_alerts)
             else:
                 logger.warning(f"Unsupported GCP service for analysis: {service}")
+
+        elif provider == "huawei":
+            # O account_id para Huawei pode ser project_id ou domain_id dependendo do serviço
+            # O collector deve popular o campo account_id no AnalysisRequest com o ID apropriado.
+            if service == "huawei_obs_buckets":
+                if not all(isinstance(item, HuaweiOBSBucketDataInput) for item in data): # type: ignore
+                    logger.error("Data for huawei_obs_buckets is not List[HuaweiOBSBucketDataInput]. Skipping.")
+                else:
+                    obs_alerts = huawei_obs_policies.evaluate_huawei_obs_policies(
+                        huawei_buckets_data=data, # type: ignore
+                        account_id=account_id
+                    )
+                    alerts.extend(obs_alerts)
+
+            elif service == "huawei_ecs_instances":
+                if not all(isinstance(item, HuaweiECSServerDataInput) for item in data): # type: ignore
+                    logger.error("Data for huawei_ecs_instances is not List[HuaweiECSServerDataInput]. Skipping.")
+                else:
+                    ecs_alerts = huawei_ecs_policies.evaluate_huawei_ecs_instance_policies(
+                        instances_data=data, # type: ignore
+                        account_id=account_id,
+                        region_id=getattr(data[0], 'region_id', None) if data else None # Tenta pegar a região do primeiro item
+                    )
+                    alerts.extend(ecs_alerts)
+
+            elif service == "huawei_vpc_security_groups":
+                if not all(isinstance(item, HuaweiVPCSecurityGroupInput) for item in data): # type: ignore
+                    logger.error("Data for huawei_vpc_security_groups is not List[HuaweiVPCSecurityGroupInput]. Skipping.")
+                else:
+                    sg_alerts = huawei_ecs_policies.evaluate_huawei_vpc_sg_policies(
+                        sgs_data=data, # type: ignore
+                        account_id=account_id,
+                        region_id=getattr(data[0], 'region_id', None) if data else None # Tenta pegar a região do primeiro item
+                    )
+                    alerts.extend(sg_alerts)
+
+            elif service == "huawei_iam_users":
+                if not all(isinstance(item, HuaweiIAMUserDataInput) for item in data): # type: ignore
+                    logger.error("Data for huawei_iam_users is not List[HuaweiIAMUserDataInput]. Skipping.")
+                else:
+                    iam_user_alerts = huawei_iam_policies.evaluate_huawei_iam_user_policies(
+                        users_data=data, # type: ignore
+                        account_id=account_id # Aqui account_id deve ser o domain_id
+                    )
+                    alerts.extend(iam_user_alerts)
+            else:
+                logger.warning(f"Unsupported Huawei Cloud service for analysis: {service}")
         else:
             logger.warning(f"Unsupported provider for analysis: {provider}")
 

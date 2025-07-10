@@ -163,7 +163,13 @@ SupportedDataTypes = Union[
     List['GCPStorageBucketDataInput'],
     List['GCPComputeInstanceDataInput'],
     List['GCPFirewallDataInput'],
-    Optional['GCPProjectIAMPolicyDataInput'] # IAM de projeto é um objeto único, não uma lista
+    Optional['GCPProjectIAMPolicyDataInput'], # IAM de projeto é um objeto único, não uma lista
+
+    # Tipos de Dados Huawei Cloud (a serem adicionados)
+    List['HuaweiOBSBucketDataInput'],
+    List['HuaweiECSServerDataInput'],
+    List['HuaweiVPCSecurityGroupInput'],
+    List['HuaweiIAMUserDataInput']
 ]
 
 # --- GCP Schemas (devem espelhar os do collector_service/app/schemas/gcp_*.py) ---
@@ -334,13 +340,166 @@ class GCPProjectIAMPolicyDataInput(BaseModel): # Note: Este não é uma Lista no
     external_primitive_role_details: List[str] = []
     error_details: Optional[str] = None
 
+# --- Huawei Cloud Schemas (devem espelhar os do collector_service/app/schemas/huawei_*.py) ---
+
+# Huawei OBS
+class HuaweiOBSBucketPolicyStatementInput(BaseModel):
+    sid: Optional[str] = Field(None, alias="Sid")
+    effect: str = Field(alias="Effect")
+    principal: Dict[str, Any] = Field(alias="Principal")
+    action: List[str] = Field(alias="Action")
+    resource: List[str] = Field(alias="Resource")
+    condition: Optional[Dict[str, Dict[str, List[str]]]] = Field(None, alias="Condition")
+    class Config: populate_by_name = True
+
+class HuaweiOBSBucketPolicyInput(BaseModel):
+    version: Optional[str] = Field(None, alias="Version")
+    statement: List[HuaweiOBSBucketPolicyStatementInput] = Field(alias="Statement")
+    class Config: populate_by_name = True
+
+class HuaweiOBSGranteeInput(BaseModel):
+    id: Optional[str] = Field(None, alias="ID")
+    uri: Optional[str] = Field(None, alias="URI")
+    class Config: populate_by_name = True
+
+class HuaweiOBSGrantInput(BaseModel):
+    grantee: HuaweiOBSGranteeInput = Field(alias="Grantee")
+    permission: str = Field(alias="Permission")
+    class Config: populate_by_name = True
+
+class HuaweiOBSOwnerInput(BaseModel):
+    id: str = Field(alias="ID")
+    class Config: populate_by_name = True
+
+class HuaweiOBSBucketACLInput(BaseModel):
+    owner: HuaweiOBSOwnerInput = Field(alias="Owner")
+    grants: List[HuaweiOBSGrantInput] = Field([], alias="Grant")
+    class Config: populate_by_name = True
+
+class HuaweiOBSBucketVersioningInput(BaseModel):
+    status: Optional[str] = None
+
+class HuaweiOBSBucketLoggingInput(BaseModel):
+    enabled: bool = False
+    target_bucket: Optional[str] = None
+    target_prefix: Optional[str] = None
+
+class HuaweiOBSBucketDataInput(BaseModel):
+    name: str
+    creation_date: Optional[datetime] = None
+    location: Optional[str] = None
+    storage_class: Optional[str] = None
+    bucket_policy: Optional[HuaweiOBSBucketPolicyInput] = None
+    acl: Optional[HuaweiOBSBucketACLInput] = None
+    versioning: Optional[HuaweiOBSBucketVersioningInput] = None
+    logging: Optional[HuaweiOBSBucketLoggingInput] = None
+    is_public_by_policy: Optional[bool] = None
+    public_policy_details: List[str] = []
+    is_public_by_acl: Optional[bool] = None
+    public_acl_details: List[str] = []
+    error_details: Optional[str] = None
+
+# Huawei ECS & VPC (Security Groups)
+class HuaweiECSAddressInput(BaseModel):
+    version: Optional[int] = None
+    addr: Optional[str] = None
+    mac_addr: Optional[str] = Field(None, alias="OS-EXT-IPS-MAC:mac_addr")
+    type: Optional[str] = Field(None, alias="OS-EXT-IPS:type")
+    class Config: populate_by_name = True
+
+class HuaweiECSImageInput(BaseModel):
+    id: str
+
+class HuaweiECSFlavorInput(BaseModel):
+    id: str
+    name: Optional[str] = None
+
+class HuaweiECSServerMetadataInput(BaseModel):
+    custom_metadata: Optional[Dict[str, str]] = None
+
+class HuaweiECSServerDataInput(BaseModel):
+    id: str
+    name: str
+    status: str
+    created: datetime
+    updated: Optional[datetime] = None
+    user_id: Optional[str] = Field(None, alias="user_id")
+    image: Optional[HuaweiECSImageInput] = None
+    flavor: HuaweiECSFlavorInput
+    addresses: Optional[Dict[str, List[HuaweiECSAddressInput]]] = None
+    key_name: Optional[str] = Field(None, alias="key_name")
+    availability_zone: Optional[str] = Field(None, alias="OS-EXT-AZ:availability_zone")
+    host_id: Optional[str] = Field(None, alias="OS-EXT-SRV-ATTR:host")
+    hypervisor_hostname: Optional[str] = Field(None, alias="OS-EXT-SRV-ATTR:hypervisor_hostname")
+    security_groups: Optional[List[Dict[str, str]]] = None
+    volumes_attached: Optional[List[Dict[str, str]]] = Field(None, alias="os-extended-volumes:volumes_attached")
+    metadata: Optional[HuaweiECSServerMetadataInput] = None
+    project_id: str
+    region_id: str
+    public_ips: List[str] = []
+    private_ips: List[str] = []
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True
+
+class HuaweiVPCSecurityGroupRuleInput(BaseModel):
+    id: str
+    description: Optional[str] = None
+    security_group_id: str
+    direction: str
+    ethertype: Optional[str] = None
+    protocol: Optional[str] = None
+    port_range_min: Optional[int] = Field(None, alias="port_range_min")
+    port_range_max: Optional[int] = Field(None, alias="port_range_max")
+    remote_ip_prefix: Optional[str] = Field(None, alias="remote_ip_prefix")
+    remote_group_id: Optional[str] = Field(None, alias="remote_group_id")
+    class Config: populate_by_name = True
+
+class HuaweiVPCSecurityGroupInput(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    project_id_from_collector: str = Field(alias="project_id")
+    security_group_rules: List[HuaweiVPCSecurityGroupRuleInput] = []
+    region_id: str
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True
+
+# Huawei IAM
+class HuaweiIAMUserLoginProtectInput(BaseModel):
+    enabled: bool
+    verification_method: Optional[str] = None
+
+class HuaweiIAMUserAccessKeyInput(BaseModel):
+    access_key: str = Field(alias="access")
+    status: str
+    create_time: Optional[datetime] = Field(None, alias="create_time_format")
+    description: Optional[str] = None
+    class Config: populate_by_name = True
+
+class HuaweiIAMUserMfaDeviceInput(BaseModel):
+    serial_number: str
+    type: str
+
+class HuaweiIAMUserDataInput(BaseModel):
+    id: str
+    name: str
+    domain_id: str
+    enabled: bool
+    email: Optional[str] = None
+    phone: Optional[str] = Field(None, alias="areacode_mobile")
+    login_protect: Optional[HuaweiIAMUserLoginProtectInput] = Field(None, alias="login_protect")
+    access_keys: Optional[List[HuaweiIAMUserAccessKeyInput]] = None
+    mfa_devices: Optional[List[HuaweiIAMUserMfaDeviceInput]] = None
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True
+
 
 class AnalysisRequest(BaseModel):
-    provider: str = Field(description="Cloud provider name, e.g., 'aws', 'gcp'.")
-    service: str = Field(description="Service name, e.g., 's3', 'ec2_instances', 'gcp_storage_buckets'.")
+    provider: str = Field(description="Cloud provider name, e.g., 'aws', 'gcp', 'huawei'.")
+    service: str = Field(description="Service name, e.g., 's3', 'ec2_instances', 'gcp_storage_buckets', 'huawei_obs_buckets'.")
     data: SupportedDataTypes
-    account_id: Optional[str] = Field(None, description="Cloud account ID (e.g., AWS Account ID, GCP Project ID/Number).")
-    # Para GCP, 'account_id' pode ser o Project ID. Os dados de recurso já devem ter project_id neles.
+    account_id: Optional[str] = Field(None, description="Cloud account ID (e.g., AWS Account ID, GCP Project ID, Huawei Domain/Project ID).")
+    # Para Huawei, account_id pode ser o Domain ID ou Project ID dependendo do serviço.
 
     class Config:
         pass

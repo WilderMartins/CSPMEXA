@@ -214,14 +214,100 @@ async def collect_gcp_project_iam_policy_data(
     """Coleta a política IAM a nível de projeto do Google Cloud."""
     try:
         data = await gcp_iam_collector.get_gcp_project_iam_policy(project_id=project_id)
-        if data is None: # Collector pode retornar None se o project_id for estritamente necessário e não encontrado
+        if data is None:
              raise HTTPException(status_code=400, detail="GCP Project ID is required and could not be determined for IAM policy collection.")
-        if data.error_details and data.project_id == project_id : # Erro específico na coleta desta política
+        if data.error_details and data.project_id == (project_id or gcp_iam_collector.get_gcp_project_id()):
+            # Se o project_id não foi passado, o collector usa o do ambiente. Comparar com o resolvido.
             raise HTTPException(status_code=500, detail=data.error_details)
         return data
-    except HTTPException as http_exc: # Exceções levantadas pelo gcp_iam_collector (ex: get_iam_client falha)
+    except HTTPException as http_exc:
         logger.error(f"HTTPException during GCP Project IAM Policy collection for project {project_id or 'default'}: {http_exc.detail}")
         raise http_exc
     except Exception as e:
         logger.exception(f"Unexpected error in collect_gcp_project_iam_policy_data endpoint for project {project_id or 'default'}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# --- Endpoints de Coleta Huawei Cloud ---
+from app.huawei import huawei_obs_collector, huawei_ecs_collector, huawei_iam_collector
+from app.schemas import huawei_obs, huawei_ecs, huawei_iam
+
+HUAWEI_ROUTER_PREFIX = "/collect/huawei"
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/obs/buckets", response_model=List[huawei_obs.HuaweiOBSBucketData], name="huawei_collector:get_obs_buckets")
+async def collect_huawei_obs_buckets_data(
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud (usado para escopo e credenciais)."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud (ex: ap-southeast-1)."),
+    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+):
+    """Coleta dados de configuração de Huawei Cloud OBS buckets."""
+    try:
+        data = await huawei_obs_collector.get_huawei_obs_buckets(project_id=project_id, region_id=region_id)
+        if data and data[0].error_details and data[0].name.startswith("ERROR_"):
+            raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei OBS Buckets collection for project {project_id} in region {region_id}: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_huawei_obs_buckets_data for project {project_id} in region {region_id}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/ecs/instances", response_model=List[huawei_ecs.HuaweiECSServerData], name="huawei_collector:get_ecs_instances")
+async def collect_huawei_ecs_instances_data(
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """Coleta dados de instâncias ECS (VMs) da Huawei Cloud."""
+    try:
+        data = await huawei_ecs_collector.get_huawei_ecs_instances(project_id=project_id, region_id=region_id)
+        if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+            raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei ECS Instances collection for project {project_id} in region {region_id}: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_huawei_ecs_instances_data for project {project_id} in region {region_id}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/vpc/security-groups", response_model=List[huawei_ecs.HuaweiVPCSecurityGroup], name="huawei_collector:get_vpc_sgs")
+async def collect_huawei_vpc_sgs_data(
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """Coleta dados de Security Groups VPC da Huawei Cloud."""
+    try:
+        # A função get_huawei_vpc_security_groups está em huawei_ecs_collector.py
+        data = await huawei_ecs_collector.get_huawei_vpc_security_groups(project_id=project_id, region_id=region_id)
+        if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+            raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei VPC SGs collection for project {project_id} in region {region_id}: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_huawei_vpc_sgs_data for project {project_id} in region {region_id}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/iam/users", response_model=List[huawei_iam.HuaweiIAMUserData], name="huawei_collector:get_iam_users")
+async def collect_huawei_iam_users_data(
+    region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM (endpoint)."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud. Se não fornecido, tenta obter do ambiente."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """Coleta dados de usuários IAM da Huawei Cloud."""
+    try:
+        data = await huawei_iam_collector.get_huawei_iam_users(domain_id=domain_id, region_id=region_id)
+        if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+            if "Domain ID" in data[0].error_details: # Erro específico de configuração
+                 raise HTTPException(status_code=400, detail=data[0].error_details)
+            raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei IAM Users collection for domain {domain_id or 'default'} in region {region_id}: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_huawei_iam_users_data for domain {domain_id or 'default'} in region {region_id}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")

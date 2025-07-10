@@ -18,20 +18,22 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
     *   **Porta Dev Padrão:** `8000`
 
 2.  **`collector-service` (Serviço de Coleta de Dados):**
-    *   **Responsabilidades Atuais (AWS & GCP):**
+    *   **Responsabilidades Atuais (AWS, GCP & Huawei Cloud):**
         *   **AWS:** Coleta de dados para S3, EC2 (Instâncias, SGs), IAM (Usuários, Roles, Policies).
         *   **GCP:** Coleta de dados para Cloud Storage Buckets, Compute Engine VMs, Firewalls VPC, Políticas IAM de Projeto.
+        *   **Huawei Cloud:** Coleta de dados para OBS Buckets, ECS VMs, VPC SGs, IAM Users.
         *   Conexão com APIs dos provedores de nuvem.
         *   Coleta de metadados de configuração.
-    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), Pydantic.
+    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), huaweicloudsdkpython (Huawei), Pydantic.
     *   **Comunicação:** REST API. Os dados são retornados diretamente nas respostas da API.
     *   **Porta Dev Padrão:** `8001`
 
 3.  **`policy-engine-service` (Serviço do Motor de Políticas):**
-    *   **Responsabilidades Atuais (AWS & GCP):**
+    *   **Responsabilidades Atuais (AWS, GCP & Huawei Cloud):**
         *   Receber dados de configuração (via `api-gateway-service`).
         *   **AWS:** Aplicar políticas para S3, EC2 (Instâncias, SGs), Usuários IAM.
         *   **GCP:** Aplicar políticas para Cloud Storage Buckets, Compute Engine VMs, Firewalls VPC, Políticas IAM de Projeto.
+        *   **Huawei Cloud:** Aplicar políticas para OBS Buckets, ECS VMs, VPC SGs, IAM Users.
         *   Gerar e retornar uma lista de "Alertas" (descobertas).
     *   **Tecnologia:** Python com FastAPI, Pydantic.
     *   **Comunicação:** REST API (endpoint `/analyze` que aceita dados de vários provedores/serviços).
@@ -41,8 +43,8 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
     *   **Responsabilidades Atuais:**
         *   Ponto de entrada único para o frontend.
         *   Proxy para endpoints de autenticação do `auth-service`.
-        *   Proxy para endpoints de coleta de dados AWS e GCP do `collector-service`.
-        *   Endpoints de orquestração que chamam o `collector-service` e depois o `policy-engine-service` para recursos AWS e GCP.
+        *   Proxy para endpoints de coleta de dados AWS, GCP e Huawei Cloud do `collector-service`.
+        *   Endpoints de orquestração que chamam o `collector-service` e depois o `policy-engine-service` para recursos AWS, GCP e Huawei Cloud.
         *   Validação de token JWT para endpoints protegidos.
     *   **Tecnologia:** Python com FastAPI, Pydantic, HTTPX.
     *   **Comunicação:** REST/HTTP com frontend e outros serviços.
@@ -70,8 +72,8 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
 **Limitações do MVP Alpha:**
 *   Não há persistência dos dados coletados nem dos alertas gerados. Cada análise é feita sob demanda.
 *   O `notification-service` não está implementado.
-*   Cobertura de provedores limitada à AWS (S3, EC2, IAM) e GCP (Cloud Storage, Compute Engine VMs & Firewalls, IAM de Projeto). Outros serviços e provedores (Azure, Huawei Cloud) são para futuras iterações.
-*   Conjunto de políticas de segurança ainda é básico para os serviços cobertos.
+*   Cobertura de provedores atual: AWS (S3, EC2, IAM), GCP (Cloud Storage, Compute Engine VMs/Firewalls, IAM de Projeto), e Huawei Cloud (OBS Buckets, ECS VMs, VPC SGs, IAM Users). Outros serviços e o provedor Azure são para futuras iterações.
+*   Conjunto de políticas de segurança ainda é básico para os serviços e provedores cobertos.
 
 ## Comunicação entre Microsserviços (MVP Alpha)
 
@@ -96,8 +98,8 @@ graph TD
 
     subgraph "Serviços de Backend"
         C[Auth Service - Porta 8000]
-        D[Collector Service (AWS & GCP) - Porta 8001]
-        E[Policy Engine Service (AWS & GCP) - Porta 8002]
+        D[Collector Service (AWS, GCP, Huawei) - Porta 8001]
+        E[Policy Engine Service (AWS, GCP, Huawei) - Porta 8002]
         G((Notification Service - Planejado))
     end
 
@@ -105,6 +107,7 @@ graph TD
         DB1[(PostgreSQL - AuthDB)]
         AWSAPI[AWS APIs]
         GCPApi[GCP APIs]
+        HuaweiAPI[Huawei Cloud APIs]
         GoogleOAuth[Google OAuth2 API]
     end
 
@@ -114,13 +117,14 @@ graph TD
     C --> GoogleOAuth;
     C --- DB1;
 
-    B -->|/collect/aws/*, /collect/gcp/* (Proxy)| D;
-    B -->|/analyze/aws/*, /analyze/gcp/* (Coleta)| D;
+    B -->|/collect/* (Proxy)| D;
+    B -->|/analyze/* (Coleta)| D;
     D --> AWSAPI;
     D --> GCPApi;
+    D --> HuaweiAPI;
 
-    B -->|/analyze/aws/*, /analyze/gcp/* (Análise)| E;
-    D -- Dados Coletados AWS & GCP (via B) --> E;
+    B -->|/analyze/* (Análise)| E;
+    D -- Dados Coletados AWS, GCP, Huawei (via B) --> E;
 
     E -- Alertas Gerados (via B) --> A;
     E -.->|Alertas (Futuro)| G;
