@@ -23,3 +23,9 @@ huaweicloudsdkiam # IAM Service
 huaweicloudsdkobs # Object Storage Service (OBS)
 huaweicloudsdkecs # Elastic Cloud Server (ECS)
 huaweicloudsdkvpc # Virtual Private Cloud (VPC)
+
+# Azure SDK
+azure-identity~=1.15.0
+azure-mgmt-compute~=30.0.0
+azure-mgmt-storage~=21.0.0
+azure-mgmt-resource~=23.0.0

@@ -11,3 +11,4 @@ python-multipart
 httpx
 alembic
 python-dotenv
+alembic

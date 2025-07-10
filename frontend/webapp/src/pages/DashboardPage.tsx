@@ -27,6 +27,9 @@ const DashboardPage: React.FC = () => {
   const [huaweiRegionId, setHuaweiRegionId] = useState<string>(''); // e.g., ap-southeast-1
   const [huaweiDomainId, setHuaweiDomainId] = useState<string>(''); // Para IAM Users
 
+  // Estado para Azure Subscription ID
+  const [azureSubscriptionId, setAzureSubscriptionId] = useState<string>('');
+
   const apiClient = axios.create({
     baseURL: '',
     headers: {
@@ -52,10 +55,10 @@ const DashboardPage: React.FC = () => {
   const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
 
   const handleAnalysis = async (
-    provider: 'aws' | 'gcp' | 'huawei',
+    provider: 'aws' | 'gcp' | 'huawei' | 'azure', // Adicionado 'azure'
     servicePath: string,
     analysisType: string,
-    idParams?: { projectId?: string; regionId?: string; domainId?: string }
+    idParams?: { projectId?: string; regionId?: string; domainId?: string; subscriptionId?: string } // Adicionado subscriptionId
   ) => {
     setIsLoading(true);
     setError(null);
@@ -93,6 +96,13 @@ const DashboardPage: React.FC = () => {
         // Adicionar um aviso ou exigir domain_id para IAM é uma opção.
         // Por enquanto, permitimos a chamada. O backend logará um aviso se o domain_id não for claro.
       }
+    } else if (provider === 'azure') {
+      if (!idParams?.subscriptionId) {
+        setError(t('dashboardPage.azureSubscriptionIdRequired')); // Adicionar esta chave de tradução
+        setIsLoading(false);
+        return;
+      }
+      queryParams.append('subscription_id', idParams.subscriptionId);
     }
 
     const queryString = queryParams.toString();
@@ -199,6 +209,36 @@ const DashboardPage: React.FC = () => {
           </button>
           <button onClick={() => handleAnalysis('huawei', 'iam/users', 'Huawei IAM Users', { projectId: huaweiProjectId, regionId: huaweiRegionId, domainId: huaweiDomainId })} disabled={isLoading || !huaweiRegionId /* Domain ID é opcional, mas region é crucial para o client IAM */}>
             {isLoading && currentAnalysisType === 'Huawei IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiIAMButton')}
+          </button>
+        </div>
+      </div>
+
+      {/* Seção de Análise Azure */}
+      <div className="azure-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
+        <h3>{t('dashboardPage.azureAnalysisTitle')}</h3>
+        <div style={{ marginBottom: '10px' }}>
+          <label htmlFor="azureSubscriptionId" style={{ marginRight: '10px' }}>{t('dashboardPage.azureSubscriptionIdLabel')}:</label>
+          <input
+            type="text"
+            id="azureSubscriptionId"
+            value={azureSubscriptionId}
+            onChange={(e) => setAzureSubscriptionId(e.target.value)}
+            placeholder={t('dashboardPage.azureSubscriptionIdPlaceholder')}
+            style={{ padding: '5px', minWidth: '250px' }}
+          />
+        </div>
+        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <button
+            onClick={() => handleAnalysis('azure', 'virtualmachines', 'Azure Virtual Machines', { subscriptionId: azureSubscriptionId })}
+            disabled={isLoading || !azureSubscriptionId}
+          >
+            {isLoading && currentAnalysisType === 'Azure Virtual Machines' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureVMsButton')}
+          </button>
+          <button
+            onClick={() => handleAnalysis('azure', 'storageaccounts', 'Azure Storage Accounts', { subscriptionId: azureSubscriptionId })}
+            disabled={isLoading || !azureSubscriptionId}
+          >
+            {isLoading && currentAnalysisType === 'Azure Storage Accounts' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureStorageButton')}
           </button>
         </div>
       </div>

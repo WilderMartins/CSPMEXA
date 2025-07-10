@@ -165,12 +165,84 @@ SupportedDataTypes = Union[
     List['GCPFirewallDataInput'],
     Optional['GCPProjectIAMPolicyDataInput'], # IAM de projeto é um objeto único, não uma lista
 
-    # Tipos de Dados Huawei Cloud (a serem adicionados)
+    # Tipos de Dados Huawei Cloud
     List['HuaweiOBSBucketDataInput'],
     List['HuaweiECSServerDataInput'],
     List['HuaweiVPCSecurityGroupInput'],
-    List['HuaweiIAMUserDataInput']
+    List['HuaweiIAMUserDataInput'],
+
+    # Tipos de Dados Azure (a serem adicionados)
+    List['AzureVirtualMachineDataInput'],
+    List['AzureStorageAccountDataInput']
 ]
+
+# --- Azure Schemas (espelham collector_service/app/schemas/azure_*.py) ---
+
+# Azure Compute (VMs)
+class AzureNetworkSecurityGroupInfoInput(BaseModel):
+    id: str
+    name: Optional[str] = None
+    resource_group: Optional[str] = None
+
+class AzurePublicIPAddressInput(BaseModel):
+    id: str
+    name: Optional[str] = None
+    ip_address: Optional[str] = None
+    resource_group: Optional[str] = None
+
+class AzureIPConfigurationInput(BaseModel):
+    name: Optional[str] = None
+    private_ip_address: Optional[str] = None
+    public_ip_address_details: Optional[AzurePublicIPAddressInput] = Field(None, alias="publicIPAddress")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+
+class AzureNetworkInterfaceInput(BaseModel):
+    id: str
+    name: Optional[str] = None
+    resource_group: Optional[str] = None
+    ip_configurations: List[AzureIPConfigurationInput] = Field(default_factory=list)
+    network_security_group: Optional[AzureNetworkSecurityGroupInfoInput] = None
+    class Config: extra = 'ignore'
+
+
+class AzureVirtualMachineDataInput(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group_name: Optional[str] = None
+    size: Optional[str] = None
+    os_type: Optional[str] = None
+    power_state: Optional[str] = None
+    tags: Optional[Dict[str, str]] = None
+    network_interfaces: List[AzureNetworkInterfaceInput] = Field(default_factory=list)
+    error_details: Optional[str] = None
+    class Config: extra = 'ignore'
+
+
+# Azure Storage
+class AzureBlobContainerDataInput(BaseModel):
+    id: str
+    name: Optional[str] = None
+    public_access: Optional[str] = None
+    last_modified_time: Optional[datetime] = Field(None, alias="lastModifiedTime")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+
+class AzureStorageAccountDataInput(BaseModel):
+    id: str
+    name: str
+    location: str
+    resource_group_name: Optional[str] = None
+    kind: Optional[str] = None
+    sku_name: Optional[str] = None
+    allow_blob_public_access: Optional[bool] = None
+    minimum_tls_version: Optional[str] = None
+    supports_https_traffic_only: Optional[bool] = None
+    blob_containers: List[AzureBlobContainerDataInput] = Field(default_factory=list)
+    error_details: Optional[str] = None
+    class Config: extra = 'ignore'
+
 
 # --- GCP Schemas (devem espelhar os do collector_service/app/schemas/gcp_*.py) ---
 

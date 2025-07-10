@@ -311,3 +311,62 @@ async def collect_huawei_iam_users_data(
     except Exception as e:
         logger.exception(f"Unexpected error in collect_huawei_iam_users_data for domain {domain_id or 'default'} in region {region_id}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+# --- Endpoints de Coleta Azure ---
+from app.azure import vm_collector as azure_vm_collector
+from app.azure import storage_collector as azure_storage_collector
+from app.schemas.azure import azure_compute, azure_storage
+
+AZURE_ROUTER_PREFIX = "/collect/azure"
+
+@router.get(f"{AZURE_ROUTER_PREFIX}/virtualmachines", response_model=List[azure_compute.AzureVirtualMachineData], name="azure_collector:get_virtual_machines")
+async def collect_azure_virtual_machines_data(
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID)."),
+    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+):
+    """Coleta dados de configuração de Azure Virtual Machines."""
+    sub_id_to_use = subscription_id or azure_vm_collector.AZURE_SUBSCRIPTION_ID # Tenta pegar do manager se não fornecido
+    if not sub_id_to_use:
+        raise HTTPException(status_code=400, detail="Azure Subscription ID is required and was not provided nor found in environment.")
+    try:
+        data = await azure_vm_collector.get_azure_vm_data(subscription_id=sub_id_to_use)
+        # Adicionar checagem de erro global similar aos outros provedores se o coletor retornar um item de erro.
+        # Ex: if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+        #         raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Azure Virtual Machines collection for subscription {sub_id_to_use}: {http_exc.detail}")
+        raise http_exc
+    except ValueError as ve: # Captura ValueError do azure_client_manager se sub_id não for encontrado
+        logger.error(f"ValueError during Azure Virtual Machines collection for subscription {sub_id_to_use}: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_azure_virtual_machines_data for subscription {sub_id_to_use}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+@router.get(f"{AZURE_ROUTER_PREFIX}/storageaccounts", response_model=List[azure_storage.AzureStorageAccountData], name="azure_collector:get_storage_accounts")
+async def collect_azure_storage_accounts_data(
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID)."),
+    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+):
+    """Coleta dados de configuração de Azure Storage Accounts e seus Blob Containers."""
+    sub_id_to_use = subscription_id or azure_storage_collector.AZURE_SUBSCRIPTION_ID # Tenta pegar do manager se não fornecido
+    if not sub_id_to_use:
+        raise HTTPException(status_code=400, detail="Azure Subscription ID is required and was not provided nor found in environment.")
+    try:
+        data = await azure_storage_collector.get_azure_storage_account_data(subscription_id=sub_id_to_use)
+        # Adicionar checagem de erro global similar
+        # Ex: if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+        #         raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Azure Storage Accounts collection for subscription {sub_id_to_use}: {http_exc.detail}")
+        raise http_exc
+    except ValueError as ve: # Captura ValueError do azure_client_manager
+        logger.error(f"ValueError during Azure Storage Accounts collection for subscription {sub_id_to_use}: {ve}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_azure_storage_accounts_data for subscription {sub_id_to_use}")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")

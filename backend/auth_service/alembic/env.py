@@ -13,8 +13,9 @@ APP_DIR = Path(__file__).resolve().parent.parent.parent / "app"
 sys.path.insert(0, str(APP_DIR.parent)) # Adiciona backend/auth_service/ ao path
                                        # para que 'from app...' funcione
 
-from app.db.session import Base # Assumindo que sua Base está aqui
-from app.models.user_model import User # Importar todos os modelos que Alembic deve conhecer
+from app.db.session import Base # Base está em app.db.session
+from app.models.user_model import User # Modelo User existente
+from app.models.alert_model import Alert # Importar o novo modelo Alert
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

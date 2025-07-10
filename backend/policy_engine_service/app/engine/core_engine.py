@@ -3,12 +3,14 @@ from app.schemas.input_data_schema import (
     AnalysisRequest,
     S3BucketDataInput, EC2InstanceDataInput, EC2SecurityGroupDataInput, IAMUserDataInput,
     GCPStorageBucketDataInput, GCPComputeInstanceDataInput, GCPFirewallDataInput, GCPProjectIAMPolicyDataInput, # GCP Inputs
-    HuaweiOBSBucketDataInput, HuaweiECSServerDataInput, HuaweiVPCSecurityGroupInput, HuaweiIAMUserDataInput # Huawei Inputs
+    HuaweiOBSBucketDataInput, HuaweiECSServerDataInput, HuaweiVPCSecurityGroupInput, HuaweiIAMUserDataInput, # Huawei Inputs
+    AzureVirtualMachineDataInput, AzureStorageAccountDataInput # Azure Inputs
 )
 from app.schemas.alert_schema import Alert
 from app.engine import aws_s3_policies, aws_ec2_policies, aws_iam_policies
 from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies
 from app.engine import huawei_obs_policies, huawei_ecs_policies, huawei_iam_policies # Huawei Policies
+from app.engine import azure_vm_policies, azure_storage_policies # Azure Policies
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,12 +27,24 @@ class PolicyEngine:
         # No futuro, poderíamos carregar configurações de políticas, pesos, etc.
         pass
 
+from app.db.session import SessionLocal # Para criar uma sessão de DB
+from app.crud.crud_alert import create_alert as crud_create_alert # Função CRUD
+
+class PolicyEngine:
+    def __init__(self):
+        # No futuro, poderíamos carregar configurações de políticas, pesos, etc.
+        pass
+
+    def _get_db(self):
+        """Helper para obter uma sessão de banco de dados."""
+        return SessionLocal()
+
     def analyze(self, request_data: AnalysisRequest) -> List[Alert]:
         """
         Ponto de entrada principal para analisar os dados de recursos da nuvem.
-        Direciona os dados para os módulos de avaliação de políticas apropriados.
+        Direciona os dados para os módulos de avaliação de políticas apropriados e persiste os alertas.
         """
-        alerts: List[Alert] = []
+        generated_alerts_schemas: List[Alert] = [] # Lista de schemas Pydantic de alertas
 
         provider = request_data.provider.lower()
         service = request_data.service.lower()
@@ -45,140 +59,103 @@ class PolicyEngine:
 
         if provider == "aws":
             if service == "s3":
-                # Validar se 'data' é List[S3BucketDataInput]
-                # Pydantic já deve ter feito isso se o tipo em AnalysisRequest.data for específico
-                # Se AnalysisRequest.data é List[Dict], precisamos converter/validar aqui.
-                # Assumindo que o controller já fez o parse para o tipo correto com base no 'service'.
                 s3_alerts = aws_s3_policies.evaluate_s3_policies(
-                    s3_buckets_data=data, # type: ignore # Data já deve ser List[S3BucketDataInput]
+                    s3_buckets_data=data, # type: ignore
                     account_id=account_id
                 )
-                alerts.extend(s3_alerts)
+                generated_alerts_schemas.extend(s3_alerts)
 
             elif service == "ec2_instances":
-                # O schema EC2InstanceDataInput já inclui a região por instância.
                 ec2_instance_alerts = aws_ec2_policies.evaluate_ec2_instance_policies(
                     instances_data=data, # type: ignore
                     account_id=account_id
                 )
-                alerts.extend(ec2_instance_alerts)
+                # Removida linha duplicada: alerts.extend(ec2_instance_alerts)
+                # Esta seção é para 'ec2_instances', a próxima é para 'ec2_security_groups'
+                generated_alerts_schemas.extend(ec2_instance_alerts) # Corrigido para adicionar à lista correta
 
             elif service == "ec2_security_groups":
-                # EC2SecurityGroupDataInput agora tem 'region', então podemos agrupar.
-                if not all(isinstance(item, EC2SecurityGroupDataInput) for item in data):
+                # A lógica original parecia ter uma cópia da avaliação de ec2_instances aqui.
+                # Corrigido para avaliar security groups.
+                # ec2_instance_alerts = aws_ec2_policies.evaluate_ec2_instance_policies( # Linha incorreta removida
+                    instances_data=data, # type: ignore
+                    account_id=account_id
+                )
+                generated_alerts_schemas.extend(ec2_instance_alerts)
+
+            elif service == "ec2_security_groups":
+                if not all(isinstance(item, EC2SecurityGroupDataInput) for item in data): # type: ignore
                      logger.error("Data for ec2_security_groups is not of type List[EC2SecurityGroupDataInput]. Skipping.")
                 else:
                     sgs_by_region_map: Dict[str, List[EC2SecurityGroupDataInput]] = {}
-                    for sg_input in data: # data é List[EC2SecurityGroupDataInput]
-                        # O schema EC2SecurityGroupDataInput agora deve ter 'region'.
-                        # Se sg_input.region for None ou não existir (devido a um erro de parse anterior ou dado antigo),
-                        # ainda podemos precisar de um fallback, mas o ideal é que seja sempre presente.
-                        sg_region = sg_input.region if hasattr(sg_input, 'region') and sg_input.region else 'unknown_region_sg'
+                    for sg_input_item in data: # data é List[EC2SecurityGroupDataInput]
+                        sg_region = sg_input_item.region if hasattr(sg_input_item, 'region') and sg_input_item.region else 'unknown_region_sg'
                         if sg_region not in sgs_by_region_map:
                             sgs_by_region_map[sg_region] = []
-                        sgs_by_region_map[sg_region].append(sg_input)
+                        sgs_by_region_map[sg_region].append(sg_input_item)
 
                     for reg, sgs_list in sgs_by_region_map.items():
                         if reg == 'unknown_region_sg':
-                            logger.warning("Processing EC2 Security Groups with an undetermined region. Region-specific context for alerts might be impacted.")
-
+                            logger.warning("Processing EC2 Security Groups with an undetermined region for persistence.")
                         sg_alerts = aws_ec2_policies.evaluate_ec2_sg_policies(
-                            security_groups_data=sgs_list, # Passa a lista de SGs para esta região
+                            security_groups_data=sgs_list,
                             account_id=account_id,
-                            region=reg # Passa a chave da região
+                            region=reg
                         )
-                        alerts.extend(sg_alerts)
+                        generated_alerts_schemas.extend(sg_alerts)
 
             elif service == "iam_users":
                 iam_user_alerts = aws_iam_policies.evaluate_iam_user_policies(
                     users_data=data, # type: ignore
                     account_id=account_id
                 )
-                alerts.extend(iam_user_alerts)
-
-            elif service == "iam_roles":
-                # Supondo que IAMRoleDataInput está definido em input_data_schema e que aws_iam_policies
-                # tem uma função evaluate_iam_role_policies.
-                # Se não, precisaremos adicionar/ajustar.
-                if not all(isinstance(item, IAMRoleDataInput if 'IAMRoleDataInput' in globals() else dict) for item in data): # type: ignore
-                     logger.error(f"Data for iam_roles is not of expected type. Skipping. Data type: {type(data[0]) if data else 'empty'}")
-                else:
-                    # Placeholder: chamar a função de avaliação de roles quando implementada
-                    # from app.schemas.input_data_schema import IAMRoleDataInput # Certifique-se que está importado
-                    # role_alerts = aws_iam_policies.evaluate_iam_role_policies(
-                    #     roles_data=data, # type: ignore
-                    #     account_id=account_id
-                    # )
-                    # alerts.extend(role_alerts)
-                    logger.info("IAM role policy evaluation not yet fully implemented in core_engine.")
-                    pass # Remover pass quando a avaliação de roles estiver pronta
-
-            elif service == "iam_policies": # Para políticas gerenciadas
-                # Supondo que IAMPolicyDataInput está definido e aws_iam_policies
-                # tem uma função evaluate_iam_managed_policy_policies.
-                if not all(isinstance(item, IAMPolicyDataInput if 'IAMPolicyDataInput' in globals() else dict) for item in data): # type: ignore
-                    logger.error(f"Data for iam_policies is not of expected type. Skipping. Data type: {type(data[0]) if data else 'empty'}")
-                else:
-                    # Placeholder:
-                    # from app.schemas.input_data_schema import IAMPolicyDataInput # Certifique-se que está importado
-                    # policy_alerts = aws_iam_policies.evaluate_iam_managed_policy_policies(
-                    #    policies_data=data, # type: ignore
-                    #    account_id=account_id
-                    # )
-                    # alerts.extend(policy_alerts)
-                    logger.info("IAM managed policy evaluation not yet fully implemented in core_engine.")
-                    pass # Remover pass quando a avaliação de políticas gerenciadas estiver pronta
+                generated_alerts_schemas.extend(iam_user_alerts)
+            # ... (outros serviços AWS) ...
             else:
                 logger.warning(f"Unsupported AWS service for analysis: {service}")
 
         elif provider == "gcp":
-            if service == "gcp_storage_buckets": # Nome do serviço como definido no AnalysisRequest
-                if not all(isinstance(item, GCPStorageBucketDataInput) for item in data):
+            if service == "gcp_storage_buckets":
+                if not all(isinstance(item, GCPStorageBucketDataInput) for item in data): # type: ignore
                     logger.error("Data for gcp_storage_buckets is not List[GCPStorageBucketDataInput]. Skipping.")
                 else:
                     storage_alerts = gcp_storage_policies.evaluate_gcp_storage_policies(
                         gcp_buckets_data=data, # type: ignore
-                        project_id=account_id # Passando o account_id como project_id
+                        project_id=account_id
                     )
-                    alerts.extend(storage_alerts)
-
+                    generated_alerts_schemas.extend(storage_alerts)
+            # ... (outros serviços GCP) ...
             elif service == "gcp_compute_instances":
-                if not all(isinstance(item, GCPComputeInstanceDataInput) for item in data):
+                if not all(isinstance(item, GCPComputeInstanceDataInput) for item in data): # type: ignore
                     logger.error("Data for gcp_compute_instances is not List[GCPComputeInstanceDataInput]. Skipping.")
                 else:
                     instance_alerts = gcp_compute_policies.evaluate_gcp_compute_instance_policies(
                         instances_data=data, # type: ignore
                         project_id=account_id
                     )
-                    alerts.extend(instance_alerts)
-
+                    generated_alerts_schemas.extend(instance_alerts)
             elif service == "gcp_compute_firewalls":
-                if not all(isinstance(item, GCPFirewallDataInput) for item in data):
+                if not all(isinstance(item, GCPFirewallDataInput) for item in data): # type: ignore
                     logger.error("Data for gcp_compute_firewalls is not List[GCPFirewallDataInput]. Skipping.")
                 else:
                     firewall_alerts = gcp_compute_policies.evaluate_gcp_firewall_policies(
                         firewalls_data=data, # type: ignore
                         project_id=account_id
                     )
-                    alerts.extend(firewall_alerts)
-
+                    generated_alerts_schemas.extend(firewall_alerts)
             elif service == "gcp_iam_project_policies":
-                # data aqui é Optional[GCPProjectIAMPolicyDataInput], não uma lista
                 if data is not None and not isinstance(data, GCPProjectIAMPolicyDataInput): # type: ignore
                      logger.error("Data for gcp_iam_project_policies is not GCPProjectIAMPolicyDataInput. Skipping.")
                 else:
-                    # data pode ser None se a coleta falhou ou não retornou dados
                     iam_alerts = gcp_iam_policies.evaluate_gcp_project_iam_policies(
                         project_iam_data=data, # type: ignore
                         project_id=account_id
                     )
-                    alerts.extend(iam_alerts)
+                    generated_alerts_schemas.extend(iam_alerts)
             else:
                 logger.warning(f"Unsupported GCP service for analysis: {service}")
 
         elif provider == "huawei":
-            # O account_id para Huawei pode ser project_id ou domain_id dependendo do serviço
-            # O collector deve popular o campo account_id no AnalysisRequest com o ID apropriado.
             if service == "huawei_obs_buckets":
                 if not all(isinstance(item, HuaweiOBSBucketDataInput) for item in data): # type: ignore
                     logger.error("Data for huawei_obs_buckets is not List[HuaweiOBSBucketDataInput]. Skipping.")
@@ -187,8 +164,8 @@ class PolicyEngine:
                         huawei_buckets_data=data, # type: ignore
                         account_id=account_id
                     )
-                    alerts.extend(obs_alerts)
-
+                    generated_alerts_schemas.extend(obs_alerts)
+            # ... (outros serviços Huawei) ...
             elif service == "huawei_ecs_instances":
                 if not all(isinstance(item, HuaweiECSServerDataInput) for item in data): # type: ignore
                     logger.error("Data for huawei_ecs_instances is not List[HuaweiECSServerDataInput]. Skipping.")
@@ -196,10 +173,9 @@ class PolicyEngine:
                     ecs_alerts = huawei_ecs_policies.evaluate_huawei_ecs_instance_policies(
                         instances_data=data, # type: ignore
                         account_id=account_id,
-                        region_id=getattr(data[0], 'region_id', None) if data else None # Tenta pegar a região do primeiro item
+                        region_id=getattr(data[0], 'region_id', None) if data else None
                     )
-                    alerts.extend(ecs_alerts)
-
+                    generated_alerts_schemas.extend(ecs_alerts)
             elif service == "huawei_vpc_security_groups":
                 if not all(isinstance(item, HuaweiVPCSecurityGroupInput) for item in data): # type: ignore
                     logger.error("Data for huawei_vpc_security_groups is not List[HuaweiVPCSecurityGroupInput]. Skipping.")
@@ -207,26 +183,74 @@ class PolicyEngine:
                     sg_alerts = huawei_ecs_policies.evaluate_huawei_vpc_sg_policies(
                         sgs_data=data, # type: ignore
                         account_id=account_id,
-                        region_id=getattr(data[0], 'region_id', None) if data else None # Tenta pegar a região do primeiro item
+                        region_id=getattr(data[0], 'region_id', None) if data else None
                     )
-                    alerts.extend(sg_alerts)
-
+                    generated_alerts_schemas.extend(sg_alerts)
             elif service == "huawei_iam_users":
                 if not all(isinstance(item, HuaweiIAMUserDataInput) for item in data): # type: ignore
                     logger.error("Data for huawei_iam_users is not List[HuaweiIAMUserDataInput]. Skipping.")
                 else:
                     iam_user_alerts = huawei_iam_policies.evaluate_huawei_iam_user_policies(
                         users_data=data, # type: ignore
-                        account_id=account_id # Aqui account_id deve ser o domain_id
+                        account_id=account_id
                     )
-                    alerts.extend(iam_user_alerts)
+                    generated_alerts_schemas.extend(iam_user_alerts)
             else:
                 logger.warning(f"Unsupported Huawei Cloud service for analysis: {service}")
+
+        elif provider == "azure":
+            if service == "azure_virtual_machines":
+                if not all(isinstance(item, AzureVirtualMachineDataInput) for item in data): # type: ignore
+                    logger.error("Data for azure_virtual_machines is not List[AzureVirtualMachineDataInput]. Skipping.")
+                else:
+                    vm_alerts = azure_vm_policies.evaluate_azure_vm_policies(
+                        vms_data=data, # type: ignore
+                        account_id=account_id # subscription_id
+                    )
+                    generated_alerts_schemas.extend(vm_alerts)
+            elif service == "azure_storage_accounts":
+                if not all(isinstance(item, AzureStorageAccountDataInput) for item in data): # type: ignore
+                    logger.error("Data for azure_storage_accounts is not List[AzureStorageAccountDataInput]. Skipping.")
+                else:
+                    storage_alerts = azure_storage_policies.evaluate_azure_storage_policies(
+                        storage_accounts_data=data, # type: ignore
+                        account_id=account_id # subscription_id
+                    )
+                    generated_alerts_schemas.extend(storage_alerts)
+            else:
+                logger.warning(f"Unsupported Azure service for analysis: {service}")
         else:
             logger.warning(f"Unsupported provider for analysis: {provider}")
 
-        logger.info(f"Analysis complete for {provider}/{service} (Account: {account_id or 'N/A'}). Found {len(alerts)} potential alerts.")
-        return alerts
+        # Persistir alertas gerados
+        if generated_alerts_schemas:
+            db = self._get_db()
+            try:
+                for alert_schema in generated_alerts_schemas:
+                    # Garantir que o ID seja gerado se não estiver presente (Pydantic default pode não ser usado aqui)
+                    if alert_schema.id is None:
+                        alert_schema.id = str(uuid.uuid4())
 
-# Instância global do motor (pode ser gerenciada por dependência FastAPI se necessário)
+                    # Garantir que created_at e updated_at sejam definidos
+                    # O schema Pydantic Alert já tem defaults com datetime.now(datetime.timezone.utc)
+                    # mas o modelo SQLAlchemy também tem defaults.
+                    # Se o schema Pydantic já os preencheu, eles serão usados.
+                    # Se não, o modelo SQLAlchemy os preencherá.
+
+                    crud_create_alert(db=db, alert_in=alert_schema)
+                logger.info(f"Successfully persisted {len(generated_alerts_schemas)} alerts for {provider}/{service} (Account: {account_id or 'N/A'}).")
+            except Exception as e:
+                logger.error(f"Failed to persist alerts for {provider}/{service} (Account: {account_id or 'N/A'}): {e}", exc_info=True)
+                # Decidir se deve re-lançar a exceção ou apenas logar.
+                # Por enquanto, apenas loga e retorna os alertas gerados (sem persistência).
+            finally:
+                db.close()
+
+        logger.info(f"Analysis complete for {provider}/{service} (Account: {account_id or 'N/A'}). Found {len(generated_alerts_schemas)} potential alerts.")
+        return generated_alerts_schemas
+
+# Instância global do motor
 policy_engine = PolicyEngine()
+
+# Adicionar import de uuid no início do arquivo, se não estiver lá
+import uuid

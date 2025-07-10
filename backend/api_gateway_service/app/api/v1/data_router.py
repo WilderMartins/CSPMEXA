@@ -10,7 +10,8 @@ from app.core.security import get_current_user, TokenData
 from app.schemas import (
     collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas,
     collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas,
-    collector_huawei_obs_schemas, collector_huawei_ecs_schemas, collector_huawei_iam_schemas, # Huawei Schemas
+    collector_huawei_obs_schemas, collector_huawei_ecs_schemas, collector_huawei_iam_schemas,
+    collector_azure_schemas, # Azure Schemas
     policy_engine_alert_schema
 )
 import logging
@@ -759,3 +760,122 @@ async def analyze_huawei_iam_users_orchestrated(
 # TODO: Adicionar um endpoint "/analyze/aws/all", "/analyze/gcp/all" e "/analyze/huawei/all"
 # que chamam todos os coletores e analisadores para o respectivo provedor.
 # Ex: @router.post("/analyze/huawei/all", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_all_huawei")
+
+
+# --- Endpoints de Coleta Azure (Proxy) ---
+AZURE_COLLECT_ROUTER_PREFIX = "/collect/azure"
+
+@router.get(f"{AZURE_COLLECT_ROUTER_PREFIX}/virtualmachines", response_model=List[collector_azure_schemas.AzureVirtualMachineData], name="azure_collector:get_virtual_machines")
+async def collect_azure_vms_gateway(
+    request: Request,
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Azure Virtual Machines."""
+    return await _proxy_collector_request("GET", "/collect/azure/virtualmachines", current_user, request, params={"subscription_id": subscription_id} if subscription_id else None)
+
+@router.get(f"{AZURE_COLLECT_ROUTER_PREFIX}/storageaccounts", response_model=List[collector_azure_schemas.AzureStorageAccountData], name="azure_collector:get_storage_accounts")
+async def collect_azure_storage_accounts_gateway(
+    request: Request,
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Azure Storage Accounts."""
+    return await _proxy_collector_request("GET", "/collect/azure/storageaccounts", current_user, request, params={"subscription_id": subscription_id} if subscription_id else None)
+
+
+# --- Endpoints de Análise Azure (Orquestração) ---
+AZURE_ANALYZE_ROUTER_PREFIX = "/analyze/azure"
+
+async def _orchestrate_azure_analysis(
+    service_name_in_engine: str, # ex: "azure_virtual_machines"
+    collector_path_suffix: str,  # ex: "virtualmachines"
+    request: Request,
+    subscription_id: Optional[str],
+    current_user: TokenData
+) -> List[policy_engine_alert_schema.Alert]:
+    downstream_headers = {}
+    if not subscription_id:
+        raise HTTPException(status_code=400, detail="Azure Subscription ID is required for analysis.")
+
+    # 1. Chamar o Collector Service
+    collected_data: Any
+    try:
+        collector_full_path = f"/collect/azure/{collector_path_suffix}"
+        collector_params = {"subscription_id": subscription_id}
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params, headers=downstream_headers)
+
+        if collector_response.status_code != 200:
+            error_detail = collector_response.text
+            try: error_detail = collector_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=collector_response.status_code,
+                detail=f"Error from Collector Service (Azure {collector_path_suffix}) for subscription {subscription_id}: {error_detail}",
+            )
+        collected_data = collector_response.json()
+        if not collected_data: return []
+    except HTTPException as e:
+        logger.error(f"HTTPException during Azure {collector_path_suffix} collection for subscription {subscription_id} in orchestration: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Error calling Collector Service (Azure {collector_path_suffix}) for subscription {subscription_id} during orchestration")
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to collect Azure {collector_path_suffix} data for analysis: {str(e)}"
+        )
+
+    # 2. Enviar os dados coletados para o Policy Engine Service
+    analysis_payload = {
+        "provider": "azure",
+        "service": service_name_in_engine,
+        "data": collected_data,
+        "account_id": subscription_id # Usar subscription_id como account_id para Azure
+    }
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
+        if engine_response.status_code != 200:
+            error_detail = engine_response.text
+            try: error_detail = engine_response.json().get("detail", error_detail)
+            except: pass
+            raise HTTPException(
+                status_code=engine_response.status_code,
+                detail=f"Error from Policy Engine Service (Azure {service_name_in_engine} analysis for subscription {subscription_id}): {error_detail}",
+            )
+        alerts = engine_response.json()
+    except HTTPException as e:
+        logger.error(f"HTTPException during Azure {service_name_in_engine} analysis for subscription {subscription_id} in orchestration: {e.detail}")
+        raise e
+    except Exception as e:
+        logger.exception(f"Error calling Policy Engine Service (Azure {service_name_in_engine}) for subscription {subscription_id} during orchestration")
+        raise HTTPException(
+            status_code=500, detail=f"Gateway failed to analyze Azure {service_name_in_engine} data: {str(e)}"
+        )
+    return alerts
+
+@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/virtualmachines", response_model=List[policy_engine_alert_schema.Alert], name="azure_orchestrator:analyze_virtual_machines")
+async def analyze_azure_vms_orchestrated(
+    request: Request,
+    subscription_id: str = Query(..., description="ID da Subscrição Azure a ser analisada."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Azure Virtual Machines."""
+    return await _orchestrate_azure_analysis(
+        service_name_in_engine="azure_virtual_machines", # Nome do serviço como esperado pelo Policy Engine
+        collector_path_suffix="virtualmachines",
+        request=request, subscription_id=subscription_id, current_user=current_user
+    )
+
+@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/storageaccounts", response_model=List[policy_engine_alert_schema.Alert], name="azure_orchestrator:analyze_storage_accounts")
+async def analyze_azure_storage_accounts_orchestrated(
+    request: Request,
+    subscription_id: str = Query(..., description="ID da Subscrição Azure a ser analisada."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Azure Storage Accounts."""
+    return await _orchestrate_azure_analysis(
+        service_name_in_engine="azure_storage_accounts", # Nome do serviço como esperado pelo Policy Engine
+        collector_path_suffix="storageaccounts",
+        request=request, subscription_id=subscription_id, current_user=current_user
+    )

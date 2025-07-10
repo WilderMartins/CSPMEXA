@@ -7,3 +7,5 @@ pydantic-settings
 pytest
 pytest-asyncio # Core engine é async, então testes de API podem precisar
 # httpx # Para TestClient em API tests, se aplicável
+SQLAlchemy~=1.4.0
+psycopg2-binary
