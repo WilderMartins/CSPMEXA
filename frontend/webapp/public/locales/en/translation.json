@@ -8,16 +8,26 @@
   },
   "dashboardPage": {
     "title": "Dashboard",
-    "welcomeMessage": "Welcome! (User ID: {{userId}})",
-    "analyzeButton": "Analyze S3 Configurations",
-    "analyzingButton": "Analyzing S3...",
-    "alertsFound": "S3 Alerts Found:",
-    "noAlerts": "No alerts found or no S3 resources to analyze.",
-    "errorFetchingAlerts": "Failed to fetch S3 alerts."
+    "welcomeMessage": "Welcome, {{userId}}!",
+    "analyzeS3Button": "Analyze S3 Buckets",
+    "analyzeEC2InstancesButton": "Analyze EC2 Instances",
+    "analyzeEC2SGsButton": "Analyze EC2 Security Groups",
+    "analyzeIAMUsersButton": "Analyze IAM Users",
+    "analyzingButton": "Analyzing...",
+    "alertsFound": "Alerts Found:",
+    "alertsFoundFor": "Alerts Found for {{type}}:",
+    "noAlerts": "No alerts found or no resources to analyze.",
+    "noAlertsFor": "No alerts found for {{type}} or no matching resources to analyze.",
+    "errorFetchingAlerts": "Failed to fetch alerts.",
+    "errorDuringAnalysis": "Error during {{type}} analysis: {{error}}",
+    "loadingMessage": "Loading {{type}} analysis..."
   },
   "alertItem": {
-    "resource": "Resource:",
-    "severity": "Severity:"
+    "resource": "Resource ID:",
+    "resourceType": "Resource Type:",
+    "severity": "Severity:",
+    "title": "Title:",
+    "description": "Description:"
   },
   "header": {
     "title": "CSPMEXA",

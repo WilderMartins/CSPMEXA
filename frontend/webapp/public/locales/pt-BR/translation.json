@@ -8,16 +8,26 @@
   },
   "dashboardPage": {
     "title": "Painel de Controle",
-    "welcomeMessage": "Bem-vindo(a)! (ID do Usuário: {{userId}})",
-    "analyzeButton": "Analisar Configurações S3",
-    "analyzingButton": "Analisando S3...",
-    "alertsFound": "Alertas S3 Encontrados:",
-    "noAlerts": "Nenhum alerta encontrado ou nenhum recurso S3 para analisar.",
-    "errorFetchingAlerts": "Falha ao buscar alertas S3."
+    "welcomeMessage": "Bem-vindo(a), {{userId}}!",
+    "analyzeS3Button": "Analisar Buckets S3",
+    "analyzeEC2InstancesButton": "Analisar Instâncias EC2",
+    "analyzeEC2SGsButton": "Analisar Grupos de Segurança EC2",
+    "analyzeIAMUsersButton": "Analisar Usuários IAM",
+    "analyzingButton": "Analisando...",
+    "alertsFound": "Alertas Encontrados:",
+    "alertsFoundFor": "Alertas Encontrados para {{type}}:",
+    "noAlerts": "Nenhum alerta encontrado ou nenhum recurso para analisar.",
+    "noAlertsFor": "Nenhum alerta encontrado para {{type}} ou nenhum recurso correspondente para analisar.",
+    "errorFetchingAlerts": "Falha ao buscar alertas.",
+    "errorDuringAnalysis": "Erro durante a análise de {{type}}: {{error}}",
+    "loadingMessage": "Carregando análise de {{type}}..."
   },
   "alertItem": {
-    "resource": "Recurso:",
-    "severity": "Severidade:"
+    "resource": "ID do Recurso:",
+    "resourceType": "Tipo de Recurso:",
+    "severity": "Severidade:",
+    "title": "Título:",
+    "description": "Descrição:"
   },
   "header": {
     "title": "CSPMEXA",

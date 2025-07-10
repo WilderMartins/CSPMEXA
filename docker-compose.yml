@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  postgres_auth:
+    image: postgres:13
+    container_name: postgres_auth_cspm
+    environment:
+      POSTGRES_USER: ${AUTH_DB_USER:-user}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-password}
+      POSTGRES_DB: ${AUTH_DB_NAME:-authdb_mvp}
+    ports:
+      - "${AUTH_DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-user} -d ${AUTH_DB_NAME:-authdb_mvp}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth_service:
+    build:
+      context: ./backend/auth_service
+      dockerfile: Dockerfile
+    container_name: auth_service_cspm
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres_auth:
+        condition: service_healthy
+    env_file:
+      - ./backend/auth_service/.env
+    volumes:
+      - ./backend/auth_service/app:/app/app # Mount for hot-reloading
+
+  collector_service:
+    build:
+      context: ./backend/collector_service
+      dockerfile: Dockerfile
+    container_name: collector_service_cspm
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    ports:
+      - "8001:8001"
+    env_file:
+      - ./backend/collector_service/.env
+    volumes:
+      - ./backend/collector_service/app:/app/app # Mount for hot-reloading
+      # Mount AWS credentials if not using instance profiles or other auth methods
+      # - ~/.aws:/root/.aws:ro
+
+  policy_engine_service:
+    build:
+      context: ./backend/policy_engine_service
+      dockerfile: Dockerfile
+    container_name: policy_engine_service_cspm
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
+    ports:
+      - "8002:8002"
+    env_file:
+      - ./backend/policy_engine_service/.env
+    volumes:
+      - ./backend/policy_engine_service/app:/app/app # Mount for hot-reloading
+
+  api_gateway_service:
+    build:
+      context: ./backend/api_gateway_service
+      dockerfile: Dockerfile
+    container_name: api_gateway_service_cspm
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8050 --reload
+    ports:
+      - "8050:8050"
+    depends_on:
+      - auth_service
+      - collector_service
+      - policy_engine_service
+    env_file:
+      - ./backend/api_gateway_service/.env
+    volumes:
+      - ./backend/api_gateway_service/app:/app/app # Mount for hot-reloading
+
+  frontend_webapp:
+    build:
+      context: ./frontend/webapp
+      dockerfile: Dockerfile # Assumes Dockerfile is set up for development or production build
+    container_name: frontend_webapp_cspm
+    # For development with hot-reloading (if Dockerfile supports it and runs `npm run dev`):
+    command: npm run dev # Or your dev script
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend/webapp/src:/app/src # Mount src for hot-reloading
+      - ./frontend/webapp/public:/app/public
+      # Mount package.json and lock file to avoid re-installing node_modules on every start,
+      # if your Docker image doesn't copy them in a way that persists them in a volume.
+      # - ./frontend/webapp/package.json:/app/package.json
+      # - ./frontend/webapp/package-lock.json:/app/package-lock.json
+      # - frontend_node_modules:/app/node_modules # Persist node_modules
+    environment:
+      - NODE_ENV=development # Ensure Vite runs in development mode if needed
+      # Vite needs this for HMR if not running on localhost inside container
+      - VITE_DEV_SERVER_HOST=0.0.0.0
+
+volumes:
+  postgres_auth_data:
+  # frontend_node_modules:
+
+networks:
+  default:
+    driver: bridge

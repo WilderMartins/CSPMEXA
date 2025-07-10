@@ -81,13 +81,15 @@ async def google_callback(
 
         # ---- Próximos passos (a serem implementados na próxima etapa do plano) ----
         # 1. Obter/Criar usuário local
+        user_full_name = user_info.get("name")
+        user_picture_url = user_info.get("picture")
+
         local_user = user_service.get_or_create_user_oauth(
             db,
             google_id=google_id,
-            email=email
-            # Passar name, picture se quiser armazená-los:
-            # name=user_info.get("name"),
-            # picture=user_info.get("picture")
+            email=email,
+            full_name=user_full_name,
+            profile_picture_url=user_picture_url
         )
 
         if not local_user:
@@ -96,11 +98,12 @@ async def google_callback(
 
         # 2. Gerar token JWT interno
         # Adicionar claims relevantes ao token. Para RBAC, o 'role' do usuário seria importante.
-        # Por enquanto, vamos adicionar email e google_id para referência.
         jwt_claims = {
             "email": local_user.email,
-            "google_id": local_user.google_id, # Pode ser útil para o frontend/outros serviços
-            "role": local_user.role # O campo 'role' agora tem default no modelo
+            # "google_id": local_user.google_id, # Opcional, sub (user_id) já é o identificador principal
+            "role": local_user.role, # Essencial para RBAC
+            "full_name": local_user.full_name, # Adicionado full_name
+            # "picture": local_user.profile_picture_url # Opcional, pode ser grande para um JWT
         }
         internal_jwt = token_service.create_jwt_token_with_custom_claims(
             subject=local_user.id, # 'sub' claim é o ID do nosso usuário local
@@ -136,10 +139,12 @@ async def google_callback(
             detail="An unexpected error occurred during the login process. Please try again later."
         )
 
-from app.services.mfa_service import mfa_service
-from app.schemas.mfa_schema import MFASetupResponse, MFAEnableRequest, MFADisableRequest, MFALoginVerifyRequest
-from app.core.security import get_current_active_user # Para proteger endpoints
-from app.models.user_model import User # Para type hint
+from app.services.mfa_service import mfa_service # pylint: disable=E0401 (ajuste para seu linter se necessário)
+from app.schemas.mfa_schema import MFASetupResponse, MFAEnableRequest, MFADisableRequest, MFALoginVerifyRequest # pylint: disable=E0401
+from app.schemas.user_schema import User as UserSchema, UserUpdateByAdmin # pylint: disable=E0401
+from app.core.security import get_current_active_user, require_role # pylint: disable=E0401
+from app.models.user_model import User as UserModel # pylint: disable=E0401
+from typing import List
 
 # --- Endpoints MFA ---
 
@@ -258,8 +263,9 @@ async def mfa_verify_login(
     # Se o código TOTP for válido, gerar o token JWT final para o usuário
     jwt_claims = {
         "email": user.email,
-        "google_id": user.google_id, # Se aplicável e desejado no token
-        "role": getattr(user, 'role', 'user'),
+        # "google_id": user.google_id, # Opcional
+        "role": getattr(user, 'role', 'user'), # Garante que role sempre exista
+        "full_name": getattr(user, 'full_name', None), # Adicionado full_name
         "mfa_verified": True # Adicionar um claim para indicar que MFA foi verificado
     }
     final_jwt = token_service.create_jwt_token_with_custom_claims(

@@ -41,53 +41,116 @@ const DashboardPage: React.FC = () => {
   }, []);
 
 
-  const handleAnalyzeS3 = async () => {
+  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
+
+  const handleAnalysis = async (servicePath: string, analysisType: string) => {
     setIsLoading(true);
     setError(null);
-    setAlerts([]);
+    setAlerts([]); // Limpa alertas anteriores antes de nova análise
+    setCurrentAnalysisType(analysisType);
     try {
-      const response = await apiClient.post('/api/v1/analyze/aws/s3', {});
+      // O payload vazio {} é importante para POST se não houver corpo, mas a API espera.
+      const response = await apiClient.post(`/api/v1/analyze/aws/${servicePath}`, {});
       setAlerts(response.data || []);
       if (response.data.length === 0) {
-        setError(t('dashboardPage.noAlerts'));
+        setError(t('dashboardPage.noAlertsFor', { type: analysisType }));
       }
     } catch (err: any) {
-      console.error("Erro ao analisar S3:", err);
-      setError(err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts'));
+      console.error(`Erro ao analisar ${analysisType}:`, err);
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts');
+      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, error: errorMessage }));
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="dashboard-page-placeholder">
+    <div className="dashboard-page">
       <h2>{t('dashboardPage.title')}</h2>
       {userInfo && (
-        <div style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
-          <p>{t('dashboardPage.welcomeMessage', { userId: userInfo.user_id })}</p>
+        <div className="user-info" style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
+          <p>{t('dashboardPage.welcomeMessage', { userId: userInfo.user_id || userInfo.email || 'Usuário' })}</p>
         </div>
       )}
-      <button onClick={handleAnalyzeS3} disabled={isLoading}>
-        {isLoading ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeButton')}
-      </button>
 
-      {error && <p style={{ color: 'red' }}>{t('dashboardPage.errorFetchingAlerts')}: {error}</p>}
+      <div className="analysis-buttons" style={{ marginBottom: '20px' }}>
+        <button onClick={() => handleAnalysis('s3', 'S3 Buckets')} disabled={isLoading}>
+          {isLoading && currentAnalysisType === 'S3 Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeS3Button')}
+        </button>
+        <button onClick={() => handleAnalysis('ec2/instances', 'EC2 Instances')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          {isLoading && currentAnalysisType === 'EC2 Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2InstancesButton')}
+        </button>
+        <button onClick={() => handleAnalysis('ec2/security-groups', 'EC2 Security Groups')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          {isLoading && currentAnalysisType === 'EC2 Security Groups' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2SGsButton')}
+        </button>
+        <button onClick={() => handleAnalysis('iam/users', 'IAM Users')} disabled={isLoading} style={{ marginLeft: '10px' }}>
+          {isLoading && currentAnalysisType === 'IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
+        </button>
+        {/* Adicionar botões para IAM Roles e IAM Policies quando prontos */}
+      </div>
+
+      {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentAnalysisType })}</p>}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {alerts.length > 0 && (
         <div className="alerts-container">
-          <h3>{t('dashboardPage.alertsFound')}</h3>
-          {alerts.map((alert, index) => (
-            <div key={alert.id || index} className="alert-item">
-              <h4>{alert.title}</h4>
-              <p><strong>{t('alertItem.resource')}</strong> {alert.resource_id} ({alert.resource_type})</p>
-              <p><strong>{t('alertItem.severity')}</strong> <span style={{color: alert.severity === 'Critical' ? 'red' : (alert.severity === 'High' ? 'orange' : 'inherit')}}>{alert.severity}</span></p>
-              <p>{alert.description}</p>
-            </div>
-          ))}
+          <h3>{t('dashboardPage.alertsFoundFor', { type: currentAnalysisType })}</h3>
+          <table className="alerts-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>{t('alertItem.severity')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.title')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.resource')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.resourceType')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.description')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((alert, index) => (
+                <tr key={alert.id || index} style={index % 2 === 0 ? evenRowStyle : oddRowStyle}>
+                  <td style={getSeverityStyle(alert.severity)}>{alert.severity}</td>
+                  <td style={tableCellStyle}>{alert.title}</td>
+                  <td style={tableCellStyle}>{alert.resource_id}</td>
+                  <td style={tableCellStyle}>{alert.resource_type}</td>
+                  <td style={tableCellStyle}>{alert.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
   );
+};
+
+// Estilos básicos para a tabela (podem ser movidos para um arquivo CSS)
+const tableHeaderStyle: React.CSSProperties = {
+  border: '1px solid #ddd',
+  padding: '8px',
+  textAlign: 'left',
+  backgroundColor: '#f2f2f2',
+};
+
+const tableCellStyle: React.CSSProperties = {
+  border: '1px solid #ddd',
+  padding: '8px',
+  textAlign: 'left',
+};
+
+const evenRowStyle: React.CSSProperties = {
+  backgroundColor: '#f9f9f9',
+};
+
+const oddRowStyle: React.CSSProperties = {
+  backgroundColor: '#ffffff',
+};
+
+const getSeverityStyle = (severity: string): React.CSSProperties => {
+  let color = 'inherit';
+  if (severity === 'Critical') color = 'red';
+  else if (severity === 'High') color = 'orange';
+  else if (severity === 'Medium') color = '#DAA520'; // DarkGoldenRod
+  return { ...tableCellStyle, color, fontWeight: 'bold' };
 };
 
 export default DashboardPage;

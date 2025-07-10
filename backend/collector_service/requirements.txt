@@ -3,3 +3,9 @@ uvicorn[standard]
 pydantic
 pydantic-settings
 boto3
+
+# Test dependencies
+pytest
+pytest-asyncio # For testing async code with pytest
+moto[s3,ec2,iam] # Specify extras for the services we'll mock
+httpx # For TestClient in API tests

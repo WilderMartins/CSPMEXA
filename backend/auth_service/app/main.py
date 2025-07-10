@@ -25,10 +25,27 @@ async def startup_event():
     # Para desenvolvimento, podemos criar tabelas aqui.
     # Certifique-se que o DB exista antes de rodar.
     try:
-        create_tables()
-        print("Database tables created (if they didn't exist).")
+        create_tables() # Cria tabelas se não existirem (ideal para dev, Alembic para prod)
+        print("Database tables checked/created (if they didn't exist).")
+
+        # Tentar definir o usuário inicial como admin
+        # Isso deve ser chamado depois que as tabelas são criadas e o DB está acessível.
+        # Precisamos de uma sessão de DB para isso.
+        from app.db.session import SessionLocal
+        from app.services.user_service import user_service as service_user # Renomeado para evitar conflito
+        db_session = SessionLocal()
+        try:
+            print("Attempting to set initial admin user...")
+            initial_admin = service_user.set_initial_admin_user(db_session)
+            if initial_admin:
+                print(f"Initial admin user set/verified: {initial_admin.email}")
+            else:
+                print("No initial admin user set (no users found or admin already exists).")
+        finally:
+            db_session.close()
+
     except Exception as e:
-        print(f"Error creating tables: {e}")
+        print(f"Error during startup tasks (tables or initial admin): {e}")
         print("Please ensure the database is running and accessible.")
 
 

@@ -18,10 +18,10 @@ oauth2_scheme = OAuth2PasswordBearer(
 
 
 class TokenData(BaseModel):
-    user_id: Optional[int] = (
-        None  # Ou str, dependendo do que o auth-service coloca no 'sub'
-    )
-    # Adicionar outros campos do token que possam ser úteis (ex: email, roles)
+    user_id: Optional[int] = None  # Ou str, dependendo do que o auth-service coloca no 'sub'
+    email: Optional[str] = None
+    role: Optional[str] = None
+    # Adicionar outros claims relevantes que o auth_service possa incluir
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
@@ -42,9 +42,15 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
         # Você pode adicionar mais validações aqui se necessário (ex: verificar 'exp')
         # A biblioteca python-jose já valida 'exp' por padrão.
 
+        # Extrair outros claims esperados
+        email_from_token = payload.get("email")
+        role_from_token = payload.get("role")
+
         token_data = TokenData(
-            user_id=int(user_id_from_token)
-        )  # Assumindo que user_id é int
+            user_id=int(user_id_from_token), # Assumindo que user_id é int
+            email=email_from_token,
+            role=role_from_token
+        )
     except JWTError as exc:
         import logging
         logging.warning(f"JWTError during token decoding: {exc}")
@@ -61,11 +67,51 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
     return token_data
 
 
-# Opcional: uma dependência para superusuários, se o token tiver essa informação
-# async def get_current_active_superuser(current_user: TokenData = Depends(get_current_user)):
-#     # Esta função dependeria do auth-service ter incluído um campo 'is_superuser' no token
-#     # ou o gateway teria que chamar o auth-service para verificar.
-#     # Para o MVP, vamos manter simples.
-#     # if not current_user.is_superuser: # Supondo que TokenData tenha is_superuser
-#     #     raise HTTPException(status_code=403, detail="The user doesn't have enough privileges")
-#     return current_user
+# --- Dependências para verificação de roles ---
+
+async def require_role(required_role: str, current_user: TokenData = Depends(get_current_user)):
+    """
+    Verifica se o usuário atual possui o role especificado.
+    Levanta HTTPException 403 se o role não corresponder.
+    """
+    if not current_user.role or current_user.role.lower() != required_role.lower():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User does not have the required '{required_role}' role.",
+        )
+    return current_user
+
+async def require_admin_role(current_user: TokenData = Depends(get_current_user)):
+    """
+    Dependência específica para verificar se o usuário é um 'admin'.
+    """
+    return await require_role(required_role="admin", current_user=current_user)
+
+async def require_user_role(current_user: TokenData = Depends(get_current_user)):
+    """
+    Dependência específica para verificar se o usuário é um 'user' (ou qualquer role não-admin,
+    se a lógica for apenas admin vs não-admin).
+    Para ser mais explícito, pode-se verificar se o role é 'user'.
+    Se um admin também puder fazer ações de usuário, essa verificação é mais simples.
+    """
+    # Se admin pode fazer tudo que user faz, então get_current_user é suficiente.
+    # Se for para distinguir estritamente, usar require_role("user", current_user)
+    # ou verificar if current_user.role not in ["admin", "outro_role_privilegiado"]
+    if not current_user.role: # Garante que o role existe
+         raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User role is not defined.",
+        )
+    # Esta implementação permite qualquer usuário autenticado que tenha um role.
+    # Para restringir a apenas 'user' ou 'admin', use require_role.
+    return current_user
+
+
+# Exemplo de como seria uma dependência para superusuário (se 'is_superuser' estivesse no token)
+# class TokenDataWithSuperuser(TokenData):
+# is_superuser: Optional[bool] = False
+#
+# async def get_current_active_superuser(current_user: TokenDataWithSuperuser = Depends(get_current_user_com_superuser_flag)):
+# if not current_user.is_superuser:
+# raise HTTPException(status_code=403, detail="The user doesn't have enough privileges")
+# return current_user

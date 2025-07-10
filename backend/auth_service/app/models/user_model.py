@@ -19,6 +19,10 @@ class User(Base):
     is_superuser = Column(Boolean, default=False)  # Pode ser usado para um super admin
     role = Column(String, default="user", nullable=False) # Papel do usuário: "user", "admin", etc.
 
+    # Campos de perfil adicionais (opcionais)
+    full_name = Column(String, nullable=True)
+    profile_picture_url = Column(String, nullable=True)
+
     # MFA (TOTP)
     mfa_secret = Column(String, nullable=True)
     is_mfa_enabled = Column(Boolean, default=False)
