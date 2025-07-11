@@ -3,6 +3,7 @@
 from . import collector_s3_schemas
 from . import collector_ec2_schemas
 from . import collector_iam_schemas
+from . import collector_rds_schemas # Adicionado RDS
 
 from . import collector_gcp_storage_schemas
 from . import collector_gcp_compute_schemas
@@ -22,6 +23,7 @@ __all__ = [
     "collector_s3_schemas",
     "collector_ec2_schemas",
     "collector_iam_schemas",
+    "collector_rds_schemas", # Adicionado RDS
     "collector_gcp_storage_schemas",
     "collector_gcp_compute_schemas",
     "collector_gcp_iam_schemas",

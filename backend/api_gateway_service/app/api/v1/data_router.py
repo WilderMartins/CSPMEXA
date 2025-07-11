@@ -8,11 +8,11 @@ from app.core.security import get_current_user, TokenData
 
 # Importar os schemas copiados/criados para o gateway
 from app.schemas import (
-    collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas,
+    collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas, collector_rds_schemas, # Adicionado collector_rds_schemas
     collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas,
     collector_huawei_obs_schemas, collector_huawei_ecs_schemas, collector_huawei_iam_schemas,
     collector_azure_schemas,
-    collector_google_workspace_schemas, # Google Workspace Schemas
+    collector_google_workspace_schemas,
     policy_engine_alert_schema
 )
 import logging

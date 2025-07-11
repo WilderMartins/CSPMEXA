@@ -2,14 +2,25 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios'; // Para chamadas de API
 import { useTranslation } from 'react-i18next'; // Importar hook
 
+// Interface Alert atualizada para corresponder ao AlertSchema do backend (com campos do DB)
 interface Alert {
-  id?: string;
+  id: number; // ID numérico do banco de dados
   resource_id: string;
   resource_type: string;
-  severity: string;
+  account_id?: string;
+  region?: string;
+  provider: string;
+  severity: string; // Idealmente, usar o AlertSeverityEnum se importado
   title: string;
   description: string;
-  // Adicionar outros campos do schema Alert se necessário
+  policy_id: string;
+  status: string; // Idealmente, usar o AlertStatusEnum se importado
+  details?: Record<string, any>;
+  recommendation?: string;
+  created_at: string; // Data como string ISO
+  updated_at: string;
+  first_seen_at: string;
+  last_seen_at: string;
 }
 
 const DashboardPage: React.FC = () => {
@@ -35,31 +46,58 @@ const DashboardPage: React.FC = () => {
   const [googleWorkspaceAdminEmail, setGoogleWorkspaceAdminEmail] = useState<string>('');
 
   const apiClient = axios.create({
-    baseURL: '',
+    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
     headers: {
       'Authorization': `Bearer ${localStorage.getItem('authToken')}`
     }
   });
 
-  // Buscar dados do usuário ao carregar o dashboard
+  // Função para buscar todos os alertas persistidos
+  const fetchAllAlerts = async () => {
+    setIsLoading(true);
+    setError(null);
+    setAlerts([]);
+    setCurrentDisplayMode('all_alerts');
+    setCurrentAnalysisType(null); // Limpa o tipo de análise específica
+
+    try {
+      // Chama o novo endpoint GET /alerts do gateway
+      const response = await apiClient.get('/alerts?limit=100&sort_by=last_seen_at&sort_order=desc');
+      setAlerts(response.data || []);
+      if (response.data.length === 0) {
+        setError(t('dashboardPage.noAlertsFound'));
+      }
+    } catch (err: any) {
+      console.error("Erro ao buscar todos os alertas:", err);
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts');
+      setError(t('dashboardPage.errorFetchingAllAlerts', { error: errorMessage }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Buscar dados do usuário e todos os alertas ao carregar o dashboard
   useEffect(() => {
-    const fetchUserInfo = async () => {
+    const fetchInitialData = async () => {
       try {
-        const response = await apiClient.get('/api/v1/users/me');
-        setUserInfo(response.data);
+        // Não é necessário esperar fetchUserInfo para chamar fetchAllAlerts
+        apiClient.get('/users/me').then(response => {
+          setUserInfo(response.data);
+        }).catch(err => {
+          console.error("Erro ao buscar informações do usuário:", err);
+        });
+
+        fetchAllAlerts(); // Carrega todos os alertas ao iniciar
       } catch (err) {
-        console.error("Erro ao buscar informações do usuário:", err);
-        // Poderia tratar erro de token inválido/expirado aqui, e deslogar o usuário
+        // Erros já são tratados dentro de fetchUserInfo e fetchAllAlerts
       }
     };
-    fetchUserInfo();
-  }, []);
+    fetchInitialData();
+  }, []); // Executa apenas uma vez ao montar
 
-
-  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
 
   const handleAnalysis = async (
-    provider: 'aws' | 'gcp' | 'huawei' | 'azure' | 'googleworkspace', // Adicionado 'googleworkspace'
+    provider: 'aws' | 'gcp' | 'huawei' | 'azure' | 'googleworkspace',
     servicePath: string,
     analysisType: string,
     idParams?: {
@@ -67,68 +105,45 @@ const DashboardPage: React.FC = () => {
       regionId?: string;
       domainId?: string;
       subscriptionId?: string;
-      gwsCustomerId?: string; // Para Google Workspace
-      gwsAdminEmail?: string; // Para Google Workspace
+      gwsCustomerId?: string;
+      gwsAdminEmail?: string;
     }
   ) => {
     setIsLoading(true);
     setError(null);
-    setAlerts([]);
+    setAlerts([]); // Limpa alertas anteriores
+    setCurrentDisplayMode('analysis_result'); // Muda para modo de resultado de análise
     setCurrentAnalysisType(analysisType);
 
-    let url = `/api/v1/analyze/${provider}/${servicePath}`;
+    let url = `/analyze/${provider}/${servicePath}`; // URL relativa ao baseURL do apiClient
     const queryParams = new URLSearchParams();
 
+    // Lógica de parâmetros (mantida, mas URL base é tratada pelo apiClient)
     if (provider === 'gcp') {
       if (!idParams?.projectId) {
-        setError(t('dashboardPage.gcpProjectIdRequired'));
-        setIsLoading(false);
-        return;
+        setError(t('dashboardPage.gcpProjectIdRequired')); setIsLoading(false); return;
       }
       queryParams.append('project_id', idParams.projectId);
     } else if (provider === 'huawei') {
-      if (!idParams?.projectId && servicePath !== 'iam/users') { // IAM users usa domain_id
-        setError(t('dashboardPage.huaweiProjectIdRequired'));
-        setIsLoading(false);
-        return;
+      if (!idParams?.projectId && servicePath !== 'iam/users') {
+        setError(t('dashboardPage.huaweiProjectIdRequired')); setIsLoading(false); return;
       }
       if (!idParams?.regionId) {
-        setError(t('dashboardPage.huaweiRegionIdRequired'));
-        setIsLoading(false);
-        return;
+        setError(t('dashboardPage.huaweiRegionIdRequired')); setIsLoading(false); return;
       }
       if (idParams.projectId) queryParams.append('project_id', idParams.projectId);
       queryParams.append('region_id', idParams.regionId);
-      if (servicePath === 'iam/users' && idParams.domainId) { // Domain ID é opcional mas preferido para IAM users
+      if (servicePath === 'iam/users' && idParams.domainId) {
         queryParams.append('domain_id', idParams.domainId);
-      } else if (servicePath === 'iam/users' && !idParams.domainId) {
-        // Se domain_id não for fornecido para IAM users, o backend tentará usar variáveis de ambiente
-        // ou o project_id como fallback, o que pode não ser o ideal mas permite a chamada.
-        // Adicionar um aviso ou exigir domain_id para IAM é uma opção.
-        // Por enquanto, permitimos a chamada. O backend logará um aviso se o domain_id não for claro.
       }
     } else if (provider === 'azure') {
       if (!idParams?.subscriptionId) {
-        setError(t('dashboardPage.azureSubscriptionIdRequired')); // Adicionar esta chave de tradução
-        setIsLoading(false);
-        return;
+        setError(t('dashboardPage.azureSubscriptionIdRequired')); setIsLoading(false); return;
       }
       queryParams.append('subscription_id', idParams.subscriptionId);
     } else if (provider === 'googleworkspace') {
-      // customerId é opcional no backend (default 'my_customer'), mas adminEmail é crucial se não configurado no backend.
-      // O frontend deve enviar ambos se o usuário os preencher.
-      if (!idParams?.gwsAdminEmail && !idParams?.gwsCustomerId) { // Se ambos vazios, pode dar erro se backend não tiver defaults.
-         // Relaxar essa checagem por agora, assumindo que o backend pode ter defaults ou o usuário sabe que precisa de um deles.
-         // setError(t('dashboardPage.gwsAdminEmailRequired')); // Adicionar tradução
-         // setIsLoading(false);
-         // return;
-      }
-      if (idParams?.gwsCustomerId) {
-        queryParams.append('customer_id', idParams.gwsCustomerId);
-      }
-      if (idParams?.gwsAdminEmail) {
-        queryParams.append('delegated_admin_email', idParams.gwsAdminEmail);
-      }
+      if (idParams?.gwsCustomerId) queryParams.append('customer_id', idParams.gwsCustomerId);
+      if (idParams?.gwsAdminEmail) queryParams.append('delegated_admin_email', idParams.gwsAdminEmail);
     }
 
     const queryString = queryParams.toString();
@@ -137,10 +152,11 @@ const DashboardPage: React.FC = () => {
     }
 
     try {
+      // A resposta de /analyze agora também é uma lista de Alertas persistidos
       const response = await apiClient.post(url, {});
       setAlerts(response.data || []);
       if (response.data.length === 0) {
-        setError(t('dashboardPage.noAlertsFor', { type: analysisType }));
+        setError(t('dashboardPage.noNewAlertsForAnalysis', { type: analysisType }));
       }
     } catch (err: any) {
       console.error(`Erro ao analisar ${analysisType} (${provider}):`, err);
@@ -160,9 +176,16 @@ const DashboardPage: React.FC = () => {
         </div>
       )}
 
-      {/* Provider Analysis Sections Wrapper */}
-      <div className="provider-sections-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
+      {/* Botão para recarregar todos os alertas */}
+      <div style={{ marginBottom: '20px' }}>
+        <button onClick={fetchAllAlerts} disabled={isLoading}>
+          {isLoading && currentDisplayMode === 'all_alerts' ? t('dashboardPage.loadingAllAlerts') : t('dashboardPage.fetchAllAlertsButton')}
+        </button>
+      </div>
 
+
+      {/* Provider Analysis Sections Wrapper (igual ao anterior) */}
+      <div className="provider-sections-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
         {/* AWS Analysis Section */}
         <div className="aws-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
           <h3>{t('dashboardPage.awsAnalysisTitle')}</h3>
@@ -178,6 +201,9 @@ const DashboardPage: React.FC = () => {
             </button>
             <button onClick={() => handleAnalysis('aws', 'iam/users', 'AWS IAM Users')} disabled={isLoading}>
               {isLoading && currentAnalysisType === 'AWS IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
+            </button>
+            <button onClick={() => handleAnalysis('aws', 'rds/instances', 'AWS RDS Instances')} disabled={isLoading}>
+              {isLoading && currentAnalysisType === 'AWS RDS Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeRDSInstancesButton')}
             </button>
           </div>
         </div>
@@ -319,30 +345,44 @@ const DashboardPage: React.FC = () => {
 
       </div> {/* End of provider-sections-wrapper */}
 
-      {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentAnalysisType })}</p>}
+      {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</p>}
       {error && <p style={{ color: 'red' }}>{error}</p>}
 
       {alerts.length > 0 && (
         <div className="alerts-container">
-          <h3>{t('dashboardPage.alertsFoundFor', { type: currentAnalysisType })}</h3>
+          <h3>
+            {currentDisplayMode === 'all_alerts'
+              ? t('dashboardPage.allPersistedAlerts')
+              : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType })}
+          </h3>
           <table className="alerts-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
+                <th style={tableHeaderStyle}>{t('alertItem.id')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.provider')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.severity')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.title')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.resource')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.resourceType')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.description')}</th>
+                 <th style={tableHeaderStyle}>{t('alertItem.status')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.firstSeen')}</th>
+                <th style={tableHeaderStyle}>{t('alertItem.lastSeen')}</th>
+                {/* <th style={tableHeaderStyle}>{t('alertItem.description')}</th> */}
               </tr>
             </thead>
             <tbody>
               {alerts.map((alert, index) => (
-                <tr key={alert.id || index} style={index % 2 === 0 ? evenRowStyle : oddRowStyle}>
+                <tr key={alert.id} style={index % 2 === 0 ? evenRowStyle : oddRowStyle}>
+                  <td style={tableCellStyle}>{alert.id}</td>
+                  <td style={tableCellStyle}>{alert.provider.toUpperCase()}</td>
                   <td style={getSeverityStyle(alert.severity)}>{alert.severity}</td>
-                  <td style={tableCellStyle}>{alert.title}</td>
+                  <td style={tableCellStyle} title={alert.description}>{alert.title}</td>
                   <td style={tableCellStyle}>{alert.resource_id}</td>
                   <td style={tableCellStyle}>{alert.resource_type}</td>
-                  <td style={tableCellStyle}>{alert.description}</td>
+                  <td style={tableCellStyle}>{alert.status}</td>
+                  <td style={tableCellStyle}>{new Date(alert.first_seen_at).toLocaleString()}</td>
+                  <td style={tableCellStyle}>{new Date(alert.last_seen_at).toLocaleString()}</td>
+                  {/* <td style={tableCellStyle}>{alert.description}</td> */}
                 </tr>
               ))}
             </tbody>
@@ -353,7 +393,7 @@ const DashboardPage: React.FC = () => {
   );
 };
 
-// Estilos básicos para a tabela (podem ser movidos para um arquivo CSS)
+// Estilos básicos para a tabela (mantidos)
 const tableHeaderStyle: React.CSSProperties = {
   border: '1px solid #ddd',
   padding: '8px',

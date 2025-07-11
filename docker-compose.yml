@@ -105,9 +105,11 @@ services:
     restart: unless-stopped
     command: python /app/app/main.py
     environment:
-      # Assume que o policy engine usa o mesmo DB que o auth_service para alertas
-      - ALERT_DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
+      # Aponta para o mesmo DB do auth_service para alertas (ALERT_DATABASE_URL é usado internamente se DATABASE_URL não estiver setado)
+      - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
       - DEBUG_MODE=${DEBUG_MODE:-false}
+      # URL para o notification_service, usado pelo policy_engine para enviar notificações
+      - NOTIFICATION_SERVICE_URL=http://notification_service:${NOTIFICATION_SERVICE_PORT:-8003}/api/v1
     volumes:
       - ./backend/policy_engine_service:/app
     ports:
@@ -115,8 +117,43 @@ services:
     networks:
       - cspmexa_net
     depends_on:
-      postgres_auth_db: # Se ele realmente escrever no DB, senão pode remover
+      postgres_auth_db:
         condition: service_healthy
+      # Adicionada dependência para garantir que notification_service esteja disponível, se necessário na inicialização.
+      # Se a chamada for totalmente desacoplada (ex: via message queue no futuro), isso pode não ser estritamente necessário.
+      # notification_service:
+      #   condition: service_started # Ou service_healthy se tiver healthcheck
+
+  notification_service:
+    build:
+      context: ./backend/notification_service
+      dockerfile: Dockerfile
+    container_name: cspmexa-notification-service
+    restart: unless-stopped
+    command: python /app/app/main.py # main.py lida com reload via DEBUG_MODE ou RELOAD_UVICORN
+    environment:
+      - PROJECT_NAME=NotificationService
+      - API_V1_STR=/api/v1
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - RELOAD_UVICORN=${DEBUG_MODE:-false} # Usar DEBUG_MODE para consistência com outros serviços
+      - PORT=${NOTIFICATION_SERVICE_PORT:-8003} # O Dockerfile usa PORT
+      # SMTP settings from root .env file
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - SMTP_SSL=${SMTP_SSL:-false}
+      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
+      - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CSPMEXA Notification}
+      - DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=${DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}
+    volumes:
+      - ./backend/notification_service/app:/app/app # Montar código para dev com reload
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8003}:8003" # Expor a porta
+    networks:
+      - cspmexa_net
+    # depends_on: # Sem dependências de banco de dados para iniciar
 
   api_gateway_service:
     build:
@@ -129,9 +166,10 @@ services:
       - AUTH_SERVICE_URL=http://auth_service:8000/api/v1
       - COLLECTOR_SERVICE_URL=http://collector_service:8001/api/v1
       - POLICY_ENGINE_SERVICE_URL=http://policy_engine_service:8002/api/v1
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway} # Requer que JWT_SECRET_KEY seja definida no .env raiz
+      - NOTIFICATION_SERVICE_URL=http://notification_service:${NOTIFICATION_SERVICE_PORT:-8003}/api/v1 # Adicionado
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
-      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60} # Aumentado para coletas potencialmente longas
+      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60}
       - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
       - ./backend/api_gateway_service:/app
@@ -143,6 +181,7 @@ services:
       - auth_service
       - collector_service
       - policy_engine_service
+      - notification_service # Adicionado
 
   # --- Frontend WebApp ---
   frontend_webapp:

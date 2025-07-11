@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+emails # For sending emails
+httpx # For async HTTP requests (if this service needs to call others, or for testing)

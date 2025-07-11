@@ -157,6 +157,7 @@ SupportedDataTypes = Union[
     List[EC2InstanceDataInput],
     List[EC2SecurityGroupDataInput],
     List[IAMUserDataInput],
+    List['RDSInstanceDataInput'], # Adicionado RDS
     # Adicionar List[IAMRoleDataInput], List[IAMPolicyDataInput] quando prontos para AWS
 
     # Tipos de Dados GCP
