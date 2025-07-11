@@ -132,7 +132,11 @@ No diretório `frontend/webapp`:
     *   Jest e React Testing Library para testes.
     *   Foco em testar a lógica de negócios, interações do usuário e renderização de componentes.
 
-## 7. Adicionando Novos Componentes/Páginas
+## 7. Integração com Backend
+
+Para detalhes sobre os endpoints de API e schemas de dados que o frontend espera do backend, consulte o [Guia de Integração do Backend](../../docs/backend_integration_guide.md).
+
+## 8. Adicionando Novos Componentes/Páginas
 
 *   **Novas Páginas:**
     1.  Crie o componente da página em `src/pages/NovaPagina.tsx`.
