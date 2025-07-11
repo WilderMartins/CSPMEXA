@@ -25,6 +25,12 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **S3:** Verificações para ACLs públicas, políticas públicas, versionamento desabilitado, logging desabilitado.
     *   **EC2:** Verificações para Security Groups com acesso público total ou a portas específicas (SSH, RDP), instâncias com IP público, instâncias sem perfil IAM.
     *   **IAM Users:** Verificações para MFA desabilitado, chaves de acesso não utilizadas, chaves de acesso ativas para usuário root.
+*   **Coleta de Dados Azure:**
+    *   **Virtual Machines:** Detalhes de VMs (nome, ID, localização, tamanho, tipo de SO, estado de energia, tags), Interfaces de Rede (IPs públicos/privados, NSGs associados).
+    *   **Storage Accounts:** Detalhes de Contas de Armazenamento (nome, ID, localização, tipo, SKU), configurações de segurança (acesso público a blobs, versão TLS, HTTPS), propriedades do serviço Blob (versionamento).
+*   **Motor de Políticas Azure (Básico):**
+    *   **Virtual Machines:** Verificações para VMs com IP público, VMs sem NSG associado à NIC.
+    *   **Storage Accounts:** Verificações para Contas de Armazenamento permitindo acesso público a blobs, não exigindo transferência HTTPS, com versionamento de blob desabilitado.
 *   **Coleta de Dados GCP (Google Cloud Platform):**
     *   **Cloud Storage:** Detalhes de buckets (IAM, versionamento, logging).
     *   **Compute Engine:** Detalhes de VMs (IPs, Service Accounts, tags), Firewalls VPC (regras).
@@ -43,12 +49,12 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **ECS/VPC:** Verificações para VMs ECS com IP público, SGs VPC com acesso público.
     *   **IAM Users:** Verificações para MFA de console desabilitado, chaves de acesso inativas.
 *   **API Gateway:**
-    *   Proxy para endpoints de coleta AWS, GCP e Huawei Cloud.
-    *   Endpoints de orquestração para coletar e analisar dados de AWS, GCP e Huawei Cloud.
+    *   Proxy para endpoints de coleta AWS, GCP, Huawei Cloud e Azure.
+    *   Endpoints de orquestração para coletar e analisar dados de AWS, GCP, Huawei Cloud e Azure.
     *   Proteção de endpoints relevantes com JWT.
 *   **Frontend (Básico):**
     *   Página de login e callback OAuth.
-    *   Dashboard para acionar análises AWS, GCP (requer Project ID) e Huawei Cloud (requer Project/Domain ID e Region ID) e visualizar alertas.
+    *   Dashboard para acionar análises AWS, GCP (requer Project ID), Huawei Cloud (requer Project/Domain ID e Region ID), Azure (requer Subscription ID) e visualizar alertas.
     *   Internacionalização (Inglês, Português-BR).
 
 ## Primeiros Passos (Ambiente de Desenvolvimento)
@@ -64,6 +70,12 @@ Esta seção descreve como configurar e rodar o ambiente de desenvolvimento loca
 *   **Credenciais AWS:** Configuradas localmente para o `collector-service` acessar a AWS (via variáveis de ambiente ou `~/.aws/credentials`).
 *   **Credenciais GCP:** Um arquivo JSON de chave de Service Account do GCP. A Service Account deve ter permissões de leitura para os serviços a serem monitorados. Defina a variável de ambiente `GOOGLE_APPLICATION_CREDENTIALS` para o caminho deste arquivo JSON.
 *   **Credenciais Huawei Cloud:** Access Key ID (AK), Secret Access Key (SK), Project ID e Domain ID (para IAM) da Huawei Cloud. Configure as variáveis de ambiente: `HUAWEICLOUD_SDK_AK`, `HUAWEICLOUD_SDK_SK`, `HUAWEICLOUD_SDK_PROJECT_ID`, `HUAWEICLOUD_SDK_DOMAIN_ID`.
+*   **Credenciais Azure:** Para o `collector-service` acessar o Azure:
+    *   `AZURE_SUBSCRIPTION_ID`: ID da Subscrição do Azure.
+    *   `AZURE_TENANT_ID`: ID do Tenant do Azure (Directory ID).
+    *   `AZURE_CLIENT_ID`: ID do Cliente (Application ID) de um App Registration/Service Principal.
+    *   `AZURE_CLIENT_SECRET`: Segredo do Cliente (Chave) do Service Principal.
+    O Service Principal deve ter permissões de leitura (como "Reader") na subscrição ou nos grupos de recursos relevantes.
 *   **Google OAuth (para `auth-service`):** Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados.
 
 ### 1. Clone o Repositório
@@ -162,9 +174,9 @@ O frontend é uma aplicação React (Vite) localizada em `frontend/webapp/`.
 
 Quando os serviços backend estiverem rodando, suas documentações OpenAPI (Swagger UI) estarão disponíveis nos seguintes endpoints:
 *   **Auth Service:** `http://localhost:8000/docs`
-*   **Collector Service:** `http://localhost:8001/docs` (Inclui endpoints para AWS, GCP e Huawei Cloud)
+*   **Collector Service:** `http://localhost:8001/docs` (Inclui endpoints para AWS, GCP, Huawei Cloud e Azure)
 *   **Policy Engine Service:** `http://localhost:8002/docs`
-*   **API Gateway Service:** `http://localhost:8050/docs` (Ponto de entrada principal, documenta todos os endpoints proxy e de orquestração para AWS, GCP e Huawei Cloud)
+*   **API Gateway Service:** `http://localhost:8050/docs` (Ponto de entrada principal, documenta todos os endpoints proxy e de orquestração para AWS, GCP, Huawei Cloud e Azure)
 
 *(Nota: Para um ambiente de produção, todos os serviços seriam containerizados e orquestrados de forma mais robusta, por exemplo, com um `docker-compose.yml` completo para todos os serviços ou Kubernetes.)*
 

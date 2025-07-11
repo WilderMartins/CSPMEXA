@@ -10,68 +10,54 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Tentar carregar as configurações do settings do collector_service se existir
-# Se não, carregar diretamente das variáveis de ambiente.
-try:
-    AZURE_SUBSCRIPTION_ID = settings.AZURE_SUBSCRIPTION_ID
-    AZURE_TENANT_ID = settings.AZURE_TENANT_ID
-    AZURE_CLIENT_ID = settings.AZURE_CLIENT_ID
-    AZURE_CLIENT_SECRET = settings.AZURE_CLIENT_SECRET
-except AttributeError: # Fallback para os.environ se settings não tiver as vars Azure
-    logger.info("Azure settings not found in app.core.config.settings, trying os.environ.")
-    AZURE_SUBSCRIPTION_ID = os.getenv("AZURE_SUBSCRIPTION_ID")
-    AZURE_TENANT_ID = os.getenv("AZURE_TENANT_ID")
-    AZURE_CLIENT_ID = os.getenv("AZURE_CLIENT_ID")
-    AZURE_CLIENT_SECRET = os.getenv("AZURE_CLIENT_SECRET")
-
+# Utiliza as configurações carregadas de app.core.config.settings
+# que por sua vez lê variáveis de ambiente ou .env.
 
 def get_azure_credentials():
     """
     Obtém as credenciais do Azure.
-    Prioriza ClientSecretCredential se todas as variáveis estiverem definidas,
-    caso contrário, usa DefaultAzureCredential.
+    Prioriza ClientSecretCredential se todas as variáveis (AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET)
+    estiverem definidas em settings. Caso contrário, usa DefaultAzureCredential.
     """
-    if AZURE_TENANT_ID and AZURE_CLIENT_ID and AZURE_CLIENT_SECRET:
-        logger.info("Using ClientSecretCredential for Azure.")
+    if settings.AZURE_TENANT_ID and settings.AZURE_CLIENT_ID and settings.AZURE_CLIENT_SECRET:
+        logger.info("Using ClientSecretCredential for Azure based on explicit settings.")
         return ClientSecretCredential(
-            tenant_id=AZURE_TENANT_ID,
-            client_id=AZURE_CLIENT_ID,
-            client_secret=AZURE_CLIENT_SECRET
+            tenant_id=settings.AZURE_TENANT_ID,
+            client_id=settings.AZURE_CLIENT_ID,
+            client_secret=settings.AZURE_CLIENT_SECRET
         )
     else:
-        logger.info("Client secret credentials not fully provided, attempting DefaultAzureCredential.")
-        # DefaultAzureCredential tentará várias estratégias (env vars, Azure CLI, Managed Identity etc.)
-        # Certifique-se de que as variáveis de ambiente AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET
-        # são lidas pelo DefaultAzureCredential se este for o método desejado sem ClientSecretCredential explícito.
-        # Ou que o ambiente de execução (ex: VM com Managed Identity, Azure CLI logada) está configurado.
+        logger.info("Client secret credentials not fully provided in settings, attempting DefaultAzureCredential.")
+        # DefaultAzureCredential tentará várias estratégias (env vars AZURE_*, Azure CLI, Managed Identity etc.)
         return DefaultAzureCredential()
 
 @lru_cache(maxsize=5) # Cache para evitar recriar clientes para a mesma subscrição
 def get_compute_management_client(subscription_id: str = None) -> ComputeManagementClient:
-    sub_id = subscription_id or AZURE_SUBSCRIPTION_ID
-    if not sub_id:
-        raise ValueError("Azure Subscription ID is required to create ComputeManagementClient.")
+    # Prioriza o subscription_id passado como argumento, depois o de settings.
+    sub_id_to_use = subscription_id or settings.AZURE_SUBSCRIPTION_ID
+    if not sub_id_to_use:
+        raise ValueError("Azure Subscription ID is required to create ComputeManagementClient. Provide it as an argument or set AZURE_SUBSCRIPTION_ID in settings/env.")
     credential = get_azure_credentials()
-    logger.debug(f"Creating ComputeManagementClient for subscription ID: {sub_id}")
-    return ComputeManagementClient(credential=credential, subscription_id=sub_id)
+    logger.debug(f"Creating ComputeManagementClient for subscription ID: {sub_id_to_use}")
+    return ComputeManagementClient(credential=credential, subscription_id=sub_id_to_use)
 
 @lru_cache(maxsize=5)
 def get_storage_management_client(subscription_id: str = None) -> StorageManagementClient:
-    sub_id = subscription_id or AZURE_SUBSCRIPTION_ID
-    if not sub_id:
-        raise ValueError("Azure Subscription ID is required to create StorageManagementClient.")
+    sub_id_to_use = subscription_id or settings.AZURE_SUBSCRIPTION_ID
+    if not sub_id_to_use:
+        raise ValueError("Azure Subscription ID is required to create StorageManagementClient. Provide it as an argument or set AZURE_SUBSCRIPTION_ID in settings/env.")
     credential = get_azure_credentials()
-    logger.debug(f"Creating StorageManagementClient for subscription ID: {sub_id}")
-    return StorageManagementClient(credential=credential, subscription_id=sub_id)
+    logger.debug(f"Creating StorageManagementClient for subscription ID: {sub_id_to_use}")
+    return StorageManagementClient(credential=credential, subscription_id=sub_id_to_use)
 
 @lru_cache(maxsize=5)
 def get_resource_management_client(subscription_id: str = None) -> ResourceManagementClient:
-    sub_id = subscription_id or AZURE_SUBSCRIPTION_ID
-    if not sub_id:
-        raise ValueError("Azure Subscription ID is required to create ResourceManagementClient.")
+    sub_id_to_use = subscription_id or settings.AZURE_SUBSCRIPTION_ID
+    if not sub_id_to_use:
+        raise ValueError("Azure Subscription ID is required to create ResourceManagementClient. Provide it as an argument or set AZURE_SUBSCRIPTION_ID in settings/env.")
     credential = get_azure_credentials()
-    logger.debug(f"Creating ResourceManagementClient for subscription ID: {sub_id}")
-    return ResourceManagementClient(credential=credential, subscription_id=sub_id)
+    logger.debug(f"Creating ResourceManagementClient for subscription ID: {sub_id_to_use}")
+    return ResourceManagementClient(credential=credential, subscription_id=sub_id_to_use)
 
 # Exemplo de como obter um cliente:
 # compute_client = get_compute_management_client()

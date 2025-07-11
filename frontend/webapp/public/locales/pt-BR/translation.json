@@ -35,12 +35,14 @@
     "analyzeHuaweiECSButton": "Analisar Instâncias ECS (Huawei)",
     "analyzeHuaweiSGsButton": "Analisar SGs VPC (Huawei)",
     "analyzeHuaweiIAMButton": "Analisar Usuários IAM (Huawei)",
+
     "azureAnalysisTitle": "Análise Azure",
     "azureSubscriptionIdLabel": "ID da Subscrição Azure",
     "azureSubscriptionIdPlaceholder": "Digite o ID da Subscrição Azure",
     "azureSubscriptionIdRequired": "O ID da Subscrição Azure é obrigatório para análise Azure.",
     "analyzeAzureVMsButton": "Analisar VMs (Azure)",
     "analyzeAzureStorageButton": "Analisar Contas de Storage (Azure)",
+
     "gwsAnalysisTitle": "Análise Google Workspace",
     "gwsCustomerIdLabel": "ID do Cliente",
     "gwsCustomerIdPlaceholder": "Digite o ID do Cliente (ex: my_customer)",

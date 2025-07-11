@@ -45,15 +45,15 @@ class Settings(BaseSettings):
     # HUAWEICLOUD_SDK_DOMAIN_ID: Optional[str] = None # Domain ID (Account ID) para IAM
 
     # Azure Settings
-    AZURE_SUBSCRIPTION_ID: Optional[str] = None
-    AZURE_TENANT_ID: Optional[str] = None
-    AZURE_CLIENT_ID: Optional[str] = None
-    AZURE_CLIENT_SECRET: Optional[str] = None
+    AZURE_SUBSCRIPTION_ID: Optional[str] = Field(default=None, env="AZURE_SUBSCRIPTION_ID")
+    AZURE_TENANT_ID: Optional[str] = Field(default=None, env="AZURE_TENANT_ID")
+    AZURE_CLIENT_ID: Optional[str] = Field(default=None, env="AZURE_CLIENT_ID")
+    AZURE_CLIENT_SECRET: Optional[str] = Field(default=None, env="AZURE_CLIENT_SECRET")
 
     # Google Workspace Settings
-    GOOGLE_WORKSPACE_CUSTOMER_ID: str = "my_customer" # Default 'my_customer'
-    GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL: Optional[str] = None
-    GOOGLE_SERVICE_ACCOUNT_KEY_PATH: Optional[str] = None
+    GOOGLE_WORKSPACE_CUSTOMER_ID: str = Field(default="my_customer", env="GOOGLE_WORKSPACE_CUSTOMER_ID")
+    GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL: Optional[str] = Field(default=None, env="GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL")
+    GOOGLE_SERVICE_ACCOUNT_KEY_PATH: Optional[str] = Field(default=None, env="GOOGLE_SERVICE_ACCOUNT_KEY_PATH")
     # GOOGLE_WORKSPACE_SCOPES: List[str] = Field(default_factory=lambda: [ # Definir escopos no código é mais seguro
     #     "https://www.googleapis.com/auth/admin.directory.user.readonly",
     #     "https://www.googleapis.com/auth/admin.reports.audit.readonly",

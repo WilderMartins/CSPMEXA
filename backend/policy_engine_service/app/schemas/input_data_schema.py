@@ -217,27 +217,29 @@ class AzureNetworkSecurityGroupInfoInput(BaseModel):
     id: str
     name: Optional[str] = None
     resource_group: Optional[str] = None
+    class Config: extra = 'ignore'; populate_by_name = True
 
 class AzurePublicIPAddressInput(BaseModel):
     id: str
     name: Optional[str] = None
     ip_address: Optional[str] = None
     resource_group: Optional[str] = None
+    class Config: extra = 'ignore'; populate_by_name = True
 
 class AzureIPConfigurationInput(BaseModel):
     name: Optional[str] = None
     private_ip_address: Optional[str] = None
-    public_ip_address_details: Optional[AzurePublicIPAddressInput] = Field(None, alias="publicIPAddress")
-    class Config: populate_by_name = True; extra = 'ignore'
+    public_ip_address_details: Optional[AzurePublicIPAddressInput] = Field(None, alias="publicIpAddress")
+    class Config: extra = 'ignore'; populate_by_name = True
 
 
 class AzureNetworkInterfaceInput(BaseModel):
     id: str
     name: Optional[str] = None
     resource_group: Optional[str] = None
-    ip_configurations: List[AzureIPConfigurationInput] = Field(default_factory=list)
-    network_security_group: Optional[AzureNetworkSecurityGroupInfoInput] = None
-    class Config: extra = 'ignore'
+    ip_configurations: List[AzureIPConfigurationInput] = Field(default_factory=list, alias="ipConfigurations")
+    network_security_group: Optional[AzureNetworkSecurityGroupInfoInput] = Field(None, alias="networkSecurityGroup")
+    class Config: extra = 'ignore'; populate_by_name = True
 
 
 class AzureVirtualMachineDataInput(BaseModel):

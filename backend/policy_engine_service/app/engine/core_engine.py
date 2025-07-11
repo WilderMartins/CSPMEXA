@@ -204,8 +204,8 @@ class PolicyEngine:
                     logger.error("Data for azure_virtual_machines is not List[AzureVirtualMachineDataInput]. Skipping.")
                 else:
                     vm_alerts = azure_vm_policies.evaluate_azure_vm_policies(
-                        vms_data=data, # type: ignore
-                        account_id=account_id # subscription_id
+                        azure_vms_data=data, # type: ignore # Corrigido para azure_vms_data
+                        subscription_id=account_id # Corrigido para subscription_id
                     )
                     generated_alerts_schemas.extend(vm_alerts)
             elif service == "azure_storage_accounts":
@@ -213,8 +213,8 @@ class PolicyEngine:
                     logger.error("Data for azure_storage_accounts is not List[AzureStorageAccountDataInput]. Skipping.")
                 else:
                     storage_alerts = azure_storage_policies.evaluate_azure_storage_policies(
-                        storage_accounts_data=data, # type: ignore
-                        account_id=account_id # subscription_id
+                        azure_storage_accounts_data=data, # type: ignore # Corrigido para azure_storage_accounts_data
+                        subscription_id=account_id # Corrigido para subscription_id
                     )
                     generated_alerts_schemas.extend(storage_alerts)
             else:
