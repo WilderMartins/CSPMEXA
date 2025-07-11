@@ -88,20 +88,12 @@ export const fetchSecurityScoreTrend = async (filters?: { // Renomeado para filt
   provider?: string; // ex: 'AWS', 'GCP', '' para todos
 }): Promise<SecurityScoreTrendPoint[]> => {
   try {
-    // const response = await apiClient.get<SecurityScoreTrendPoint[]>('/reports/security-score-trend', { params: filters });
-    // return response.data;
-
-    // Mock data enquanto o endpoint não existe
-    console.warn("fetchSecurityScoreTrend: Usando dados mockados. Endpoint real necessário: GET /api/v1/reports/security-score-trend");
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simula delay da API
-    return [
-      { date: "2023-05-01", overallScore: 70, criticalAlerts: 8, highAlerts: 12, awsScore: 75 },
-      { date: "2023-05-08", overallScore: 72, criticalAlerts: 6, highAlerts: 10, awsScore: 77 },
-      { date: "2023-05-15", overallScore: 75, criticalAlerts: 4, highAlerts: 8, awsScore: 80 },
-      { date: "2023-05-22", overallScore: 73, criticalAlerts: 5, highAlerts: 9, awsScore: 78 },
-    ];
+    const response = await apiClient.get<SecurityScoreTrendPoint[]>('/reports/security-score-trend', { params: filters });
+    return response.data;
   } catch (error) {
     console.error('Error fetching security score trend:', error);
+    // Lançar o erro permite que o componente que chama trate a UI de erro
+    // Pode-se também retornar um array vazio ou um objeto de erro customizado se preferir
     throw error;
   }
 };
@@ -119,27 +111,8 @@ export const fetchAlertsSummary = async (filters: { // Renomeado para filters
   range_end?: string;   // YYYY-MM-DD
 }): Promise<AlertsSummaryDataPoint[]> => {
   try {
-    // const response = await apiClient.get<AlertsSummaryDataPoint[]>('/reports/alerts-summary', { params: filters });
-    // return response.data;
-
-    console.warn("fetchAlertsSummary: Usando dados mockados. Endpoint real necessário: GET /api/v1/reports/alerts-summary");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    // A lógica de mock pode ser ajustada para retornar dados diferentes baseados nos filtros, se necessário para testes.
-    if (filters.group_by === 'severity' || !filters.group_by) {
-      return [
-        { severity: "Critical", count: 15, percentage: 10 },
-        { severity: "High", count: 30, percentage: 20 },
-        { severity: "Medium", count: 75, percentage: 50 },
-        { severity: "Low", count: 30, percentage: 20 },
-      ];
-    } else if (params.group_by === 'provider') {
-       return [
-        { provider: "AWS", count: 100, openAlerts: 50 },
-        { provider: "GCP", count: 40, openAlerts: 15 },
-        { provider: "Azure", count: 10, openAlerts: 5 },
-      ];
-    }
-    return [];
+    const response = await apiClient.get<AlertsSummaryDataPoint[]>('/reports/alerts-summary', { params: filters });
+    return response.data;
   } catch (error) {
     console.error('Error fetching alerts summary:', error);
     throw error;
@@ -156,20 +129,8 @@ export const fetchComplianceOverview = async (filters?: { // Renomeado para filt
   provider?: string; // ex: 'AWS', 'GCP', '' para todos
 }): Promise<ComplianceOverview> => {
   try {
-    // const response = await apiClient.get<ComplianceOverview>('/reports/compliance-overview', { params: filters });
-    // return response.data;
-
-    console.warn("fetchComplianceOverview: Usando dados mockados. Endpoint real necessário: GET /api/v1/reports/compliance-overview");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return {
-      framework: "CIS AWS Foundations Benchmark v1.4.0 (Mocked)",
-      overallCompliance: 75.5,
-      controls: [
-        { controlId: "1.1", description: "Avoid the use of the root account (Mocked)", status: "Compliant", failingChecks: 0, totalChecks: 5 },
-        { controlId: "1.2", description: "Ensure MFA is enabled for all IAM users (Mocked)", status: "Non-Compliant", failingChecks: 2, totalChecks: 10 },
-        { controlId: "1.3", description: "Ensure credentials unused for 90 days or greater are disabled (Mocked)", status: "Compliant", failingChecks: 1, totalChecks: 20 },
-      ]
-    };
+    const response = await apiClient.get<ComplianceOverview>('/reports/compliance-overview', { params: filters });
+    return response.data;
   } catch (error) {
     console.error('Error fetching compliance overview:', error);
     throw error;
@@ -187,16 +148,8 @@ export const fetchTopRisks = async (filters?: { // Renomeado para filters
   severity?: 'Critical' | 'High' | ''; // Filtrar por severidade mínima
 }): Promise<TopRisk[]> => {
   try {
-    // const response = await apiClient.get<TopRisk[]>('/reports/top-risks', { params: filters });
-    // return response.data;
-
-    console.warn("fetchTopRisks: Usando dados mockados. Endpoint real necessário: GET /api/v1/reports/top-risks");
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [
-      { policyTitle: "S3 Bucket Publicly Accessible (Mocked)", severity: "Critical", instanceCount: 5, provider: "AWS" },
-      { policyTitle: "Unrestricted SSH Access (Mocked)", severity: "High", instanceCount: 8, provider: "AWS" },
-      { policyTitle: "VM using Default Service Account (Mocked)", severity: "Medium", instanceCount: 12, provider: "GCP" },
-    ];
+    const response = await apiClient.get<TopRisk[]>('/reports/top-risks', { params: filters });
+    return response.data;
   } catch (error) {
     console.error('Error fetching top risks:', error);
     throw error;
@@ -271,13 +224,13 @@ export interface ProactiveRecommendation {
  * @returns Uma Promise com uma lista de ativos críticos.
  */
 export const fetchCriticalAssets = async (filters?: { provider?: string }): Promise<CriticalAsset[]> => {
-  console.warn("fetchCriticalAssets: Usando dados mockados. Endpoint real necessário: GET /api/v1/insights/critical-assets");
-  await new Promise(resolve => setTimeout(resolve, 600));
-  return [
-    { id: 'asset-001', name: 'Prod DB Server', type: 'RDS Instance', riskScore: 95, relatedAlertsCount: 5, provider: filters?.provider || 'AWS' },
-    { id: 'asset-002', name: 'Main K8s Cluster', type: 'EKS Cluster', riskScore: 88, relatedAlertsCount: 3, provider: filters?.provider || 'AWS' },
-    { id: 'asset-003', name: 'Billing Storage', type: 'S3 Bucket', riskScore: 92, relatedAlertsCount: 7, provider: filters?.provider || 'AWS' },
-  ];
+  try {
+    const response = await apiClient.get<CriticalAsset[]>('/insights/critical-assets', { params: filters });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching critical assets:', error);
+    throw error;
+  }
 };
 
 /**
@@ -285,20 +238,13 @@ export const fetchCriticalAssets = async (filters?: { provider?: string }): Prom
  * @returns Uma Promise com uma lista de caminhos de ataque.
  */
 export const fetchAttackPaths = async (filters?: { provider?: string }): Promise<AttackPath[]> => {
-  console.warn("fetchAttackPaths: Usando dados mockados. Endpoint real necessário: GET /api/v1/insights/attack-paths");
-  await new Promise(resolve => setTimeout(resolve, 700));
-  return [
-    {
-      id: 'ap-001',
-      description: `Public EC2 Instance ${filters?.provider || 'AWS'}-Instance-123 to Sensitive Data S3 Bucket`,
-      path: [
-        { resourceId: `${filters?.provider || 'AWS'}-Instance-123`, resourceType: 'EC2 Instance', vulnerability: 'Publicly Exposed, Unrestricted SG' },
-        { resourceId: 'internal-network-hop', resourceType: 'Network Path', vulnerability: 'Assumed Internal Access' },
-        { resourceId: `${filters?.provider || 'AWS'}-S3-Sensitive-Data`, resourceType: 'S3 Bucket', vulnerability: 'Readable by Instance Role' }
-      ],
-      severity: 'High'
-    },
-  ];
+  try {
+    const response = await apiClient.get<AttackPath[]>('/insights/attack-paths', { params: filters });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching attack paths:', error);
+    throw error;
+  }
 };
 
 /**
@@ -306,11 +252,11 @@ export const fetchAttackPaths = async (filters?: { provider?: string }): Promise
  * @returns Uma Promise com uma lista de recomendações proativas.
  */
 export const fetchProactiveRecommendations = async (filters?: { category?: string }): Promise<ProactiveRecommendation[]> => {
-  console.warn("fetchProactiveRecommendations: Usando dados mockados. Endpoint real necessário: GET /api/v1/insights/proactive-recommendations");
-  await new Promise(resolve => setTimeout(resolve, 400));
-  return [
-    { id: 'rec-001', title: 'Enable MFA for all IAM Users', description: 'Multiple IAM users without MFA detected. MFA adds a critical layer of security.', category: 'IAM', severity: 'High' },
-    { id: 'rec-002', title: 'Restrict Public S3 Bucket Access', description: 'Review and restrict policies战争 S3 buckets that allow public read/write access.', category: 'Data Security', severity: 'Critical' },
-    { id: 'rec-003', title: 'Implement Least Privilege for Service Accounts (GCP)', description: 'Several default service accounts have broad permissions. Assign granular roles instead.', category: 'IAM', severity: 'Medium' },
-  ];
+  try {
+    const response = await apiClient.get<ProactiveRecommendation[]>('/insights/proactive-recommendations', { params: filters });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching proactive recommendations:', error);
+    throw error;
+  }
 };
