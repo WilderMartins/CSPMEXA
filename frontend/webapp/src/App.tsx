@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next'; // Importar hook
 import React from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton } from '@mantine/core'; // Importar AppShell e outros
+import { useDisclosure } from '@mantine/hooks';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ReportsPage from './pages/ReportsPage';
-import InsightsPage from './pages/InsightsPage'; // Importar a nova página de Insights
+import InsightsPage from './pages/InsightsPage';
 import { useAuth } from './contexts/AuthContext';
 
 const OAuthCallbackPage = () => {
@@ -44,7 +46,8 @@ const OAuthCallbackPage = () => {
 
 
 function App() {
-  const auth = useAuth(); // Usar o hook useAuth
+  const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
+  const auth = useAuth();
   const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
@@ -52,58 +55,94 @@ function App() {
   };
 
   if (auth.isLoading) {
-    // Você pode retornar um spinner/loader de tela inteira aqui
-    return <div className="loading-fullscreen">{t('loading')}</div>;
+    // TODO: Usar um Loader da Mantine aqui
+    return <div className="loading-fullscreen" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>{t('loading')}</div>;
   }
 
+  const navLinkStyle = (isActive?: boolean) => ({ // Estilo para links de navegação, pode ser melhorado com NavLink do react-router
+    padding: '8px 12px',
+    borderRadius: '4px',
+    textDecoration: 'none',
+    color: isActive ? 'var(--mantine-color-blue-filled)' : 'var(--mantine-color-text)',
+    fontWeight: isActive ? 700 : 500,
+    '&:hover': {
+      backgroundColor: 'var(--mantine-color-gray-1)',
+    },
+  });
+
+
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>{t('header.title')}</h1>
-        <nav>
-          {!auth.isAuthenticated && <Link to="/">{t('header.navLogin')}</Link>}
-          {auth.isAuthenticated && (
-            <>
-              <Link to="/dashboard" style={{ marginRight: '15px' }}>{t('header.navDashboard')}</Link>
-              <Link to="/reports" style={{ marginRight: '15px' }}>{t('header.navReports')}</Link>
-              <Link to="/insights" style={{ marginRight: '15px' }}>{t('header.navInsights', 'Insights')}</Link>
-            </>
-          )}
-          {auth.isAuthenticated && <button onClick={() => auth.logout()}>{t('header.btnLogout')}</button>}
-        </nav>
-        <div className="language-selector" style={{ color: "white", marginLeft: "20px" }}>
-          <button onClick={() => changeLanguage('en')} disabled={i18n.language === 'en'}>EN</button>
-          <button onClick={() => changeLanguage('pt-BR')} disabled={i18n.language === 'pt-BR'}>PT-BR</button>
-        </div>
-      </header>
-      <main className="app-main">
+    <AppShell
+      header={{ height: 60 }}
+      navbar={{ width: 250, breakpoint: 'sm', collapsed: { mobile: !opened, desktop: true } }} // Navbar será usado se quisermos links laterais no futuro
+      padding="md"
+    >
+      <AppShell.Header>
+        <Group h="100%" px="md" justify="space-between">
+          {/* Burger para Navbar mobile - pode ser removido se não houver Navbar lateral */}
+          {/* <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" /> */}
+
+          <Text size="xl" fw={700}>{t('header.title')}</Text>
+
+          <Group>
+            <nav>
+              <Group gap="sm">
+                {!auth.isAuthenticated && (
+                  <Anchor component={Link} to="/" style={navLinkStyle()}>
+                    {t('header.navLogin')}
+                  </Anchor>
+                )}
+                {auth.isAuthenticated && (
+                  <>
+                    <Anchor component={Link} to="/dashboard" style={navLinkStyle()}>
+                      {t('header.navDashboard')}
+                    </Anchor>
+                    <Anchor component={Link} to="/reports" style={navLinkStyle()}>
+                      {t('header.navReports')}
+                    </Anchor>
+                    <Anchor component={Link} to="/insights" style={navLinkStyle()}>
+                      {t('header.navInsights', 'Insights')}
+                    </Anchor>
+                  </>
+                )}
+              </Group>
+            </nav>
+
+            {auth.isAuthenticated && (
+              <MantineButton variant="light" onClick={() => auth.logout()}>
+                {t('header.btnLogout')}
+              </MantineButton>
+            )}
+
+            <Group gap="xs" ml="lg">
+              <MantineButton variant={i18n.language === 'en' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('en')}>EN</MantineButton>
+              <MantineButton variant={i18n.language === 'pt-BR' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('pt-BR')}>PT-BR</MantineButton>
+            </Group>
+          </Group>
+        </Group>
+      </AppShell.Header>
+
+      {/* AppShell.Navbar - pode ser adicionado aqui se necessário no futuro */}
+      {/* <AppShell.Navbar p="md">Navbar</AppShell.Navbar> */}
+
+      <AppShell.Main>
         <Routes>
           <Route path="/" element={!auth.isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/auth/callback" element={<OAuthCallbackPage />} />
-
-          <Route
-            path="/dashboard"
-            element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />}
-          />
-          <Route
-            path="/reports"
-            element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />}
-          />
-          <Route
-            path="/insights"
-            element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />}
-          />
-          {/* Adicionar aqui outras rotas protegidas que dependem de auth.isAuthenticated */}
-
-          {/* Rota catch-all para redirecionar usuários não autenticados para login, e autenticados para dashboard */}
+          <Route path="/dashboard" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
+          <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
+          <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
         </Routes>
-      </main>
-      <footer className="app-footer">
-        <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
-      </footer>
-    </div>
-  )
+      </AppShell.Main>
+
+      <AppShell.Footer p="md" style={{textAlign: 'center'}}>
+        <Text size="sm" c="dimmed">
+          {t('footer.copyright', { year: new Date().getFullYear() })}
+        </Text>
+      </AppShell.Footer>
+    </AppShell>
+  );
 }
 
-export default App
+export default App;

@@ -65,7 +65,28 @@
     "resourceType": "Resource Type:",
     "severity": "Severity:",
     "title": "Title:",
-    "description": "Description:"
+    "description": "Description:",
+    "accountId": "Account ID:",
+    "region": "Region:",
+    "policyId": "Policy ID:",
+    "firstSeen": "First Seen:",
+    "lastSeen": "Last Seen:",
+    "details": "Details:"
+  },
+  "alertFilters": {
+    "severity": "Severity",
+    "provider": "Provider",
+    "status": "Status",
+    "allSeverities": "All Severities",
+    "allProviders": "All Providers",
+    "allStatuses": "All Statuses"
+  },
+  "alertsTable": {
+    "clickToViewDetails": "Click row to view details",
+    "noMatchingAlerts": "No alerts match the current filters."
+  },
+  "alertDetails": {
+    "title": "Alert Details"
   },
   "header": {
     "title": "CSPMEXA",
@@ -106,7 +127,9 @@
       "daily": "Daily",
       "weekly": "Weekly",
       "monthly": "Monthly",
-      "allProviders": "All Providers"
+      "allProviders": "All Providers",
+      "selectPeriod": "Select period",
+      "selectProvider": "Select provider"
     }
   },
   "insightsPage": {
