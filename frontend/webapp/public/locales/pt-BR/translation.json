@@ -71,10 +71,21 @@
     "title": "CSPMEXA",
     "navLogin": "Login",
     "navDashboard": "Painel",
+    "navReports": "Relatórios",
     "btnLogout": "Sair"
   },
   "footer": {
     "copyright": "© {{year}} CSPMEXA. Todos os direitos reservados."
+  },
+  "reportsPage": {
+    "title": "Relatórios e Indicadores",
+    "securityScoreTrendTitle": "Tendência da Pontuação de Segurança",
+    "alertsBySeverityTitle": "Alertas por Severidade",
+    "complianceOverviewTitle": "Visão Geral de Compliance",
+    "topRisksTitle": "Principais Riscos",
+    "dataDisclaimer": "Nota: Os dados exibidos são de exemplo. Integração com o backend é necessária para métricas reais.",
+    "compliancePlaceholder": "A visualização do status de compliance estará aqui.",
+    "topRisksPlaceholder": "A lista ou gráfico de principais riscos estará aqui."
   },
   "oauthCallback": {
     "processing": "Processando login...",

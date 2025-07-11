@@ -71,10 +71,21 @@
     "title": "CSPMEXA",
     "navLogin": "Login",
     "navDashboard": "Dashboard",
+    "navReports": "Reports",
     "btnLogout": "Logout"
   },
   "footer": {
     "copyright": "© {{year}} CSPMEXA. All rights reserved."
+  },
+  "reportsPage": {
+    "title": "Reports & Indicators",
+    "securityScoreTrendTitle": "Security Score Trend",
+    "alertsBySeverityTitle": "Alerts by Severity",
+    "complianceOverviewTitle": "Compliance Overview",
+    "topRisksTitle": "Top Risks",
+    "dataDisclaimer": "Note: Data displayed is sample data. Integration with backend required for actual metrics.",
+    "compliancePlaceholder": "Compliance status visualization will be here.",
+    "topRisksPlaceholder": "Top risks list or chart will be here."
   },
   "oauthCallback": {
     "processing": "Processing login...",
