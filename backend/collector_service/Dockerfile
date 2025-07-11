@@ -9,5 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar o código da aplicação
 COPY ./app /app
 
-# EXPOSE 8001 # Porta diferente do auth-service
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+EXPOSE 8001
+# CMD definido no docker-compose.yml
+# CMD ["python", "/app/app/main.py"]

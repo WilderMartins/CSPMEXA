@@ -9,5 +9,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar o código da aplicação
 COPY ./app /app
 
-# EXPOSE 8050 # Porta para o API Gateway
-# CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8050"]
+EXPOSE 8050
+# CMD definido no docker-compose.yml
+# CMD ["python", "/app/app/main.py"]

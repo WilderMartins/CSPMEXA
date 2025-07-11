@@ -1,110 +1,184 @@
 version: '3.8'
 
+networks:
+  cspmexa_net:
+    driver: bridge
+
+volumes:
+  postgres_auth_data:
+  # Para desenvolvimento, podemos persistir node_modules do frontend se não quisermos reconstruir
+  # frontend_node_modules:
+
 services:
-  postgres_auth:
-    image: postgres:13
-    container_name: postgres_auth_cspm
+  # --- Banco de Dados ---
+  postgres_auth_db:
+    image: postgres:13-alpine
+    container_name: cspmexa-postgres
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${AUTH_DB_USER:-user}
-      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-password}
-      POSTGRES_DB: ${AUTH_DB_NAME:-authdb_mvp}
-    ports:
-      - "${AUTH_DB_PORT:-5432}:5432"
+      POSTGRES_USER: ${AUTH_DB_USER:-cspmexa_user}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-changeme}
+      POSTGRES_DB: ${AUTH_DB_NAME:-cspmexa_db}
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
+    ports:
+      - "${AUTH_DB_EXPOSED_PORT:-5433}:5432"
+    networks:
+      - cspmexa_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-user} -d ${AUTH_DB_NAME:-authdb_mvp}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-cspmexa_user} -d $${POSTGRES_DB:-cspmexa_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # --- Serviços de Backend ---
   auth_service:
     build:
       context: ./backend/auth_service
       dockerfile: Dockerfile
-    container_name: auth_service_cspm
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    ports:
-      - "8000:8000"
-    depends_on:
-      postgres_auth:
-        condition: service_healthy
-    env_file:
-      - ./backend/auth_service/.env
+    container_name: cspmexa-auth-service
+    restart: unless-stopped
+    command: python /app/app/main.py # main.py lida com reload via DEBUG_MODE
+    environment:
+      - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:?err_google_client_id_missing}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:?err_google_client_secret_missing}
+      - GOOGLE_REDIRECT_URI=http://localhost:${API_GATEWAY_PORT:-8050}/api/v1/auth/google/callback
+      - FRONTEND_URL_AUTH_CALLBACK=http://localhost:${FRONTEND_PORT:-3000}/auth/callback
+      - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
+      - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
     volumes:
-      - ./backend/auth_service/app:/app/app # Mount for hot-reloading
+      - ./backend/auth_service:/app # Monta o código para hot-reloading
+    ports:
+      - "${AUTH_SERVICE_PORT:-8000}:8000"
+    networks:
+      - cspmexa_net
+    depends_on:
+      postgres_auth_db:
+        condition: service_healthy
 
   collector_service:
     build:
       context: ./backend/collector_service
       dockerfile: Dockerfile
-    container_name: collector_service_cspm
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
-    ports:
-      - "8001:8001"
-    env_file:
-      - ./backend/collector_service/.env
+    container_name: cspmexa-collector-service
+    restart: unless-stopped
+    command: python /app/app/main.py
+    environment:
+      - AWS_REGION_NAME=${AWS_REGION_NAME:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-credentials.json
+      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=/app/secrets/gws-sa-key.json
+      - GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL=${GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL}
+      - GOOGLE_WORKSPACE_CUSTOMER_ID=${GOOGLE_WORKSPACE_CUSTOMER_ID:-my_customer}
+      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - HUAWEICLOUD_SDK_AK=${HUAWEICLOUD_SDK_AK}
+      - HUAWEICLOUD_SDK_SK=${HUAWEICLOUD_SDK_SK}
+      - HUAWEICLOUD_SDK_PROJECT_ID=${HUAWEICLOUD_SDK_PROJECT_ID}
+      - HUAWEICLOUD_SDK_DOMAIN_ID=${HUAWEICLOUD_SDK_DOMAIN_ID}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
-      - ./backend/collector_service/app:/app/app # Mount for hot-reloading
-      # Mount AWS credentials if not using instance profiles or other auth methods
+      - ./backend/collector_service:/app
+      # Montar arquivos de credenciais do host para o container.
+      # O usuário deve criar uma pasta 'secrets' na raiz e colocar os arquivos lá,
+      # ou ajustar os caminhos abaixo e no .env raiz.
+      - ${GCP_CREDENTIALS_PATH_HOST:-./secrets/gcp-credentials.json}:/app/secrets/gcp-credentials.json:ro
+      - ${GWS_SA_KEY_PATH_HOST:-./secrets/gws-sa-key.json}:/app/secrets/gws-sa-key.json:ro
+      # Para credenciais AWS, pode-se montar ~/.aws ou usar variáveis de ambiente.
       # - ~/.aws:/root/.aws:ro
+    ports:
+      - "${COLLECTOR_SERVICE_PORT:-8001}:8001"
+    networks:
+      - cspmexa_net
 
   policy_engine_service:
     build:
       context: ./backend/policy_engine_service
       dockerfile: Dockerfile
-    container_name: policy_engine_service_cspm
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
-    ports:
-      - "8002:8002"
-    env_file:
-      - ./backend/policy_engine_service/.env
+    container_name: cspmexa-policy-engine-service
+    restart: unless-stopped
+    command: python /app/app/main.py
+    environment:
+      # Assume que o policy engine usa o mesmo DB que o auth_service para alertas
+      - ALERT_DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
+      - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
-      - ./backend/policy_engine_service/app:/app/app # Mount for hot-reloading
+      - ./backend/policy_engine_service:/app
+    ports:
+      - "${POLICY_ENGINE_SERVICE_PORT:-8002}:8002"
+    networks:
+      - cspmexa_net
+    depends_on:
+      postgres_auth_db: # Se ele realmente escrever no DB, senão pode remover
+        condition: service_healthy
 
   api_gateway_service:
     build:
       context: ./backend/api_gateway_service
       dockerfile: Dockerfile
-    container_name: api_gateway_service_cspm
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8050 --reload
+    container_name: cspmexa-api-gateway-service
+    restart: unless-stopped
+    command: python /app/app/main.py
+    environment:
+      - AUTH_SERVICE_URL=http://auth_service:8000/api/v1
+      - COLLECTOR_SERVICE_URL=http://collector_service:8001/api/v1
+      - POLICY_ENGINE_SERVICE_URL=http://policy_engine_service:8002/api/v1
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway} # Requer que JWT_SECRET_KEY seja definida no .env raiz
+      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60} # Aumentado para coletas potencialmente longas
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+    volumes:
+      - ./backend/api_gateway_service:/app
     ports:
-      - "8050:8050"
+      - "${API_GATEWAY_PORT:-8050}:8050"
+    networks:
+      - cspmexa_net
     depends_on:
       - auth_service
       - collector_service
       - policy_engine_service
-    env_file:
-      - ./backend/api_gateway_service/.env
-    volumes:
-      - ./backend/api_gateway_service/app:/app/app # Mount for hot-reloading
 
+  # --- Frontend WebApp ---
   frontend_webapp:
     build:
       context: ./frontend/webapp
-      dockerfile: Dockerfile # Assumes Dockerfile is set up for development or production build
-    container_name: frontend_webapp_cspm
-    # For development with hot-reloading (if Dockerfile supports it and runs `npm run dev`):
-    command: npm run dev # Or your dev script
+      dockerfile: Dockerfile # Usa o Nginx do Dockerfile para servir o build de produção
+      args: # Argumentos de build para passar a URL da API para o build do Vite
+        VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT:-8050}/api/v1
+        # Ou, se o Nginx for fazer proxy, VITE_API_BASE_URL pode ser relativo: /api/v1
+        # VITE_API_BASE_URL: /api/v1 # Se Nginx for configurado para proxy /api
+    container_name: cspmexa-frontend-webapp
+    restart: unless-stopped
     ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend/webapp/src:/app/src # Mount src for hot-reloading
-      - ./frontend/webapp/public:/app/public
-      # Mount package.json and lock file to avoid re-installing node_modules on every start,
-      # if your Docker image doesn't copy them in a way that persists them in a volume.
-      # - ./frontend/webapp/package.json:/app/package.json
-      # - ./frontend/webapp/package-lock.json:/app/package-lock.json
-      # - frontend_node_modules:/app/node_modules # Persist node_modules
-    environment:
-      - NODE_ENV=development # Ensure Vite runs in development mode if needed
-      # Vite needs this for HMR if not running on localhost inside container
-      - VITE_DEV_SERVER_HOST=0.0.0.0
+      - "${FRONTEND_PORT:-3000}:80" # Nginx no Dockerfile do frontend escuta na porta 80
+    networks:
+      - cspmexa_net
+    depends_on:
+      - api_gateway_service # Informativo, pois a conexão é do browser do usuário
+    # Para desenvolvimento com hot-reload do Vite (requer modificação do Dockerfile do frontend para usar `npm run dev`):
+    # command: npm run dev -- --host 0.0.0.0 # Para expor o Vite dev server
+    # volumes:
+    #   - ./frontend/webapp:/app # Monta todo o código
+    #   - /app/node_modules # Volume anônimo para não sobrescrever node_modules do host
+    # environment:
+    #   - NODE_ENV=development
+    #   - VITE_API_BASE_URL=http://localhost:${API_GATEWAY_PORT:-8050}/api/v1 # Para o Vite dev server
+    # ports:
+    #   - "${FRONTEND_PORT:-3000}:3000" # Porta do Vite dev server
 
-volumes:
-  postgres_auth_data:
-  # frontend_node_modules:
-
-networks:
-  default:
-    driver: bridge
+# Definir o arquivo .env padrão que o Docker Compose vai procurar
+# env_file: .env # Comentado pois docker-compose lê .env por padrão na mesma pasta
+# Se quiser usar um nome diferente:
+# env_file:
+#   - ./.env.compose
+# Mas o padrão é .env
+# As variáveis nos services acima usam a sintaxe ${VAR:-default} para defaults
+# ou ${VAR:?error_msg} para variáveis obrigatórias.
+# Os usuários precisarão criar um arquivo .env na raiz do projeto.
+# Um .env.example raiz será fornecido.

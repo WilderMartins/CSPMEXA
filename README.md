@@ -91,90 +91,86 @@ git clone <URL_DO_REPOSITORIO_AQUI> # Substitua pela URL correta
 cd cspmexa
 ```
 
-### 2. Configuração do Backend
+### 2. Configuração do Ambiente (Usando Docker Compose)
 
-Cada microsserviço backend está localizado em `backend/<nome_do_servico>/`.
+O método recomendado para rodar o ambiente de desenvolvimento completo é utilizando Docker Compose.
 
-**Para cada serviço (`auth_service`, `collector_service`, `policy_engine_service`, `api_gateway_service`):**
+1.  **Crie o Arquivo de Configuração `.env` Raiz:**
+    *   Na raiz do projeto, copie o arquivo `.env.example` para um novo arquivo chamado `.env`:
+        ```bash
+        cp .env.example .env
+        ```
+    *   Edite o arquivo `.env` e preencha **todas** as variáveis necessárias, especialmente:
+        *   `JWT_SECRET_KEY`: Gere uma chave forte (ex: `openssl rand -hex 32`).
+        *   Credenciais do Google para OAuth de login (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+        *   Caminhos no **seu host** para os arquivos de credenciais JSON do GCP e Google Workspace (`GCP_CREDENTIALS_PATH_HOST`, `GWS_SA_KEY_PATH_HOST`). Crie uma pasta `secrets` na raiz do projeto e coloque os arquivos lá, ou ajuste os caminhos.
+        *   Credenciais para AWS, Azure e Huawei Cloud, conforme necessário para os provedores que você deseja testar.
+        *   Verifique as portas expostas (`AUTH_DB_EXPOSED_PORT`, `AUTH_SERVICE_PORT`, etc.) se precisar alterar os defaults.
 
-1.  **Navegue até a pasta do serviço:** `cd backend/<nome_do_servico>`
-2.  **Crie um ambiente virtual Python:** `python -m venv .venv`
-3.  **Ative o ambiente:**
-    *   Linux/macOS: `source .venv/bin/activate`
-    *   Windows: `.venv\Scripts\activate`
-4.  **Instale as dependências:** `pip install -r requirements.txt`
-5.  **Configure as variáveis de ambiente:**
-    *   Copie o arquivo `.env.example` para `.env` (ex: `cp .env.example .env`).
-    *   Edite o arquivo `.env` e preencha as variáveis necessárias. Valores padrão para desenvolvimento local (como URLs de outros serviços) geralmente já estão configurados nos `.env.example`.
-    *   **`auth_service/.env` (Crítico):**
-        *   `DATABASE_URL`: URL de conexão do PostgreSQL (ex: `postgresql://user:password@localhost:5432/authdb_mvp_dev`).
-        *   `JWT_SECRET_KEY`: Uma chave secreta forte e única (ex: gerada com `openssl rand -hex 32`). **Deve ser a mesma** no `api_gateway_service`.
-        *   `GOOGLE_CLIENT_ID`: Seu Google OAuth Client ID.
-        *   `GOOGLE_CLIENT_SECRET`: Seu Google OAuth Client Secret.
-        *   `GOOGLE_REDIRECT_URI`: Deve ser `http://localhost:8050/api/v1/auth/google/callback` (aponta para o API Gateway).
-        *   `FRONTEND_URL`: `http://localhost:3000` (URL base do frontend).
-    *   **`collector_service/.env`:**
-        *   `AWS_REGION_NAME`: Região AWS padrão (ex: `us-east-1`).
-        *   `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`: Opcional se usando perfis IAM ou variáveis de ambiente globais da AWS.
-        *   `POLICY_ENGINE_URL`: `http://localhost:8002/api/v1` (URL base do policy-engine). (Nota: Este é para comunicação direta, o fluxo principal é via Gateway).
-        *   **Nota para GCP:** A autenticação é via `GOOGLE_APPLICATION_CREDENTIALS`.
-        *   **Nota para Huawei Cloud:** A autenticação é via variáveis de ambiente `HUAWEICLOUD_SDK_AK`, `HUAWEICLOUD_SDK_SK`, `HUAWEICLOUD_SDK_PROJECT_ID`, `HUAWEICLOUD_SDK_DOMAIN_ID`.
-    *   **`policy_engine_service/.env`:** Geralmente não requer configuração específica no `.env` para o MVP.
-    *   **`api_gateway_service/.env`:**
-        *   `AUTH_SERVICE_URL`, `COLLECTOR_SERVICE_URL`, `POLICY_ENGINE_SERVICE_URL`: Verifique se apontam para as portas corretas dos outros serviços locais.
-        *   `JWT_SECRET_KEY`: **Deve ser a mesma** chave do `auth_service`.
+2.  **Build e Inicialização dos Containers:**
+    *   Na raiz do projeto, execute:
+        ```bash
+        docker compose up --build -d
+        ```
+        O `-d` executa em modo detached (background). Remova-o para ver os logs de todos os serviços no terminal.
+        A primeira execução pode demorar um pouco para construir todas as imagens.
 
-**Serviços Backend e Portas Padrão (Desenvolvimento Local):**
-*   **Auth Service (`auth_service`):** Porta `8000`
-*   **Collector Service (`collector_service`):** Porta `8001`
-*   **Policy Engine Service (`policy_engine_service`):** Porta `8002`
-*   **API Gateway Service (`api_gateway_service`):** Porta `8050` (ponto de entrada principal para o frontend)
+3.  **Execute as Migrações do Banco de Dados (para `auth_service`):**
+    *   Após os containers estarem rodando (especialmente `cspmexa-postgres`), execute as migrações do Alembic para o `auth_service`. Você pode fazer isso executando um comando dentro do container do `auth_service`:
+        ```bash
+        docker compose exec auth_service alembic upgrade head
+        ```
+        Ou, se preferir rodar localmente (requer ambiente Python configurado para `auth_service`):
+        Navegue até `cd backend/auth_service`, ative o venv, configure o `.env` local para apontar para o DB do Docker (`AUTH_DB_HOST=localhost`, `AUTH_DB_PORT` conforme definido no `.env` raiz) e rode `alembic upgrade head`. **O método `docker compose exec` é mais simples se o Docker estiver rodando tudo.**
 
-### 3. Configuração do Frontend
+4.  **Acessando os Serviços:**
+    *   **Frontend (WebApp):** `http://localhost:${FRONTEND_PORT}` (default: `http://localhost:3000`)
+    *   **API Gateway Service (Swagger UI):** `http://localhost:${API_GATEWAY_PORT}/docs` (default: `http://localhost:8050/docs`)
+    *   **Outros Backends (Swagger UI):**
+        *   Auth Service: `http://localhost:${AUTH_SERVICE_PORT}/docs` (default: `http://localhost:8000/docs`)
+        *   Collector Service: `http://localhost:${COLLECTOR_SERVICE_PORT}/docs` (default: `http://localhost:8001/docs`)
+        *   Policy Engine Service: `http://localhost:${POLICY_ENGINE_SERVICE_PORT}/docs` (default: `http://localhost:8002/docs`)
 
-O frontend é uma aplicação React (Vite) localizada em `frontend/webapp/`.
+    O frontend é servido pelo Nginx e configurado para fazer proxy das chamadas `/api/v1/*` para o `api_gateway_service` dentro da rede Docker.
 
-1.  Navegue até a pasta do frontend: `cd frontend/webapp`
-2.  Instale as dependências: `npm install` (ou `yarn install`)
+5.  **Parando os Serviços:**
+    ```bash
+    docker compose down
+    ```
+    Para remover os volumes (incluindo dados do banco de dados), adicione `-v`: `docker compose down -v`.
 
-### 4. Rodando a Aplicação Completa (Desenvolvimento Local)
+### (Alternativo) Rodando Serviços Individualmente (Desenvolvimento Granular)
+
+Se preferir rodar cada serviço manualmente (sem o Docker Compose principal para todos os serviços, exceto talvez o `postgres_auth_db`), siga os passos abaixo. Isso é útil para depuração focada em um único serviço.
 
 1.  **Inicie o Banco de Dados PostgreSQL:**
-    *   Use o Docker Compose fornecido para facilitar:
+    *   Você pode usar o serviço `postgres_auth_db` do `docker-compose.yml` existente:
         ```bash
-        docker compose up -d postgresqldb
+        docker compose up -d postgres_auth_db
         ```
-        (Certifique-se que `postgresqldb` é o nome do serviço do PostgreSQL no `docker-compose.yml`)
-        Aguarde alguns segundos para o banco iniciar.
-    *   Alternativamente, se você tem um PostgreSQL rodando localmente, configure o `DATABASE_URL` no `.env` do `auth_service` apropriadamente.
+        Certifique-se que as variáveis `AUTH_DB_USER`, `AUTH_DB_PASSWORD`, `AUTH_DB_NAME` no seu `.env` raiz (ou nos `.env` dos serviços que acessam o DB) correspondem às do serviço `postgres_auth_db`. A porta exposta será `AUTH_DB_EXPOSED_PORT`.
 
-2.  **Execute as Migrações do Banco de Dados (para `auth_service`):**
-    *   Navegue até `backend/auth_service`.
-    *   Ative o ambiente virtual (`source .venv/bin/activate`).
-    *   Execute o Alembic: `alembic upgrade head`
+2.  **Para cada serviço backend (`auth_service`, `collector_service`, `policy_engine_service`, `api_gateway_service`):**
+    *   Navegue até a pasta do serviço (ex: `cd backend/auth_service`).
+    *   Crie um ambiente virtual Python: `python -m venv .venv`.
+    *   Ative o ambiente: `source .venv/bin/activate` (Linux/macOS) ou `.venv\Scripts\activate` (Windows).
+    *   Instale as dependências: `pip install -r requirements.txt`.
+    *   Copie o arquivo `.env.example` local do serviço para `.env` (ex: `cp app/.env.example app/.env`).
+    *   Edite o `.env` local e preencha as variáveis. **Importante:**
+        *   Para `DATABASE_URL` (no `auth_service` e `policy_engine_service`), use `localhost` e a porta `AUTH_DB_EXPOSED_PORT` se estiver usando o DB do Docker.
+        *   Para URLs de outros serviços (no `api_gateway_service`), use `http://localhost:<PORTA_DO_SERVICO_DEPENDENTE>`.
+        *   Certifique-se que `JWT_SECRET_KEY` é a mesma entre `auth_service` e `api_gateway_service`.
+    *   Se for o `auth_service`, execute as migrações: `alembic upgrade head`.
+    *   Inicie o serviço (já configurado para reload se `DEBUG_MODE=true` no `.env` local):
+        ```bash
+        python app/main.py
+        ```
 
-3.  **Inicie os Microsserviços Backend:**
-    *   Abra um terminal separado para cada serviço backend (`auth_service`, `collector_service`, `policy_engine_service`, `api_gateway_service`).
-    *   Em cada terminal:
-        1.  Navegue até a pasta do serviço (ex: `cd backend/auth_service`).
-        2.  Ative seu ambiente virtual (`source .venv/bin/activate`).
-        3.  Inicie o serviço com Uvicorn (os arquivos `main.py` já estão configurados para rodar com reload na porta correta):
-            ```bash
-            python app/main.py
-            ```
-            ou
-            ```bash
-            uvicorn app.main:app --reload --port <PORTA_DO_SERVICO>
-            ```
-            (Ex: `uvicorn app.main:app --reload --port 8000` para `auth_service`)
-
-4.  **Inicie o Frontend:**
-    *   Abra um novo terminal.
-    *   Navegue até `frontend/webapp`.
-    *   Execute: `npm run dev`
-    *   O frontend estará disponível em `http://localhost:3000`.
-
-    O frontend fará proxy das chamadas `/api/v1/*` para o API Gateway Service na porta `8050`, conforme configurado em `vite.config.ts`.
+3.  **Para o Frontend (`frontend/webapp`):**
+    *   Navegue até `cd frontend/webapp`.
+    *   Instale dependências: `npm install`.
+    *   Crie um arquivo `.env.development.local` (ou similar, dependendo de como o `vite.config.ts` carrega envs para `VITE_DEV_API_PROXY_TARGET`) se precisar sobrescrever o target do proxy Vite (default `http://localhost:8050`).
+    *   Execute: `npm run dev`. O frontend estará em `http://localhost:3000`.
 
 ### Documentação da API (Swagger/OpenAPI)
 
