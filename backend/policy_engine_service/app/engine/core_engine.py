@@ -105,41 +105,50 @@ class PolicyEngine:
 
         elif provider == "gcp":
             if service == "gcp_storage_buckets":
-                if not all(isinstance(item, GCPStorageBucketDataInput) for item in data): # type: ignore
+                if not all(isinstance(item, GCPStorageBucketDataInput) for item in data):
                     logger.error("Data for gcp_storage_buckets is not List[GCPStorageBucketDataInput]. Skipping.")
                 else:
                     storage_alerts_data = gcp_storage_policies.evaluate_gcp_storage_policies(
-                        gcp_buckets_data=data, # type: ignore
+                        gcp_buckets_data=data,
                         project_id=account_id
                     )
                     generated_alert_data_list.extend(storage_alerts_data)
             elif service == "gcp_compute_instances":
-                if not all(isinstance(item, GCPComputeInstanceDataInput) for item in data): # type: ignore
+                if not all(isinstance(item, GCPComputeInstanceDataInput) for item in data):
                     logger.error("Data for gcp_compute_instances is not List[GCPComputeInstanceDataInput]. Skipping.")
                 else:
                     instance_alerts_data = gcp_compute_policies.evaluate_gcp_compute_instance_policies(
-                        instances_data=data, # type: ignore
+                        instances_data=data,
                         project_id=account_id
                     )
                     generated_alert_data_list.extend(instance_alerts_data)
             elif service == "gcp_compute_firewalls":
-                if not all(isinstance(item, GCPFirewallDataInput) for item in data): # type: ignore
+                if not all(isinstance(item, GCPFirewallDataInput) for item in data):
                     logger.error("Data for gcp_compute_firewalls is not List[GCPFirewallDataInput]. Skipping.")
                 else:
                     firewall_alerts_data = gcp_compute_policies.evaluate_gcp_firewall_policies(
-                        firewalls_data=data, # type: ignore
+                        firewalls_data=data,
                         project_id=account_id
                     )
                     generated_alert_data_list.extend(firewall_alerts_data)
             elif service == "gcp_iam_project_policies":
-                if data is not None and not isinstance(data, GCPProjectIAMPolicyDataInput): # type: ignore
+                if data is not None and not isinstance(data, GCPProjectIAMPolicyDataInput):
                      logger.error("Data for gcp_iam_project_policies is not GCPProjectIAMPolicyDataInput. Skipping.")
                 else:
                     iam_alerts_data = gcp_iam_policies.evaluate_gcp_project_iam_policies(
-                        project_iam_data=data, # type: ignore
+                        project_iam_data=data,
                         project_id=account_id
                     )
                     generated_alert_data_list.extend(iam_alerts_data)
+            elif service == "gke_clusters": # Novo para GKE
+                if not all(isinstance(item, GKEClusterDataInput) for item in data):
+                    logger.error(f"Data for GCP GKE service is not List[GKEClusterDataInput]. Skipping. Data type: {type(data[0]) if data else 'empty'}")
+                else:
+                    gke_alerts_data = gcp_gke_policies.evaluate_gke_policies(
+                        gke_clusters_data=data,
+                        project_id=account_id
+                    )
+                    generated_alert_data_list.extend(gke_alerts_data)
             else:
                 logger.warning(f"Unsupported GCP service for analysis: {service}")
 
@@ -249,3 +258,11 @@ policy_engine = PolicyEngine()
 
 # Adicionar import de uuid no início do arquivo, se não estiver lá
 import uuid
+
+# Importar o novo módulo de políticas RDS e o schema de input RDS
+from app.engine import aws_rds_policies
+from app.schemas.aws.rds_input_schema import RDSInstanceDataInput
+
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado

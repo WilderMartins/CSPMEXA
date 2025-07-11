@@ -8,8 +8,10 @@ from app.core.security import get_current_user, TokenData
 
 # Importar os schemas copiados/criados para o gateway
 from app.schemas import (
-    collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas, collector_rds_schemas, # Adicionado collector_rds_schemas
-    collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas,
+# Importar os schemas copiados/criados para o gateway
+from app.schemas import (
+    collector_s3_schemas, collector_ec2_schemas, collector_iam_schemas, collector_rds_schemas,
+    collector_gcp_storage_schemas, collector_gcp_compute_schemas, collector_gcp_iam_schemas, collector_gke_schemas, # Adicionado GKE
     collector_huawei_obs_schemas, collector_huawei_ecs_schemas, collector_huawei_iam_schemas,
     collector_azure_schemas,
     collector_google_workspace_schemas,
@@ -424,28 +426,48 @@ async def collect_gcp_project_iam_policy_gateway(
     """Proxy para coletar a política IAM a nível de projeto do Google Cloud."""
     return await _proxy_collector_request("GET", "/collect/gcp/iam/project-policies", current_user, request, params={"project_id": project_id} if project_id else None)
 
+# --- GCP GKE Collector Proxy ---
+@router.get(f"{GCP_COLLECT_ROUTER_PREFIX}/gke/clusters", response_model=List[collector_gke_schemas.GKEClusterData], name="gcp_collector:get_gke_clusters")
+async def collect_gke_clusters_gateway(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
+    location: str = Query("-", description="Location (região/zona ou '-') para listar clusters GKE."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de clusters GKE."""
+    params = {"location": location}
+    if project_id:
+        params["project_id"] = project_id
+    return await _proxy_collector_request("GET", "/collect/gcp/gke/clusters", current_user, request, params=params)
+
 
 # --- Endpoints de Análise GCP (Orquestração) ---
-GCP_ANALYZE_ROUTER_PREFIX = "/analyze/gcp"
+GCP_ANALYZE_ROUTER_PREFIX = "/analyze/gcp" # Mantém o mesmo prefixo para organização
 
 async def _orchestrate_gcp_analysis(
-    service_name_in_engine: str, # ex: "gcp_storage_buckets"
-    collector_path_suffix: str,  # ex: "storage/buckets" -> será prefixado com /collect/gcp/
+    service_name_in_engine: str,
+    collector_path_suffix: str,
     request: Request,
-    project_id: Optional[str], # Este é o account_id para o policy engine
-    current_user: TokenData
-) -> List[policy_engine_alert_schema.Alert]:
+    project_id: Optional[str],
+    current_user: TokenData,
+    additional_collector_params: Optional[Dict[str, Any]] = None # Para parâmetros extras como 'location' para GKE
+) -> List[policy_engine_alert_schema.AlertSchema]: # Retorna AlertSchema do gateway
     downstream_headers = {}
 
     # 1. Chamar o Collector Service
     collected_data: Any
     try:
-        collector_full_path = f"/collect/gcp/{collector_path_suffix}"
-        # Parâmetros para o collector service devem ser passados corretamente.
-        # O project_id aqui é o que o usuário final (ou frontend) fornece para a análise.
-        collector_params = {"project_id": project_id} if project_id else {}
+        # O collector_controller no collector_service espera paths como /gcp/storage/buckets
+        # O prefixo /api/v1/collect é adicionado no main.py do collector_service
+        # Então, a chamada ao client deve ser para o path relativo ao prefixo do controller
+        # Ex: "/gcp/" + collector_path_suffix
+        final_collector_path = f"/gcp/{collector_path_suffix}"
 
-        collector_response = await collector_service_client.get(collector_full_path, params=collector_params, headers=downstream_headers)
+        collector_params = {"project_id": project_id} if project_id else {}
+        if additional_collector_params:
+            collector_params.update(additional_collector_params)
+
+        collector_response = await collector_service_client.get(final_collector_path, params=collector_params, headers=downstream_headers)
 
         if collector_response.status_code != 200:
             error_detail = collector_response.text
@@ -456,8 +478,7 @@ async def _orchestrate_gcp_analysis(
                 detail=f"Error from Collector Service (GCP {collector_path_suffix}) for project {project_id or 'default'}: {error_detail}",
             )
         collected_data = collector_response.json()
-        # Para coleções de recursos, lista vazia é ok. Para IAM de projeto, None é ok se o collector não encontrar.
-        if not collected_data and service_name_in_engine != "gcp_iam_project_policies":
+        if not collected_data and service_name_in_engine != "gcp_iam_project_policies": # IAM pode retornar None
              return []
     except HTTPException as e:
         logger.error(f"HTTPException during GCP {collector_path_suffix} collection for project {project_id or 'default'} in orchestration: {e.detail}")
@@ -472,10 +493,10 @@ async def _orchestrate_gcp_analysis(
     analysis_payload = {
         "provider": "gcp",
         "service": service_name_in_engine,
-        "data": collected_data, # collected_data pode ser None para gcp_iam_project_policies
-        "account_id": project_id # Passar o project_id da query como account_id para o policy engine
+        "data": collected_data,
+        "account_id": project_id
     }
-    alerts: List[policy_engine_alert_schema.Alert]
+    alerts: List[policy_engine_alert_schema.AlertSchema]
     try:
         engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
         if engine_response.status_code != 200:
@@ -497,7 +518,7 @@ async def _orchestrate_gcp_analysis(
         )
     return alerts
 
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/storage/buckets", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_storage_buckets")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/storage/buckets", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_storage_buckets")
 async def analyze_gcp_storage_buckets_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
@@ -552,16 +573,33 @@ async def analyze_gcp_project_iam_policy_orchestrated(
     if not project_id:
         raise HTTPException(status_code=400, detail="GCP Project ID is required for analysis.")
     return await _orchestrate_gcp_analysis(
-        service_name_in_engine="gcp_iam_project_policies", # Deve corresponder ao 'service' esperado pelo Policy Engine
+        service_name_in_engine="gcp_iam_project_policies",
         collector_path_suffix="iam/project-policies",
         request=request, project_id=project_id, current_user=current_user
+    )
+
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/gke/clusters", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_gke_clusters")
+async def analyze_gke_clusters_orchestrated(
+    request: Request,
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
+    location: str = Query("-", description="Location (região/zona ou '-') para GKE clusters."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Google Kubernetes Engine (GKE) clusters."""
+    if not project_id:
+        raise HTTPException(status_code=400, detail="GCP Project ID is required for GKE analysis.")
+    return await _orchestrate_gcp_analysis(
+        service_name_in_engine="gke_clusters", # Como o policy engine espera
+        collector_path_suffix="gke/clusters",  # Path no collector após /gcp/
+        request=request, project_id=project_id, current_user=current_user,
+        additional_collector_params={"location": location} # Passar location para o coletor GKE
     )
 
 
 # TODO: Adicionar endpoints de orquestração para AWS IAM Roles, IAM Policies.
 
 # --- Endpoints de Coleta Huawei Cloud (Proxy) ---
-HUAWEI_COLLECT_ROUTER_PREFIX = "/collect/huawei"
+HUAWEI_COLLECT_ROUTER_PREFIX = "/collect/huawei" # Este prefixo não é mais usado aqui
 
 @router.get(f"{HUAWEI_COLLECT_ROUTER_PREFIX}/obs/buckets", response_model=List[collector_huawei_obs_schemas.HuaweiOBSBucketData], name="huawei_collector:get_obs_buckets")
 async def collect_huawei_obs_buckets_gateway(

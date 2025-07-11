@@ -235,6 +235,9 @@ const DashboardPage: React.FC = () => {
             <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
               {isLoading && currentAnalysisType === 'GCP Project IAM' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPIAMButton')}
             </button>
+            <button onClick={() => handleAnalysis('gcp', 'gke/clusters', 'GCP GKE Clusters', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
+              {isLoading && currentAnalysisType === 'GCP GKE Clusters' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGKEClustersButton')}
+            </button>
           </div>
         </div>
 

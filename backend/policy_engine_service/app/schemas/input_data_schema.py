@@ -164,7 +164,8 @@ SupportedDataTypes = Union[
     List['GCPStorageBucketDataInput'],
     List['GCPComputeInstanceDataInput'],
     List['GCPFirewallDataInput'],
-    Optional['GCPProjectIAMPolicyDataInput'], # IAM de projeto é um objeto único, não uma lista
+    Optional['GCPProjectIAMPolicyDataInput'],
+    List['GKEClusterDataInput'], # Adicionado GKE
 
     # Tipos de Dados Huawei Cloud
     List['HuaweiOBSBucketDataInput'],

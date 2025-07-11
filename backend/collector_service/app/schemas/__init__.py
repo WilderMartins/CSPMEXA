@@ -6,8 +6,14 @@ from .aws.rds_schemas import RDSInstanceData, RDSTag, RDSVpcSecurityGroupMembers
 
 # GCP Schemas
 from .gcp_storage import GCPStorageBucketData, GCPBucketIAMMember, GCPBucketLifecycleRule, GCPBucketLoggingData, GCPBucketVersioningData
-from .gcp_compute import GCPComputeInstanceData, GCPInstanceNetworkInterface, GCPInstanceDisk, GCPInstanceAttachedDisk, GCPFirewallData, GCPFirewallRule
+from .gcp_compute import (
+    GCPComputeInstanceData, GCPComputeNetworkInterface, GCPComputeNetworkInterfaceAccessConfig,
+    GCPComputeAttachedDisk, GCPComputeDiskAttachedDiskInitializeParams, GCPComputeServiceAccount, GCPComputeScheduling,
+    GCPFirewallData, GCPFirewallAllowedRule, GCPFirewallDeniedRule, GCPFirewallLogConfig
+)
 from .gcp_iam import GCPProjectIAMPolicyData, GCPProjectIAMBinding, GCPProjectIAMMember
+from .gcp_gke_schemas import GKEClusterData
+from .gcp_cloudsql_schemas import CloudSQLInstanceData # Adicionado CloudSQL Schemas
 
 # Huawei Cloud Schemas
 from .huawei_obs import HuaweiOBSBucketData, HuaweiOBSPolicyStatement, HuaweiOBSUser, HuaweiOBSGroup, HuaweiOBSCondition
@@ -39,8 +45,12 @@ __all__ = [
 
     # GCP
     "GCPStorageBucketData", "GCPBucketIAMMember", "GCPBucketLifecycleRule", "GCPBucketLoggingData", "GCPBucketVersioningData",
-    "GCPComputeInstanceData", "GCPInstanceNetworkInterface", "GCPInstanceDisk", "GCPInstanceAttachedDisk", "GCPFirewallData", "GCPFirewallRule",
+    "GCPComputeInstanceData", "GCPComputeNetworkInterface", "GCPComputeNetworkInterfaceAccessConfig",
+    "GCPComputeAttachedDisk", "GCPComputeDiskAttachedDiskInitializeParams", "GCPComputeServiceAccount", "GCPComputeScheduling",
+    "GCPFirewallData", "GCPFirewallAllowedRule", "GCPFirewallDeniedRule", "GCPFirewallLogConfig",
     "GCPProjectIAMPolicyData", "GCPProjectIAMBinding", "GCPProjectIAMMember",
+    "GKEClusterData",
+    "CloudSQLInstanceData", # Adicionado Cloud SQL
 
     # Huawei
     "HuaweiOBSBucketData", "HuaweiOBSPolicyStatement", "HuaweiOBSUser", "HuaweiOBSGroup", "HuaweiOBSCondition",

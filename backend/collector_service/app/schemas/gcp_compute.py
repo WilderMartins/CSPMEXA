@@ -87,16 +87,17 @@ class GCPComputeInstanceData(BaseModel):
     label_fingerprint: Optional[str] = Field(None, alias="labelFingerprint")
 
     # Campos extraídos para conveniência
-    project_id: str # Adicionado pelo collector
-    extracted_zone: str # Adicionado pelo collector
-    extracted_machine_type: str # Adicionado pelo collector
-    public_ip_addresses: List[str] = Field([], description="Lista de IPs públicos extraídos das interfaces.")
-    private_ip_addresses: List[str] = Field([], description="Lista de IPs privados extraídos das interfaces.")
+    project_id: str
+    extracted_zone: str
+    extracted_machine_type: str
+    public_ip_addresses: List[str] = Field(default_factory=list, description="Lista de IPs públicos extraídos.")
+    private_ip_addresses: List[str] = Field(default_factory=list, description="Lista de IPs privados extraídos.")
 
     error_details: Optional[str] = Field(None)
 
     class Config:
         populate_by_name = True
+        extra = 'ignore' # Adicionado para ignorar campos não mapeados da API
 
 
 # --- Schemas para Firewalls VPC ---
@@ -141,10 +142,11 @@ class GCPFirewallData(BaseModel):
     creation_timestamp: datetime = Field(alias="creationTimestamp")
 
     # Campos extraídos
-    project_id: str # Adicionado pelo collector
-    extracted_network_name: str # Adicionado pelo collector
+    project_id: str
+    extracted_network_name: str
 
     error_details: Optional[str] = Field(None)
 
     class Config:
         populate_by_name = True
+        extra = 'ignore' # Adicionado
