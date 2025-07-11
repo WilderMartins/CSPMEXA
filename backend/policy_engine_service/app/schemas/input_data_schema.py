@@ -175,9 +175,10 @@ SupportedDataTypes = Union[
     List['AzureVirtualMachineDataInput'],
     List['AzureStorageAccountDataInput'],
 
-    # Tipos de Dados Google Workspace (a serem adicionados)
-    List['GoogleWorkspaceUserDataInput']
-    # Adicionar outros tipos do Workspace (Drive, Gmail) quando os coletores estiverem prontos
+    # Tipos de Dados Google Workspace
+    List['GoogleWorkspaceUserDataInput'],
+    List['GoogleWorkspaceSharedDriveDataInput'], # Para dados de Drives Compartilhados
+    List['GoogleWorkspaceDriveFileDataInput'] # Para dados de arquivos individuais (se coletados separadamente)
 ]
 
 # --- Google Workspace Schemas (espelham collector_service/app/schemas/google_workspace_*.py) ---
@@ -206,6 +207,82 @@ class GoogleWorkspaceUserDataInput(BaseModel):
     org_unit_path: Optional[str] = Field(None, alias="orgUnitPath")
     is_enrolled_in_2sv: bool = Field(False, alias="isEnrolledIn2Sv")
     emails: Optional[List[GoogleWorkspaceUserEmailInput]] = None
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True; extra = 'ignore'
+
+# Google Drive Schemas (Input para Policy Engine)
+class GoogleDrivePermissionInput(BaseModel):
+    id: str
+    type: str
+    role: str
+    email_address: Optional[EmailStr] = Field(None, alias="emailAddress")
+    domain: Optional[str] = None
+    allow_file_discovery: Optional[bool] = Field(None, alias="allowFileDiscovery")
+    deleted: Optional[bool] = None
+    display_name: Optional[str] = Field(None, alias="displayName")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleDriveFileOwnerInput(BaseModel):
+    display_name: Optional[str] = Field(None, alias="displayName")
+    email_address: Optional[str] = Field(None, alias="emailAddress")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleWorkspaceDriveFileDataInput(BaseModel): # Nome completo para clareza
+    id: str
+    name: str
+    mime_type: str = Field(alias="mimeType")
+    owners: List[GoogleDriveFileOwnerInput] = Field(default_factory=list)
+    shared: Optional[bool] = False
+    web_view_link: Optional[str] = Field(None, alias="webViewLink")
+    drive_id: Optional[str] = Field(None, alias="driveId")
+    permissions_list: List[GoogleDrivePermissionInput] = Field(default_factory=list, alias="permissions")
+    is_public_on_web: bool = False
+    is_shared_with_link: bool = False
+    is_shared_externally_direct: bool = False
+    is_shared_with_domain: bool = False
+    sharing_summary: List[str] = Field(default_factory=list)
+    last_modifying_user_email: Optional[str] = Field(None, alias="lastModifyingUserEmail")
+    modified_time: Optional[datetime] = Field(None, alias="modifiedTime")
+    created_time: Optional[datetime] = Field(None, alias="createdTime")
+    error_details: Optional[str] = None
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleDriveRestrictionsInput(BaseModel):
+    admin_managed_restrictions: Optional[bool] = Field(None, alias="adminManagedRestrictions")
+    copy_requires_writer_permission: Optional[bool] = Field(None, alias="copyRequiresWriterPermission")
+    domain_users_only: Optional[bool] = Field(None, alias="domainUsersOnly")
+    drive_members_only: Optional[bool] = Field(None, alias="driveMembersOnly")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleSharedDriveCapabilitiesInput(BaseModel): # Renomeado para clareza
+    can_add_children: Optional[bool] = Field(None, alias="canAddChildren")
+    can_change_drive_background: Optional[bool] = Field(None, alias="canChangeDriveBackground")
+    can_change_copy_requires_writer_permission_restriction: Optional[bool] = Field(None, alias="canChangeCopyRequiresWriterPermissionRestriction")
+    can_change_domain_users_only_restriction: Optional[bool] = Field(None, alias="canChangeDomainUsersOnlyRestriction")
+    can_change_drive_members_only_restriction: Optional[bool] = Field(None, alias="canChangeDriveMembersOnlyRestriction")
+    can_change_sharing_folders_requires_organizer_permission_restriction: Optional[bool] = Field(None, alias="canChangeSharingFoldersRequiresOrganizerPermissionRestriction")
+    can_comment: Optional[bool] = Field(None, alias="canComment")
+    can_copy: Optional[bool] = Field(None, alias="canCopy")
+    can_delete_children: Optional[bool] = Field(None, alias="canDeleteChildren")
+    can_delete_drive: Optional[bool] = Field(None, alias="canDeleteDrive")
+    can_download: Optional[bool] = Field(None, alias="canDownload")
+    can_edit: Optional[bool] = Field(None, alias="canEdit")
+    can_list_children: Optional[bool] = Field(None, alias="canListChildren")
+    can_manage_members: Optional[bool] = Field(None, alias="canManageMembers")
+    can_read_revisions: Optional[bool] = Field(None, alias="canReadRevisions")
+    can_rename: Optional[bool] = Field(None, alias="canRename")
+    can_rename_drive: Optional[bool] = Field(None, alias="canRenameDrive")
+    can_share: Optional[bool] = Field(None, alias="canShare")
+    can_trash_children: Optional[bool] = Field(None, alias="canTrashChildren")
+    class Config: populate_by_name = True; extra = 'ignore'
+
+class GoogleWorkspaceSharedDriveDataInput(BaseModel): # Nome completo para clareza
+    id: str
+    name: str
+    created_time: Optional[datetime] = Field(None, alias="createdTime")
+    restrictions: Optional[GoogleDriveRestrictionsInput] = None
+    capabilities: Optional[GoogleSharedDriveCapabilitiesInput] = None
+    files_with_problematic_sharing: List[GoogleWorkspaceDriveFileDataInput] = Field(default_factory=list)
     error_details: Optional[str] = None
     class Config: populate_by_name = True; extra = 'ignore'
 

@@ -25,6 +25,12 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **S3:** Verificações para ACLs públicas, políticas públicas, versionamento desabilitado, logging desabilitado.
     *   **EC2:** Verificações para Security Groups com acesso público total ou a portas específicas (SSH, RDP), instâncias com IP público, instâncias sem perfil IAM.
     *   **IAM Users:** Verificações para MFA desabilitado, chaves de acesso não utilizadas, chaves de acesso ativas para usuário root.
+*   **Coleta de Dados Google Workspace:**
+    *   **Usuários:** Detalhes de usuários (ID, email, nome, status de admin, status de 2SV/MFA, último login, data de criação, status da conta - suspenso/arquivado, OU).
+    *   **Drive (MVP):** Foco em Drives Compartilhados - Detalhes (ID, nome, restrições de compartilhamento como `domainUsersOnly`, `driveMembersOnly`), e identificação de arquivos dentro desses drives que estão compartilhados publicamente ou via link "qualquer pessoa com o link".
+*   **Motor de Políticas Google Workspace (Básico):**
+    *   **Usuários:** Verificações para usuários suspensos, 2SV/MFA desabilitado (com criticidade maior para admins), privilégios de admin (informativo), inatividade.
+    *   **Drive (MVP):** Verificações para arquivos em Drives Compartilhados que são públicos na web ou acessíveis via link. Verificações para configurações de Drives Compartilhados que permitem membros externos ou acesso a arquivos por não-membros.
 *   **Coleta de Dados Azure:**
     *   **Virtual Machines:** Detalhes de VMs (nome, ID, localização, tamanho, tipo de SO, estado de energia, tags), Interfaces de Rede (IPs públicos/privados, NSGs associados).
     *   **Storage Accounts:** Detalhes de Contas de Armazenamento (nome, ID, localização, tipo, SKU), configurações de segurança (acesso público a blobs, versão TLS, HTTPS), propriedades do serviço Blob (versionamento).
@@ -79,7 +85,7 @@ Esta seção descreve como configurar e rodar o ambiente de desenvolvimento loca
 *   **Credenciais Google Workspace:** Para o `collector-service` acessar dados do Google Workspace:
     *   `GOOGLE_SERVICE_ACCOUNT_KEY_PATH`: Caminho absoluto para o arquivo JSON da chave da Service Account do Google Cloud Platform.
         *   A Service Account deve ter a "Delegação em todo o Domínio" habilitada no Google Workspace Admin Console.
-        *   Os escopos OAuth 2.0 necessários (ex: `https://www.googleapis.com/auth/admin.directory.user.readonly`) devem ser autorizados para o Client ID da Service Account no Admin Console.
+        *   Os escopos OAuth 2.0 necessários devem ser autorizados para o Client ID da Service Account no Admin Console. Para Usuários: `https://www.googleapis.com/auth/admin.directory.user.readonly`. Para Drive: `https://www.googleapis.com/auth/drive.readonly`. Outros escopos podem ser necessários para funcionalidades futuras.
     *   `GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL`: O endereço de e-mail de um administrador do Google Workspace que a Service Account irá impersonar. Este administrador deve ter as permissões necessárias para ler os dados desejados.
     *   `GOOGLE_WORKSPACE_CUSTOMER_ID`: (Opcional) O ID do cliente do Google Workspace (ex: `C0xxxxxxx` ou `my_customer` como padrão). Se não definido, o `collector-service` usará `my_customer`.
 *   **Google OAuth (para `auth-service`):** Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados.

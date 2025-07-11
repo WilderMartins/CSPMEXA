@@ -10,12 +10,13 @@ logger = logging.getLogger(__name__)
 # Escopos OAuth 2.0 necessários para as funcionalidades do MVP
 # É uma boa prática definir os escopos mínimos necessários.
 DEFAULT_SCOPES = [
-    "https://www.googleapis.com/auth/admin.directory.user.readonly",
-    "https://www.googleapis.com/auth/admin.reports.audit.readonly",
-    "https://www.googleapis.com/auth/apps.alerts"
+    "https://www.googleapis.com/auth/admin.directory.user.readonly", # Para coletor de usuários
+    "https://www.googleapis.com/auth/admin.reports.audit.readonly",  # Para futuros coletores de logs/atividades
+    "https://www.googleapis.com/auth/apps.alerts",                   # Para futuro coletor do Alert Center
+    "https://www.googleapis.com/auth/drive.readonly"                 # Para coletor do Google Drive (ler arquivos, drives compartilhados, permissões)
 ]
 
-@lru_cache(maxsize=10) # Cache para combinações de admin_email e service_name
+@lru_cache(maxsize=10) # Cache para combinações de admin_email, service_name e tuple(scopes)
 def get_workspace_service(
     service_name: str, # e.g., 'admin', 'alertcenter'
     service_version: str, # e.g., 'directory_v1', 'v1beta1' (para alertcenter)

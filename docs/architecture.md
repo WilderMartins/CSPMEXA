@@ -25,17 +25,18 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   **Azure:** Coleta de dados para Virtual Machines (VMs) e Storage Accounts.
         *   Conexão com APIs dos provedores de nuvem.
         *   Coleta de metadados de configuração.
-    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), huaweicloudsdkpython (Huawei), azure-sdk-for-python (Azure), Pydantic.
+    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), huaweicloudsdkpython (Huawei), azure-sdk-for-python (Azure), google-api-python-client (Google Workspace), Pydantic.
     *   **Comunicação:** REST API. Os dados são retornados diretamente nas respostas da API.
     *   **Porta Dev Padrão:** `8001`
 
 3.  **`policy-engine-service` (Serviço do Motor de Políticas):**
-    *   **Responsabilidades Atuais (AWS, GCP, Huawei Cloud & Azure):**
+    *   **Responsabilidades Atuais (AWS, GCP, Huawei Cloud, Azure & Google Workspace):**
         *   Receber dados de configuração (via `api-gateway-service`).
         *   **AWS:** Aplicar políticas para S3, EC2 (Instâncias, SGs), Usuários IAM.
         *   **GCP:** Aplicar políticas para Cloud Storage Buckets, Compute Engine VMs, Firewalls VPC, Políticas IAM de Projeto.
         *   **Huawei Cloud:** Aplicar políticas para OBS Buckets, ECS VMs, VPC SGs, IAM Users.
         *   **Azure:** Aplicar políticas para Virtual Machines e Storage Accounts.
+        *   **Google Workspace:** Aplicar políticas para Usuários e configurações/arquivos do Drive (Drives Compartilhados, arquivos públicos/link).
         *   Gerar e retornar uma lista de "Alertas" (descobertas).
     *   **Tecnologia:** Python com FastAPI, Pydantic.
     *   **Comunicação:** REST API (endpoint `/analyze` que aceita dados de vários provedores/serviços).
@@ -45,8 +46,8 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
     *   **Responsabilidades Atuais:**
         *   Ponto de entrada único para o frontend.
         *   Proxy para endpoints de autenticação do `auth-service`.
-        *   Proxy para endpoints de coleta de dados AWS, GCP, Huawei Cloud e Azure do `collector-service`.
-        *   Endpoints de orquestração que chamam o `collector-service` e depois o `policy-engine-service` para recursos AWS, GCP, Huawei Cloud e Azure.
+        *   Proxy para endpoints de coleta de dados AWS, GCP, Huawei Cloud, Azure e Google Workspace (Usuários, Drive) do `collector-service`.
+        *   Endpoints de orquestração que chamam o `collector-service` e depois o `policy-engine-service` para recursos AWS, GCP, Huawei Cloud, Azure e Google Workspace.
         *   Validação de token JWT para endpoints protegidos.
     *   **Tecnologia:** Python com FastAPI, Pydantic, HTTPX.
     *   **Comunicação:** REST/HTTP com frontend e outros serviços.
@@ -112,6 +113,7 @@ graph TD
         HuaweiAPI[Huawei Cloud APIs]
         AzureAPI[Azure APIs]
         GoogleOAuth[Google OAuth2 API]
+        GoogleWorkspaceAPI[Google Workspace APIs]
     end
 
     A <-->|Chamadas API /api/v1/*| B;
@@ -126,9 +128,10 @@ graph TD
     D --> GCPApi;
     D --> HuaweiAPI;
     D --> AzureAPI;
+    D --> GoogleWorkspaceAPI;
 
     B -->|/analyze/* (Análise)| E;
-    D -- Dados Coletados AWS, GCP, Huawei, Azure (via B) --> E;
+    D -- Dados Coletados AWS, GCP, Huawei, Azure, GWS (via B) --> E;
 
     E -- Alertas Gerados (via B) --> A;
     E -.->|Alertas (Futuro)| G;

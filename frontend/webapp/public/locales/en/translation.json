@@ -50,6 +50,7 @@
     "gwsAdminEmailPlaceholder": "Enter Delegated Admin Email",
     "gwsAdminEmailRequired": "Delegated Admin Email is required for Google Workspace analysis.",
     "analyzeGWSUsersButton": "Analyze Workspace Users",
+    "analyzeGWSSharedDrivesButton": "Analyze Shared Drives",
     "analyzingButton": "Analyzing...",
     "alertsFound": "Alerts Found:",
     "alertsFoundFor": "Alerts Found for {{type}}:",

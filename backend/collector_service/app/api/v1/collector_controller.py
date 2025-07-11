@@ -312,6 +312,7 @@ async def collect_huawei_iam_users_data(
         logger.exception(f"Unexpected error in collect_huawei_iam_users_data for domain {domain_id or 'default'} in region {region_id}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
+from typing import Optional # Adicionado para Optional nos Query params
 
 # --- Endpoints de Coleta Azure ---
 from app.azure import vm_collector as azure_vm_collector
@@ -326,47 +327,119 @@ async def collect_azure_virtual_machines_data(
     # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
 ):
     """Coleta dados de configuração de Azure Virtual Machines."""
-    sub_id_to_use = subscription_id or azure_vm_collector.AZURE_SUBSCRIPTION_ID # Tenta pegar do manager se não fornecido
-    if not sub_id_to_use:
-        raise HTTPException(status_code=400, detail="Azure Subscription ID is required and was not provided nor found in environment.")
+    # A lógica para obter subscription_id das settings já está no azure_client_manager e nos coletores.
+    # O controller pode simplesmente passar o subscription_id se fornecido.
+    # Os coletores levantarão ValueError se o ID não puder ser determinado.
+    if not subscription_id and not azure_vm_collector.settings.AZURE_SUBSCRIPTION_ID:
+         raise HTTPException(status_code=400, detail="Azure Subscription ID is required. Provide it as a query parameter or set AZURE_SUBSCRIPTION_ID in environment.")
+
     try:
-        data = await azure_vm_collector.get_azure_vm_data(subscription_id=sub_id_to_use)
-        # Adicionar checagem de erro global similar aos outros provedores se o coletor retornar um item de erro.
-        # Ex: if data and data[0].error_details and data[0].id.startswith("ERROR_"):
-        #         raise HTTPException(status_code=500, detail=data[0].error_details)
+        data = await azure_vm_collector.get_azure_vm_data(subscription_id=subscription_id) # Passa None se não fornecido na query
         return data
-    except HTTPException as http_exc:
-        logger.error(f"HTTPException during Azure Virtual Machines collection for subscription {sub_id_to_use}: {http_exc.detail}")
-        raise http_exc
-    except ValueError as ve: # Captura ValueError do azure_client_manager se sub_id não for encontrado
-        logger.error(f"ValueError during Azure Virtual Machines collection for subscription {sub_id_to_use}: {ve}")
+    except ValueError as ve:
+        logger.error(f"Configuration error for Azure VM collection: {ve}")
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.exception(f"Unexpected error in collect_azure_virtual_machines_data for subscription {sub_id_to_use}")
+        logger.exception(f"Unexpected error in collect_azure_virtual_machines_data for subscription {subscription_id or 'default'}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 
 @router.get(f"{AZURE_ROUTER_PREFIX}/storageaccounts", response_model=List[azure_storage.AzureStorageAccountData], name="azure_collector:get_storage_accounts")
 async def collect_azure_storage_accounts_data(
     subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID)."),
-    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+    # current_user: Any = Depends(get_current_active_user)
 ):
-    """Coleta dados de configuração de Azure Storage Accounts e seus Blob Containers."""
-    sub_id_to_use = subscription_id or azure_storage_collector.AZURE_SUBSCRIPTION_ID # Tenta pegar do manager se não fornecido
-    if not sub_id_to_use:
-        raise HTTPException(status_code=400, detail="Azure Subscription ID is required and was not provided nor found in environment.")
+    """Coleta dados de configuração de Azure Storage Accounts."""
+    if not subscription_id and not azure_storage_collector.settings.AZURE_SUBSCRIPTION_ID:
+         raise HTTPException(status_code=400, detail="Azure Subscription ID is required. Provide it as a query parameter or set AZURE_SUBSCRIPTION_ID in environment.")
     try:
-        data = await azure_storage_collector.get_azure_storage_account_data(subscription_id=sub_id_to_use)
-        # Adicionar checagem de erro global similar
-        # Ex: if data and data[0].error_details and data[0].id.startswith("ERROR_"):
-        #         raise HTTPException(status_code=500, detail=data[0].error_details)
+        data = await azure_storage_collector.get_azure_storage_account_data(subscription_id=subscription_id)
         return data
-    except HTTPException as http_exc:
-        logger.error(f"HTTPException during Azure Storage Accounts collection for subscription {sub_id_to_use}: {http_exc.detail}")
-        raise http_exc
-    except ValueError as ve: # Captura ValueError do azure_client_manager
-        logger.error(f"ValueError during Azure Storage Accounts collection for subscription {sub_id_to_use}: {ve}")
+    except ValueError as ve:
+        logger.error(f"Configuration error for Azure Storage Account collection: {ve}")
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.exception(f"Unexpected error in collect_azure_storage_accounts_data for subscription {sub_id_to_use}")
+        logger.exception(f"Unexpected error in collect_azure_storage_accounts_data for subscription {subscription_id or 'default'}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# --- Endpoints de Coleta Google Workspace ---
+from app.google_workspace import user_collector as gws_user_collector
+from app.google_workspace import drive_collector as gws_drive_collector
+from app.schemas.google_workspace import google_workspace_user, google_drive_shared_drive, google_drive_file
+
+GWS_ROUTER_PREFIX = "/collect/googleworkspace"
+
+@router.get(f"{GWS_ROUTER_PREFIX}/users", response_model=google_workspace_user.GoogleWorkspaceUserCollection, name="gws_collector:get_users")
+async def collect_gws_users_data(
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace (e.g., 'my_customer' ou C0xxxxxxx). Default das settings se não fornecido."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação. Default das settings se não fornecido."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """Coleta dados de usuários do Google Workspace."""
+    try:
+        # A função coletora já usa os defaults das settings se os params forem None.
+        # E retorna um objeto GoogleWorkspaceUserCollection que pode conter error_message.
+        return await gws_user_collector.get_google_workspace_users_data(
+            customer_id=customer_id,
+            delegated_admin_email=delegated_admin_email
+        )
+    except Exception as e: # Captura exceções inesperadas antes da formação do objeto de coleção
+        logger.exception(f"Unexpected error in collect_gws_users_data endpoint")
+        # Retornar o schema de coleção com a mensagem de erro, se possível, ou um HTTP 500.
+        # Para consistência, o coletor deve sempre retornar o schema, mesmo com erro.
+        # Se a exceção for antes disso, um 500 é apropriado.
+        raise HTTPException(status_code=500, detail=f"Unexpected server error: {str(e)}")
+
+@router.get(f"{GWS_ROUTER_PREFIX}/drive/shared-drives", response_model=List[google_drive_shared_drive.SharedDriveData], name="gws_collector:get_shared_drives")
+async def collect_gws_shared_drives_data(
+    customer_id: Optional[str] = Query(None, description="Google Workspace Customer ID."),
+    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """Coleta dados de Drives Compartilhados do Google Workspace e arquivos problematicamente compartilhados dentro deles."""
+    try:
+        data = await gws_drive_collector.get_google_drive_shared_drives_data(
+            customer_id=customer_id,
+            delegated_admin_email=delegated_admin_email
+        )
+        # O coletor pode retornar um item de erro na lista.
+        if data and data[0].error_details and data[0].id.startswith("ERROR_"):
+            # Se for um erro global retornado como o único item da lista.
+            raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_gws_shared_drives_data endpoint")
+        raise HTTPException(status_code=500, detail=f"Unexpected server error: {str(e)}")
+
+@router.get(f"{GWS_ROUTER_PREFIX}/drive/public-files", response_model=List[google_drive_file.DriveFileData], name="gws_collector:get_public_files")
+async def collect_gws_public_files_data(
+    customer_id: Optional[str] = Query(None, description="Google Workspace Customer ID."),
+    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email."),
+    # current_user: Any = Depends(get_current_active_user)
+):
+    """
+    Coleta dados de arquivos públicos ou compartilhados por link no Google Drive (Escopo MVP pode ser limitado).
+    Atualmente, esta função no coletor é mais informativa e não faz uma varredura completa.
+    """
+    try:
+        data = await gws_drive_collector.get_google_drive_public_files_data(
+            customer_id=customer_id,
+            delegated_admin_email=delegated_admin_email
+        )
+        if data and data[0].error_details and data[0].id.startswith("INFO_") or data[0].id.startswith("ERROR_"):
+            # Retorna a informação/erro como um item de dados, o frontend pode exibir isso.
+            # Ou podemos decidir levantar um HTTP 501 Not Implemented se for INFO_.
+            if data[0].id.startswith("INFO_"):
+                 # Não é um erro, mas uma indicação de funcionalidade limitada.
+                 # O frontend pode tratar isso. Ou podemos retornar um 200 com esta info.
+                 pass # Deixar o response_model validar.
+            elif data[0].id.startswith("ERROR_"):
+                 raise HTTPException(status_code=500, detail=data[0].error_details)
+        return data
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_gws_public_files_data endpoint")
+        raise HTTPException(status_code=500, detail=f"Unexpected server error: {str(e)}")

@@ -897,35 +897,61 @@ async def collect_google_workspace_users_gateway(
         params["customer_id"] = customer_id
     if delegated_admin_email:
         params["delegated_admin_email"] = delegated_admin_email
-
     return await _proxy_collector_request("GET", "/collect/googleworkspace/users", current_user, request, params=params if params else None)
+
+@router.get(f"{GOOGLE_WORKSPACE_COLLECT_ROUTER_PREFIX}/drive/shared-drives", response_model=List[collector_google_workspace_schemas.SharedDriveData], name="google_workspace_collector:get_shared_drives")
+async def collect_gws_shared_drives_gateway(
+    request: Request,
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de Drives Compartilhados do Google Workspace."""
+    params = {}
+    if customer_id:
+        params["customer_id"] = customer_id
+    if delegated_admin_email:
+        params["delegated_admin_email"] = delegated_admin_email
+    return await _proxy_collector_request("GET", "/collect/googleworkspace/drive/shared-drives", current_user, request, params=params if params else None)
+
+@router.get(f"{GOOGLE_WORKSPACE_COLLECT_ROUTER_PREFIX}/drive/public-files", response_model=List[collector_google_workspace_schemas.DriveFileData], name="google_workspace_collector:get_public_files")
+async def collect_gws_public_files_gateway(
+    request: Request,
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Proxy para coletar dados de arquivos públicos/link-shared do Google Drive (MVP pode ser limitado)."""
+    params = {}
+    if customer_id:
+        params["customer_id"] = customer_id
+    if delegated_admin_email:
+        params["delegated_admin_email"] = delegated_admin_email
+    return await _proxy_collector_request("GET", "/collect/googleworkspace/drive/public-files", current_user, request, params=params if params else None)
 
 
 # --- Endpoints de Análise Google Workspace (Orquestração) ---
 GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX = "/analyze/googleworkspace"
 
 async def _orchestrate_google_workspace_analysis(
-    service_name_in_engine: str, # ex: "google_workspace_users"
-    collector_path_suffix: str,  # ex: "users"
+    service_name_in_engine: str, # ex: "google_workspace_users", "google_drive_shared_drives"
+    collector_path_suffix: str,  # ex: "users", "drive/shared-drives"
     request: Request,
     customer_id: Optional[str],
     delegated_admin_email: Optional[str],
-    current_user: TokenData
+    current_user: TokenData,
+    data_key_in_collection: str = "users" # Chave onde a lista de dados está no objeto de coleção (ex: "users" para UserCollection)
 ) -> List[policy_engine_alert_schema.Alert]:
     downstream_headers = {}
-
-    # account_id para o Policy Engine será o customer_id do Workspace
-    account_id_for_engine = customer_id or "my_customer" # Default para my_customer se não especificado
+    account_id_for_engine = customer_id or settings.GOOGLE_WORKSPACE_CUSTOMER_ID # Usar settings para default
 
     # 1. Chamar o Collector Service
-    collected_data: Any
+    collected_data_items: List[Any] # Lista de itens de dados (ex: lista de usuários, lista de drives)
     try:
         collector_full_path = f"/collect/googleworkspace/{collector_path_suffix}"
         collector_params = {}
-        if customer_id:
-            collector_params["customer_id"] = customer_id
-        if delegated_admin_email:
-            collector_params["delegated_admin_email"] = delegated_admin_email
+        if customer_id: collector_params["customer_id"] = customer_id
+        if delegated_admin_email: collector_params["delegated_admin_email"] = delegated_admin_email
 
         collector_response = await collector_service_client.get(collector_full_path, params=collector_params if collector_params else None, headers=downstream_headers)
 
@@ -933,37 +959,35 @@ async def _orchestrate_google_workspace_analysis(
             error_detail = collector_response.text
             try: error_detail = collector_response.json().get("detail", error_detail)
             except: pass
-            raise HTTPException(
-                status_code=collector_response.status_code,
-                detail=f"Error from Collector Service (Google Workspace {collector_path_suffix}) for customer {account_id_for_engine}: {error_detail}",
-            )
+            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service (GWS {collector_path_suffix}) for customer {account_id_for_engine}: {error_detail}")
 
-        # A resposta do coletor de usuários do Workspace é um objeto GoogleWorkspaceUserCollection
-        # que contém uma lista de usuários ou uma mensagem de erro.
-        collection_response_data = collector_response.json()
-        if collection_response_data.get("error_message"): # Checa se o coletor retornou um erro encapsulado
-            raise HTTPException(
-                status_code=500, # Ou um código mais apropriado se o erro for específico (ex: 400 para config)
-                detail=f"Collector Service error (Google Workspace {collector_path_suffix}): {collection_response_data['error_message']}"
-            )
+        response_json = collector_response.json()
 
-        collected_data = collection_response_data.get("users", []) # Extrai a lista de usuários
-        if not collected_data: return []
+        # Tratar se a resposta é diretamente uma lista (ex: SharedDriveData) ou um objeto de coleção (ex: UserCollection)
+        if isinstance(response_json, list):
+            collected_data_items = response_json
+        elif isinstance(response_json, dict):
+            if response_json.get("error_message"):
+                raise HTTPException(status_code=500, detail=f"Collector Service error (GWS {collector_path_suffix}): {response_json['error_message']}")
+            collected_data_items = response_json.get(data_key_in_collection, [])
+        else:
+            logger.error(f"Resposta inesperada do coletor GWS {collector_path_suffix}: {response_json}")
+            raise HTTPException(status_code=500, detail=f"Resposta inesperada do coletor GWS {collector_path_suffix}")
+
+        if not collected_data_items: return []
 
     except HTTPException as e:
-        logger.error(f"HTTPException during Google Workspace {collector_path_suffix} collection for customer {account_id_for_engine} in orchestration: {e.detail}")
+        logger.error(f"HTTPException during GWS {collector_path_suffix} collection for customer {account_id_for_engine}: {e.detail}")
         raise e
     except Exception as e:
-        logger.exception(f"Error calling Collector Service (Google Workspace {collector_path_suffix}) for customer {account_id_for_engine} during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to collect Google Workspace {collector_path_suffix} data for analysis: {str(e)}"
-        )
+        logger.exception(f"Error calling Collector Service (GWS {collector_path_suffix}) for customer {account_id_for_engine}")
+        raise HTTPException(status_code=500, detail=f"Gateway failed to collect GWS {collector_path_suffix} data: {str(e)}")
 
     # 2. Enviar os dados coletados para o Policy Engine Service
     analysis_payload = {
-        "provider": "google_workspace", # Usar um nome de provider consistente
+        "provider": "google_workspace",
         "service": service_name_in_engine,
-        "data": collected_data, # Lista de usuários
+        "data": collected_data_items,
         "account_id": account_id_for_engine
     }
     alerts: List[policy_engine_alert_schema.Alert]
@@ -973,26 +997,21 @@ async def _orchestrate_google_workspace_analysis(
             error_detail = engine_response.text
             try: error_detail = engine_response.json().get("detail", error_detail)
             except: pass
-            raise HTTPException(
-                status_code=engine_response.status_code,
-                detail=f"Error from Policy Engine Service (Google Workspace {service_name_in_engine} analysis for customer {account_id_for_engine}): {error_detail}",
-            )
+            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine (GWS {service_name_in_engine} analysis for {account_id_for_engine}): {error_detail}")
         alerts = engine_response.json()
     except HTTPException as e:
-        logger.error(f"HTTPException during Google Workspace {service_name_in_engine} analysis for customer {account_id_for_engine} in orchestration: {e.detail}")
+        logger.error(f"HTTPException during GWS {service_name_in_engine} analysis for {account_id_for_engine}: {e.detail}")
         raise e
     except Exception as e:
-        logger.exception(f"Error calling Policy Engine Service (Google Workspace {service_name_in_engine}) for customer {account_id_for_engine} during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to analyze Google Workspace {service_name_in_engine} data: {str(e)}"
-        )
+        logger.exception(f"Error calling Policy Engine (GWS {service_name_in_engine}) for {account_id_for_engine}")
+        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze GWS {service_name_in_engine} data: {str(e)}")
     return alerts
 
 @router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/users", response_model=List[policy_engine_alert_schema.Alert], name="google_workspace_orchestrator:analyze_users")
 async def analyze_google_workspace_users_orchestrated(
     request: Request,
-    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace (e.g., 'my_customer' ou C0xxxxxxx). Se não fornecido, usa o default das configurações do coletor."),
-    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação. Se não fornecido, usa o default das configurações do coletor."),
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace. Default das settings se não fornecido."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado. Default das settings se não fornecido."),
     current_user: TokenData = Depends(get_current_user),
 ):
     """Orquestra a coleta e análise de usuários do Google Workspace."""
@@ -1002,7 +1021,29 @@ async def analyze_google_workspace_users_orchestrated(
         request=request,
         customer_id=customer_id,
         delegated_admin_email=delegated_admin_email,
-        current_user=current_user
+        current_user=current_user,
+        data_key_in_collection="users" # Chave no GoogleWorkspaceUserCollection
     )
 
-# TODO: Adicionar endpoints para Drive, Gmail, etc. quando os coletores e políticas estiverem prontos.
+@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/drive/shared-drives", response_model=List[policy_engine_alert_schema.Alert], name="google_workspace_orchestrator:analyze_shared_drives")
+async def analyze_gws_shared_drives_orchestrated(
+    request: Request,
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
+    current_user: TokenData = Depends(get_current_user),
+):
+    """Orquestra a coleta e análise de Drives Compartilhados do Google Workspace."""
+    return await _orchestrate_google_workspace_analysis(
+        service_name_in_engine="google_drive_shared_drives", # Nome do serviço no Policy Engine
+        collector_path_suffix="drive/shared-drives",    # Path no Collector Service
+        request=request,
+        customer_id=customer_id,
+        delegated_admin_email=delegated_admin_email,
+        current_user=current_user,
+        data_key_in_collection=None # Assumindo que o coletor de shared drives retorna List[SharedDriveData] diretamente
+    )
+
+# TODO: Adicionar endpoint para /analyze/googleworkspace/drive/public-files se a coleta for robustecida.
+# Por enquanto, a análise de arquivos públicos está integrada na análise de shared-drives.
+
+# TODO: Adicionar endpoints para Gmail, etc. quando os coletores e políticas estiverem prontos.

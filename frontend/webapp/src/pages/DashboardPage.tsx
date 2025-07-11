@@ -307,7 +307,13 @@ const DashboardPage: React.FC = () => {
             >
               {isLoading && currentAnalysisType === 'Google Workspace Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSUsersButton')}
             </button>
-            {/* Adicionar botões para Drive, Gmail, etc. aqui no futuro */}
+            <button
+              onClick={() => handleAnalysis('googleworkspace', 'drive/shared-drives', 'Google Workspace Shared Drives', { gwsCustomerId: googleWorkspaceCustomerId, gwsAdminEmail: googleWorkspaceAdminEmail })}
+              disabled={isLoading || (!googleWorkspaceCustomerId && !googleWorkspaceAdminEmail)}
+            >
+              {isLoading && currentAnalysisType === 'Google Workspace Shared Drives' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSSharedDrivesButton')}
+            </button>
+            {/* Adicionar botão para /drive/public-files se a coleta for robustecida */}
           </div>
         </div>
 

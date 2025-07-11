@@ -12,7 +12,7 @@ from app.engine import aws_s3_policies, aws_ec2_policies, aws_iam_policies
 from app.engine import gcp_storage_policies, gcp_compute_policies, gcp_iam_policies
 from app.engine import huawei_obs_policies, huawei_ecs_policies, huawei_iam_policies
 from app.engine import azure_vm_policies, azure_storage_policies
-from app.engine import google_workspace_user_policies # Google Workspace Policies
+from app.engine import google_workspace_user_policies, google_workspace_drive_policies # Google Workspace Policies
 import logging
 
 logger = logging.getLogger(__name__)
@@ -230,7 +230,15 @@ class PolicyEngine:
                         account_id=account_id # customer_id
                     )
                     generated_alerts_schemas.extend(gw_user_alerts)
-            # Adicionar outros serviços do Google Workspace aqui (Drive, Gmail, etc.)
+            elif service == "google_drive_shared_drives": # Novo serviço para Drive
+                # Assume que 'data' é List[GoogleWorkspaceSharedDriveDataInput]
+                # A validação de tipo mais robusta pode ser adicionada se necessário
+                drive_alerts = google_workspace_drive_policies.evaluate_google_workspace_drive_policies(
+                    shared_drives_data=data, # type: ignore
+                    account_id=account_id # customer_id
+                )
+                generated_alerts_schemas.extend(drive_alerts)
+            # Adicionar outros serviços do Google Workspace aqui (Gmail, etc.)
             else:
                 logger.warning(f"Unsupported Google Workspace service for analysis: {service}")
         else:
