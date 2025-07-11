@@ -76,6 +76,12 @@ Esta seção descreve como configurar e rodar o ambiente de desenvolvimento loca
     *   `AZURE_CLIENT_ID`: ID do Cliente (Application ID) de um App Registration/Service Principal.
     *   `AZURE_CLIENT_SECRET`: Segredo do Cliente (Chave) do Service Principal.
     O Service Principal deve ter permissões de leitura (como "Reader") na subscrição ou nos grupos de recursos relevantes.
+*   **Credenciais Google Workspace:** Para o `collector-service` acessar dados do Google Workspace:
+    *   `GOOGLE_SERVICE_ACCOUNT_KEY_PATH`: Caminho absoluto para o arquivo JSON da chave da Service Account do Google Cloud Platform.
+        *   A Service Account deve ter a "Delegação em todo o Domínio" habilitada no Google Workspace Admin Console.
+        *   Os escopos OAuth 2.0 necessários (ex: `https://www.googleapis.com/auth/admin.directory.user.readonly`) devem ser autorizados para o Client ID da Service Account no Admin Console.
+    *   `GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL`: O endereço de e-mail de um administrador do Google Workspace que a Service Account irá impersonar. Este administrador deve ter as permissões necessárias para ler os dados desejados.
+    *   `GOOGLE_WORKSPACE_CUSTOMER_ID`: (Opcional) O ID do cliente do Google Workspace (ex: `C0xxxxxxx` ou `my_customer` como padrão). Se não definido, o `collector-service` usará `my_customer`.
 *   **Google OAuth (para `auth-service`):** Um projeto no Google Cloud Platform com OAuth 2.0 Client ID e Secret configurados.
 
 ### 1. Clone o Repositório
