@@ -19,6 +19,7 @@ A aplicação é construída como um Single Page Application (SPA).
     *   `ts-jest` para integração do Jest com TypeScript.
     *   `@testing-library/jest-dom` para matchers customizados.
     *   `axios-mock-adapter` para mockar chamadas Axios em testes.
+*   **Recharts:** Para renderização de gráficos nos dashboards.
 *   **(Planejado/Simulado)** Uma biblioteca de componentes UI como [Mantine UI](https://mantine.dev/), Chakra UI, ou similar para padronização visual e componentes reutilizáveis. Os exemplos atuais usam simulações desses componentes.
 
 ## 3. Estrutura de Pastas (Principais)
@@ -36,12 +37,20 @@ frontend/webapp/
 │   ├── components/             # Componentes React reutilizáveis
 │   │   └── Dashboard/          # Componentes específicos do Dashboard
 │   │       ├── ProviderAnalysisSection.tsx
+│   │   ├── ProviderAnalysisSection.tsx
 │   │       └── AlertsTable.tsx
+│   │   └── Insights/             # Componentes específicos do Dashboard de Insights
+│   │       ├── CriticalAssetsDisplay.tsx
+│   │       ├── AttackPathsDisplay.tsx
+│   │       └── ProactiveRecommendationsDisplay.tsx
 │   ├── contexts/               # Contextos React (ex: AuthContext.tsx)
 │   ├── pages/                  # Componentes de página (mapeados para rotas)
 │   │   ├── DashboardPage.tsx
 │   │   ├── LoginPage.tsx
-│   │   └── ReportsPage.tsx
+│   │   ├── ReportsPage.tsx
+│   │   └── InsightsPage.tsx
+│   ├── services/               # Lógica de chamada de API e manipulação de dados
+│   │   └── reportsService.ts
 │   ├── App.tsx                 # Componente raiz da aplicação, define rotas e layout principal
 │   ├── main.tsx                # Ponto de entrada da aplicação, renderiza o App
 │   ├── i18n.ts                 # Configuração do i18next

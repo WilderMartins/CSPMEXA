@@ -6,7 +6,8 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-r
 import { useTranslation } from 'react-i18next';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-import ReportsPage from './pages/ReportsPage'; // Importar a nova página de Relatórios
+import ReportsPage from './pages/ReportsPage';
+import InsightsPage from './pages/InsightsPage'; // Importar a nova página de Insights
 import { useAuth } from './contexts/AuthContext';
 
 const OAuthCallbackPage = () => {
@@ -65,6 +66,7 @@ function App() {
             <>
               <Link to="/dashboard" style={{ marginRight: '15px' }}>{t('header.navDashboard')}</Link>
               <Link to="/reports" style={{ marginRight: '15px' }}>{t('header.navReports')}</Link>
+              <Link to="/insights" style={{ marginRight: '15px' }}>{t('header.navInsights', 'Insights')}</Link>
             </>
           )}
           {auth.isAuthenticated && <button onClick={() => auth.logout()}>{t('header.btnLogout')}</button>}
@@ -86,6 +88,10 @@ function App() {
           <Route
             path="/reports"
             element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />}
+          />
+          <Route
+            path="/insights"
+            element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />}
           />
           {/* Adicionar aqui outras rotas protegidas que dependem de auth.isAuthenticated */}
 
