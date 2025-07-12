@@ -159,6 +159,19 @@ O frontend (`DashboardPage.tsx`) já possui a lógica para chamar esses endpoint
         *   `parent_resource` (string, obrigatório): Recurso pai para listar findings (ex: `organizations/ID_ORG/sources/-` ou `projects/ID_PROJETO/sources/-`). O sufixo `/sources/-` indica todas as fontes.
         *   `scc_filter` (string, opcional): Filtro da API SCC (ex: `state="ACTIVE" AND severity="HIGH"`).
         *   `max_total_results` (int, opcional, default: 1000): Número máximo de findings a retornar.
+*   **Análise de Ativos do Cloud Asset Inventory (CAI):**
+    *   Endpoint: `/analyze/gcp/cai/assets?scope=<ESCOPO>&asset_types=<TIPOS_OPCIONAL>&content_type=<TIPO_CONTEUDO_OPC>&max_total_results=<NUM_MAX_OPCIONAL>`
+    *   Parâmetros:
+        *   `scope` (string, obrigatório): Escopo da consulta (ex: `projects/ID_PROJETO`, `organizations/ID_ORG`).
+        *   `asset_types` (lista de strings, opcional): Tipos de ativos (ex: `compute.googleapis.com/Instance`).
+        *   `content_type` (string, opcional, default: `RESOURCE`): `RESOURCE`, `IAM_POLICY`, etc.
+        *   `max_total_results` (int, opcional, default: 1000).
+*   **Análise de Cloud Audit Logs:**
+    *   Endpoint: `/analyze/gcp/auditlogs?project_ids=<ID_PROJETO_1>&project_ids=<ID_PROJETO_2>&log_filter=<FILTRO_OPCIONAL>&max_total_results=<NUM_MAX_OPCIONAL>`
+    *   Parâmetros:
+        *   `project_ids` (lista de strings, obrigatório): IDs dos projetos para consulta. (Nota: a API aceita `organizations/{org_id}` ou `folders/{folder_id}` como `resourceNames` para o coletor, o endpoint do gateway pode precisar ser ajustado para aceitar um `resource_scope` mais genérico em vez de apenas `project_ids`).
+        *   `log_filter` (string, opcional): Filtro avançado da API de Logging.
+        *   `max_total_results` (int, opcional, default: 1000).
 
 #### 4.2.3. Azure
 
@@ -188,6 +201,13 @@ O frontend (`DashboardPage.tsx`) já possui a lógica para chamar esses endpoint
         *   `region_id` (string, obrigatório)
         *   `tracker_name` (string, default: `system`)
         *   `max_total_traces` (int, default: 1000)
+        *   `domain_id` (string, opcional)
+*   **Análise de Riscos do Cloud Security Guard (CSG):**
+    *   Endpoint: `/analyze/huawei/csg/risks?project_id=<ID_PROJETO>&region_id=<ID_REGIAO>&max_total_results=<NUM_MAX_OPC>&domain_id=<ID_DOMINIO_OPC>`
+    *   Parâmetros:
+        *   `project_id` (string, obrigatório)
+        *   `region_id` (string, obrigatório)
+        *   `max_total_results` (int, opcional, default: 1000)
         *   `domain_id` (string, opcional)
 
 #### 4.2.5. Google Workspace
