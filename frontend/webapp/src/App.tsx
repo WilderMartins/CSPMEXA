@@ -15,6 +15,10 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const InsightsPage = lazy(() => import('./pages/InsightsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
+
+// Componentes de rota não precisam de lazy load
+import ProtectedRoute from './components/Common/ProtectedRoute';
 
 const OAuthCallbackPage = () => {
   const location = useLocation();
@@ -166,7 +170,15 @@ function App() {
               <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
               <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
               <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
-              <Route path="/settings/*" element={auth.isAuthenticated ? <SettingsPage /> : <Navigate to="/" replace />} />
+              <Route
+                path="/settings/*"
+                element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route path="/access-denied" element={<AccessDeniedPage />} />
               <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
             </Routes>
         </Suspense>

@@ -234,6 +234,11 @@
             "role": "Papel",
             "actions": "Ações"
         }
+    },
+    "accessDenied": {
+      "title": "Acesso Negado",
+      "message": "Você não tem permissão para visualizar esta página.",
+      "button": "Leve-me para o painel"
     }
   }
 }

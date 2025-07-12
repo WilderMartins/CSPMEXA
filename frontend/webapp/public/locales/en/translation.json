@@ -234,6 +234,11 @@
             "role": "Role",
             "actions": "Actions"
         }
+    },
+    "accessDenied": {
+      "title": "Access Denied",
+      "message": "You do not have permission to view this page.",
+      "button": "Take me to the dashboard"
     }
   }
 }
