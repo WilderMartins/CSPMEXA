@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assistente de Instalação do CSPMEXA</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f4f9; color: #333; line-height: 1.6; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #0056b3; }
+        h1 { text-align: center; }
+        .step { margin-bottom: 30px; border-left: 3px solid #0056b3; padding-left: 20px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;
+        }
+        .description { font-size: 0.9em; color: #666; margin-bottom: 15px; }
+        .generated-value { font-weight: bold; color: #28a745; }
+        button {
+            display: block; width: 100%; padding: 15px; background-color: #0056b3; color: #fff;
+            border: none; border-radius: 5px; font-size: 1.2em; cursor: pointer; transition: background-color 0.3s;
+        }
+        button:hover { background-color: #004494; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Assistente de Instalação do CSPMEXA</h1>
+        <p class="description" style="text-align: center;">Bem-vindo! Preencha os campos abaixo para configurar e iniciar seu ambiente CSPMEXA. Valores padrão já estão preenchidos para facilitar.</p>
+
+        <form action="/install" method="post">
+
+            <div class="step">
+                <h2>Passo 1: Configuração do Banco de Dados</h2>
+                <p class="description">Credenciais para o banco de dados PostgreSQL onde as informações de usuários e políticas serão armazenadas.</p>
+
+                <label for="auth_db_user">Usuário do Banco de Dados:</label>
+                <input type="text" id="auth_db_user" name="AUTH_DB_USER" value="cspmexa_user" required>
+
+                <label for="auth_db_password">Senha do Banco de Dados:</label>
+                <input type="password" id="auth_db_password" name="AUTH_DB_PASSWORD" required>
+
+                <label for="auth_db_name">Nome do Banco de Dados:</label>
+                <input type="text" id="auth_db_name" name="AUTH_DB_NAME" value="cspmexa_db" required>
+            </div>
+
+            <div class="step">
+                <h2>Passo 2: Configurações Gerais e de Segurança</h2>
+                <p class="description">Portas de serviço e chaves de segurança. A chave secreta JWT será gerada automaticamente para sua segurança.</p>
+
+                <label for="api_gateway_port">Porta do API Gateway (acesso principal):</label>
+                <input type="number" id="api_gateway_port" name="API_GATEWAY_PORT" value="8050" required>
+
+                <label for="frontend_port">Porta do Frontend (interface web):</label>
+                <input type="number" id="frontend_port" name="FRONTEND_PORT" value="3000" required>
+
+                <label>Chave Secreta JWT:</label>
+                <p class="generated-value">Será gerada automaticamente no servidor.</p>
+
+                <label for="totp_issuer_name">Nome do Emissor 2FA (TOTP):</label>
+                <input type="text" id="totp_issuer_name" name="TOTP_ISSUER_NAME" value="CSPMEXA" required>
+            </div>
+
+            <div class="step">
+                <h2>Passo 3: Login com Google (Opcional)</h2>
+                <p class="description">Para permitir login com contas Google, insira as credenciais OAuth 2.0 do seu projeto no Google Cloud. Você pode pular esta etapa.</p>
+
+                <label for="google_client_id">Google Client ID:</label>
+                <input type="text" id="google_client_id" name="GOOGLE_CLIENT_ID">
+
+                <label for="google_client_secret">Google Client Secret:</label>
+                <input type="text" id="google_client_secret" name="GOOGLE_CLIENT_SECRET">
+            </div>
+
+            <button type="submit">Instalar e Iniciar o CSPMEXA</button>
+        </form>
+    </div>
+</body>
+</html>
