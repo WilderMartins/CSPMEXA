@@ -1,62 +1,6 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-
-// Simulação de componentes de uma biblioteca UI como Mantine
-// Em um projeto real, seriam importados: import { Button, TextInput, Paper, Title, Group } from '@mantine/core';
-
-const Paper: React.FC<{ children: React.ReactNode, padding?: string, shadow?: string, style?: React.CSSProperties }> = ({ children, style, ...props }) => (
-  <div style={{ padding: props.padding || 'md', boxShadow: props.shadow ? `0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1)` : 'none', border: '1px solid #e0e0e0', borderRadius: '5px', ...style }} {...props}>
-    {children}
-  </div>
-);
-
-const Title: React.FC<{ order?: 1 | 2 | 3 | 4 | 5 | 6, children: React.ReactNode, style?: React.CSSProperties }> = ({ order = 3, children, style }) => {
-  const Tag = `h${order}` as keyof JSX.IntrinsicElements;
-  return <Tag style={{ marginTop: 0, marginBottom: '1rem', ...style }}>{children}</Tag>;
-};
-
-const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string, style?: React.CSSProperties }> = ({ children, style, ...props }) => (
-  <button
-    style={{
-      padding: '8px 16px',
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      cursor: props.disabled ? 'not-allowed' : 'pointer',
-      backgroundColor: props.disabled ? '#e9ecef' : (props.variant === 'light' ? '#f8f9fa' : '#007bff'),
-      color: props.disabled ? '#adb5bd' : (props.variant === 'light' ? '#212529' : 'white'),
-      ...style
-    }}
-    {...props}
-  >
-    {children}
-  </button>
-);
-
-const TextInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label?: string, description?: string, style?: React.CSSProperties, inputStyle?: React.CSSProperties }> = ({ label, description, style, inputStyle, ...props }) => (
-  <div style={{ marginBottom: '1rem', ...style }}>
-    {label && <label htmlFor={props.id || props.name} style={{ display: 'block', marginBottom: '4px', fontSize: '0.9em', fontWeight: '500' }}>{label}</label>}
-    <input
-      type="text"
-      style={{
-        width: '100%',
-        padding: '8px',
-        border: '1px solid #ced4da',
-        borderRadius: '4px',
-        boxSizing: 'border-box',
-        ...inputStyle
-      }}
-      {...props}
-    />
-    {description && <small style={{ display: 'block', marginTop: '4px', color: '#6c757d' }}>{description}</small>}
-  </div>
-);
-
-const Group: React.FC<{ children: React.ReactNode, style?: React.CSSProperties, grow?: boolean }> = ({ children, style, grow }) => (
-  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end', ...style }}>
-    {grow ? React.Children.map(children, child => React.isValidElement(child) ? React.cloneElement(child as React.ReactElement<any>, { style: { ...child.props.style, flexGrow: 1 } }) : child) : children}
-  </div>
-);
-
+import { Button, TextInput, Paper, Title, Group, Stack } from '@mantine/core'; // Importar da Mantine
 
 interface AnalysisButton {
   id: string;
@@ -136,11 +80,17 @@ const ProviderAnalysisSection: React.FC<ProviderAnalysisSectionProps> = ({
   };
 
   return (
-    <Paper padding="lg" shadow="xs" style={{ marginBottom: '2rem' }}>
-      <Title order={2} style={{ marginBottom: '1.5rem' }}>{t(providerNameKey)}</Title>
+    // Mantine Paper já tem margem padrão, mas podemos adicionar mb (margin-bottom) se necessário com props de estilo
+    <Paper p="lg" shadow="xs" radius="md" withBorder mb="xl">
+      <Title order={2} mb="xl">{t(providerNameKey)}</Title>
 
       {inputFields.length > 0 && (
-        <Group grow style={{ marginBottom: '1.5rem' }}>
+        // Usar Stack para empilhar os TextInputs verticalmente
+        // Ou Group com direction="column" dependendo do layout desejado.
+        // Se os inputs devem crescer para preencher a largura, Group com grow pode ser usado,
+        // mas para múltiplos inputs empilhados, Stack é mais direto.
+        // Para inputs lado a lado, Group é ideal. Vamos assumir que eles podem ficar empilhados.
+        <Stack mb="xl">
           {inputFields.map(field => (
             <TextInput
               key={field.id}
@@ -148,26 +98,27 @@ const ProviderAnalysisSection: React.FC<ProviderAnalysisSectionProps> = ({
               label={t(field.labelKey)}
               placeholder={t(field.placeholderKey)}
               value={field.value}
-              onChange={(e) => field.setter(e.target.value)}
+              onChange={(e) => field.setter(e.currentTarget.value)} // Mantine usa currentTarget
               type={field.type || 'text'}
               disabled={isLoading}
+              // style={{ flexGrow: 1 }} // Se dentro de um Group com grow
             />
           ))}
-        </Group>
+        </Stack>
       )}
 
-      <Title order={4} style={{ marginBottom: '1rem' }}>{t('dashboardPage.analysisActions')}</Title>
+      <Title order={4} mb="md">{t('dashboardPage.analysisActions')}</Title>
       <Group>
         {analysisButtons.map((button) => (
           <Button
             key={button.id}
             onClick={() => handleAnalysisClick(button)}
-            disabled={isLoading || !areAllParamsFilled(button.requiredParams)}
-            variant="light"
+            disabled={!areAllParamsFilled(button.requiredParams)} // isLoading é tratado pela prop loading
+            loading={isLoading && currentAnalysisType === button.analysisType}
+            variant="light" // Mantine tem variantes como 'filled', 'light', 'outline', 'default'
           >
-            {isLoading && currentAnalysisType === button.analysisType
-              ? t('dashboardPage.analyzingButton')
-              : t(button.labelKey)}
+            {t(button.labelKey)}
+            {/* O texto do botão não precisa mais mudar para 'Analisando...' pois o Mantine Button tem um loader embutido */}
           </Button>
         ))}
       </Group>

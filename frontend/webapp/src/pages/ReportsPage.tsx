@@ -1,33 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react'; // Adicionado useEffect, useState
+import React, { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar
-} from 'recharts'; // Importar componentes reais do Recharts uma vez
+} from 'recharts';
+import { Paper, Title, Select } from '@mantine/core'; // Usar Select da Mantine diretamente
 
-// Componentes UI (Paper, Title) - Definidos uma vez
-// Estes poderiam ser movidos para um diretório de componentes compartilhados se usados em mais lugares.
-const Paper: React.FC<{ children: React.ReactNode, padding?: string | number, shadow?: string, style?: React.CSSProperties }> = ({ children, style, padding = 'md', shadow = 'sm', ...props }) => (
-  <div
-    style={{
-      padding: typeof padding === 'number' ? `${padding}px` : padding,
-      boxShadow: shadow === 'sm' ? `0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.1)` : 'none',
-      border: '1px solid #e0e0e0',
-      borderRadius: '5px',
-      marginBottom: '20px',
-      ...style
-    }}
-    {...props}
-  >
-    {children}
-  </div>
-);
-
-const Title: React.FC<{ order?: 1 | 2 | 3 | 4 | 5 | 6, children: React.ReactNode, style?: React.CSSProperties }> = ({ order = 3, children, style }) => {
-  const Tag = `h${order}` as keyof JSX.IntrinsicElements;
-  return <Tag style={{ marginTop: 0, marginBottom: '1rem', fontWeight: 600, ...style }}>{children}</Tag>;
-};
-
-// Não há mais componentes simulados de Recharts aqui
+// Remover a definição do Select simulado localmente
 
 /**
  * `ReportsPage` é a página responsável por exibir diversos relatórios e indicadores
@@ -150,43 +128,36 @@ const ReportsPage: React.FC = () => {
     { value: 'GoogleWorkspace', label: 'Google Workspace' },
   ];
 
-  // Componente Select simulado (deveria ser importado de um local comum ou biblioteca UI)
-  const Select: React.FC<React.SelectHTMLAttributes<HTMLSelectElement> & { label?: string, data: Array<{value: string, label: string}>, containerStyle?: React.CSSProperties }> =
-    ({ label, data, containerStyle, ...props }) => (
-    <div style={{ display: 'inline-block', marginRight: '20px', marginBottom: '20px', ...containerStyle }}>
-      {label && <label htmlFor={props.id} style={{ marginRight: '8px', fontSize: '0.9em', fontWeight: 500 }}>{label}:</label>}
-      <select
-        id={props.id}
-        style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #ccc', minWidth: '150px' }}
-        {...props}
-      >
-        {data.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
-      </select>
-    </div>
-  );
-
+  // A definição do Select simulado foi removida. Usaremos o Select importado da Mantine.
 
   return (
     <div className="reports-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title order={1} style={{ marginBottom: '20px', textAlign: 'center' }}>{t('reportsPage.title')}</Title>
+      <Title order={1} ta="center" mb="xl">{t('reportsPage.title')}</Title> {/* Usar props Mantine */}
 
       {/* Seção de Filtros */}
-      <Paper padding="lg" shadow="xs" style={{marginBottom: '30px', background: '#f9f9f9'}}>
-        <Title order={3} style={{marginBottom: '20px', borderBottom: '1px solid #eee', paddingBottom: '10px'}}>{t('reportsPage.filtersTitle', 'Filters')}</Title>
-        <div style={{display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '20px'}}>
-          <Select
-            id="period-filter"
+      <Paper p="lg" shadow="xs" radius="md" withBorder mb="xl" style={{background: 'var(--mantine-color-gray-0)'}}> {/* Usar props e theme Mantine */}
+        <Title order={3} mb="lg" style={{borderBottom: `1px solid var(--mantine-color-gray-3)`, paddingBottom: 'var(--mantine-spacing-sm)'}}>{t('reportsPage.filtersTitle', 'Filters')}</Title>
+        <div style={{display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '20px'}}> {/* alignItems: flex-end para alinhar labels e inputs */}
+          <Select // Este agora é o Mantine Select
             label={t('reportsPage.filterLabelPeriod', 'Period')}
+            placeholder={t('reportsPage.filterOptions.selectPeriod', 'Select period')}
             data={periodOptions}
             value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value as any)}
+            onChange={(value) => setSelectedPeriod(value as any)} // value pode ser null se clearable
+            clearable
+            allowDeselect={false}
+            style={{minWidth: '200px'}}
+            comboboxProps={{ shadow: 'md', transitionProps: { transition: 'pop', duration: 200 } }}
           />
-          <Select
-            id="provider-filter"
+          <Select // Este agora é o Mantine Select
             label={t('reportsPage.filterLabelProvider', 'Provider')}
+            placeholder={t('reportsPage.filterOptions.selectProvider', 'Select provider')}
             data={providerOptions}
             value={selectedProvider}
-            onChange={(e) => setSelectedProvider(e.target.value)}
+            onChange={(value) => setSelectedProvider(value || '')} // value pode ser null, converter para ''
+            clearable
+            style={{minWidth: '200px'}}
+            comboboxProps={{ shadow: 'md', transitionProps: { transition: 'pop', duration: 200 } }}
           />
           {/* TODO: Adicionar DatePickers aqui se selectedPeriod for 'custom' */}
         </div>

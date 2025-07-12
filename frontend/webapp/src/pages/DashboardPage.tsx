@@ -3,58 +3,17 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ProviderAnalysisSection from '../components/Dashboard/ProviderAnalysisSection';
-import AlertsTable, { Alert } from '../components/Dashboard/AlertsTable'; // Importar AlertsTable e a interface Alert
+import AlertsTable, { Alert } from '../components/Dashboard/AlertsTable';
+import { Tabs, Button as MantineButton, Title, Paper, Text } from '@mantine/core'; // Importar Tabs e outros componentes Mantine
 
-// Simulação de componentes Tabs de uma biblioteca UI (mantido para estrutura da página)
-const Tabs: React.FC<{ children: React.ReactNode, defaultValue?: string, style?: React.CSSProperties }> = ({ children, defaultValue, style }) => {
-  const [activeTab, setActiveTab] = useState(defaultValue || '');
-  const tabs = React.Children.toArray(children).filter(child => React.isValidElement(child) && child.props.value);
-  useEffect(() => {
-    if (!defaultValue && tabs.length > 0 && React.isValidElement(tabs[0])) {
-      setActiveTab(tabs[0].props.value);
-    }
-  }, [defaultValue, tabs]);
-
-  return (
-    <div style={style}>
-      <div style={{ display: 'flex', borderBottom: '1px solid #dee2e6', marginBottom: '1rem' }}>
-        {tabs.map((child) => {
-          if (!React.isValidElement(child)) return null;
-          const { value, label } = child.props;
-          return (
-            <button
-              key={value}
-              onClick={() => setActiveTab(value)}
-              style={{
-                padding: '10px 15px', border: 'none',
-                borderBottom: activeTab === value ? '2px solid #007bff' : '2px solid transparent',
-                cursor: 'pointer', backgroundColor: 'transparent',
-                fontWeight: activeTab === value ? 'bold' : 'normal',
-                color: activeTab === value ? '#007bff' : '#495057', outline: 'none',
-              }}
-            >
-              {label}
-            </button>
-          );
-        })}
-      </div>
-      <div>
-        {React.Children.map(children, child => React.isValidElement(child) && child.props.value === activeTab ? child : null)}
-      </div>
-    </div>
-  );
-};
-
-const TabPanel: React.FC<{ children: React.ReactNode, value: string, label: string }> = ({ children }) => {
-  return <>{children}</>;
-};
-
+// As definições de Paper e Title locais devem ser removidas se não foram antes.
+// Por segurança, vamos garantir que não estão aqui.
 
 const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
   const auth = useAuth();
 
-  const [alerts, setAlerts] = useState<Alert[]>([]); // Usa a interface Alert importada
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -214,26 +173,35 @@ const DashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-page" style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '20px' }}>{t('dashboardPage.title')}</h2>
+    <div className="dashboard-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <Title order={1} ta="center" mb="xl">{t('dashboardPage.title')}</Title>
+
       {auth.user && (
-        <div className="user-info" style={{ marginBottom: '20px', padding: '10px', border: '1px solid #eee', borderRadius: '4px', backgroundColor: '#f9f9f9' }}>
-          <p>{t('dashboardPage.welcomeMessage', { userId: auth.user.user_id || auth.user.email || 'Usuário' })}</p>
-        </div>
+        // Usar Paper da Mantine para o user-info para consistência
+        <Paper withBorder p="md" mb="xl" shadow="xs" radius="md" style={{backgroundColor: "var(--mantine-color-gray-0)"}}>
+          <Text>{t('dashboardPage.welcomeMessage', { userId: auth.user.user_id || auth.user.email || 'Usuário' })}</Text>
+        </Paper>
       )}
 
-      <div style={{ marginBottom: '20px' }}>
-        <button
-          onClick={fetchAllAlerts}
-          disabled={isLoading && currentDisplayMode === 'all_alerts'}
-          style={{padding: '10px 15px', border: 'none', borderRadius: '4px', backgroundColor: '#007bff', color: 'white', cursor: 'pointer'}}
-        >
-          {isLoading && currentDisplayMode === 'all_alerts' ? t('dashboardPage.loadingAllAlerts') : t('dashboardPage.fetchAllAlertsButton')}
-        </button>
-      </div>
+      <MantineButton
+        onClick={fetchAllAlerts}
+        loading={isLoading && currentDisplayMode === 'all_alerts'}
+        mb="xl"
+        variant="filled"
+      >
+        {t('dashboardPage.fetchAllAlertsButton')}
+      </MantineButton>
 
-      <Tabs defaultValue="aws" style={{ marginBottom: '30px' }}>
-        <TabPanel value="aws" label="AWS">
+      <Tabs defaultValue="aws" variant="outline" radius="md">
+        <Tabs.List grow>
+          <Tabs.Tab value="aws">AWS</Tabs.Tab>
+          <Tabs.Tab value="gcp">GCP</Tabs.Tab>
+          <Tabs.Tab value="huawei">Huawei Cloud</Tabs.Tab>
+          <Tabs.Tab value="azure">Azure</Tabs.Tab>
+          <Tabs.Tab value="gws">Google Workspace</Tabs.Tab>
+        </Tabs.List>
+
+        <Tabs.Panel value="aws" pt="xs">
           <ProviderAnalysisSection
             providerId="aws"
             providerNameKey={providerConfigs.aws.providerNameKey}
@@ -242,8 +210,8 @@ const DashboardPage: React.FC = () => {
             isLoading={isLoading}
             currentAnalysisType={currentAnalysisType}
           />
-        </TabPanel>
-        <TabPanel value="gcp" label="GCP">
+        </Tabs.Panel>
+        <Tabs.Panel value="gcp" pt="xs">
           <ProviderAnalysisSection
             providerId="gcp"
             providerNameKey={providerConfigs.gcp.providerNameKey}
@@ -253,8 +221,8 @@ const DashboardPage: React.FC = () => {
             isLoading={isLoading}
             currentAnalysisType={currentAnalysisType}
           />
-        </TabPanel>
-        <TabPanel value="huawei" label="Huawei Cloud">
+        </Tabs.Panel>
+        <Tabs.Panel value="huawei" pt="xs">
           <ProviderAnalysisSection
             providerId="huawei"
             providerNameKey={providerConfigs.huawei.providerNameKey}
@@ -264,8 +232,8 @@ const DashboardPage: React.FC = () => {
             isLoading={isLoading}
             currentAnalysisType={currentAnalysisType}
           />
-        </TabPanel>
-        <TabPanel value="azure" label="Azure">
+        </Tabs.Panel>
+        <Tabs.Panel value="azure" pt="xs">
           <ProviderAnalysisSection
             providerId="azure"
             providerNameKey={providerConfigs.azure.providerNameKey}
@@ -275,8 +243,8 @@ const DashboardPage: React.FC = () => {
             isLoading={isLoading}
             currentAnalysisType={currentAnalysisType}
           />
-        </TabPanel>
-        <TabPanel value="gws" label="Google Workspace">
+        </Tabs.Panel>
+        <Tabs.Panel value="gws" pt="xs">
           <ProviderAnalysisSection
             providerId="googleworkspace"
             providerNameKey={providerConfigs.googleworkspace.providerNameKey}
@@ -286,11 +254,11 @@ const DashboardPage: React.FC = () => {
             isLoading={isLoading}
             currentAnalysisType={currentAnalysisType}
           />
-        </TabPanel>
+        </Tabs.Panel>
       </Tabs>
 
-      {isLoading && !alerts.length && <p>{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</p>}
-      {error && <p style={{ color: 'red', marginTop: '1rem', padding: '10px', border: '1px solid red', borderRadius: '4px' }}>{error}</p>}
+      {isLoading && !alerts.length && <Text mt="md">{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</Text>}
+      {error && <Text mt="md" c="red" p="sm" style={{border: '1px solid red', borderRadius: '4px'}}>{error}</Text>}
 
       <AlertsTable
         alerts={alerts}
