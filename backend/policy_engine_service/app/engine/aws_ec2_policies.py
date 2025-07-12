@@ -242,6 +242,73 @@ ec2_instance_policies_to_evaluate: List[EC2Policy] = [
     EC2InstanceNoIAMProfilePolicy(),
 ]
 
+# Nova Política: Instância EC2 sem Tags Obrigatórias
+REQUIRED_TAGS = ["Owner", "Environment", "CostCenter"] # Exemplo de tags obrigatórias, pode ser configurável
+class EC2InstanceMissingRequiredTagsPolicy(EC2Policy):
+    def __init__(self):
+        super().__init__(
+            policy_id="EC2_Instance_Missing_Required_Tags",
+            title=f"Instância EC2 Não Possui Todas as Tags Obrigatórias ({', '.join(REQUIRED_TAGS)})",
+            description=f"A instância EC2 não possui todas as tags obrigatórias configuradas: {', '.join(REQUIRED_TAGS)}. Tags são essenciais para gerenciamento de custos, responsabilidade e automação.",
+            severity="Low", # Ou Medium, dependendo da importância das tags para a organização
+            recommendation=f"Adicione as tags obrigatórias ({', '.join(REQUIRED_TAGS)}) à instância EC2 para melhor organização e governança."
+        )
+
+    def check(self, instance: EC2InstanceDataInput, account_id: Optional[str], region: Optional[str]) -> Optional[Alert]:
+        instance_tags = {tag.get("Key"): tag.get("Value") for tag in instance.tags or []}
+        missing_tags = [req_tag for req_tag in REQUIRED_TAGS if req_tag not in instance_tags]
+
+        if missing_tags:
+            details = {
+                "instance_id": instance.instance_id,
+                "current_tags": instance_tags,
+                "required_tags": REQUIRED_TAGS,
+                "missing_tags": missing_tags
+            }
+            return Alert(
+                id=str(uuid.uuid4()), resource_id=instance.instance_id, resource_type="EC2Instance",
+                account_id=account_id or "N/A", region=instance.region, provider="aws",
+                severity=self.severity, title=self.title,
+                description=f"A instância EC2 '{instance.instance_id}' não possui as seguintes tags obrigatórias: {', '.join(missing_tags)}.",
+                policy_id=self.policy_id, details=details, recommendation=self.recommendation
+            )
+        return None
+ec2_instance_policies_to_evaluate.append(EC2InstanceMissingRequiredTagsPolicy())
+
+
+# Nova Política: Instância EC2 usando AMI não aprovada/desatualizada
+# Esta política é mais complexa pois requer uma fonte de dados externa ou configuração
+# sobre quais AMIs são aprovadas, desatualizadas ou vulneráveis.
+# Para este exemplo, vamos simular com uma lista mockada.
+DISAPPROVED_AMIS = ["ami-bad123", "ami-old456"] # Exemplo
+class EC2InstanceUnapprovedAMIPolicy(EC2Policy):
+    def __init__(self):
+        super().__init__(
+            policy_id="EC2_Instance_Using_Unapproved_AMI",
+            title="Instância EC2 Utilizando AMI Não Aprovada ou Desatualizada",
+            description="A instância EC2 está utilizando uma Amazon Machine Image (AMI) que não está na lista de AMIs aprovadas ou é conhecida por ser desatualizada/vulnerável.",
+            severity="Medium", # Pode ser High se a AMI for conhecida por ter vulnerabilidades críticas
+            recommendation="Substitua a instância por uma nova utilizando uma AMI aprovada e atualizada. Mantenha uma lista de AMIs padrão e seguras para uso na organização."
+        )
+
+    def check(self, instance: EC2InstanceDataInput, account_id: Optional[str], region: Optional[str]) -> Optional[Alert]:
+        if instance.image_id and instance.image_id in DISAPPROVED_AMIS:
+            details = {
+                "instance_id": instance.instance_id,
+                "image_id_used": instance.image_id,
+                "list_of_disapproved_amis_checked": DISAPPROVED_AMIS # Para referência no alerta
+            }
+            return Alert(
+                id=str(uuid.uuid4()), resource_id=instance.instance_id, resource_type="EC2Instance",
+                account_id=account_id or "N/A", region=instance.region, provider="aws",
+                severity=self.severity, title=self.title,
+                description=f"A instância EC2 '{instance.instance_id}' está usando a AMI '{instance.image_id}', que não é aprovada ou é desatualizada.",
+                policy_id=self.policy_id, details=details, recommendation=self.recommendation
+            )
+        return None
+ec2_instance_policies_to_evaluate.append(EC2InstanceUnapprovedAMIPolicy())
+
+
 # --- Funções de Avaliação ---
 
 def evaluate_ec2_sg_policies(security_groups_data: List[EC2SecurityGroupDataInput], account_id: Optional[str], region: Optional[str]) -> List[Alert]:
