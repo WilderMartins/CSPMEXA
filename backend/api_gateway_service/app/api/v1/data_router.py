@@ -1087,6 +1087,69 @@ async def analyze_gws_shared_drives_orchestrated(
 
 # TODO: Adicionar endpoints para Gmail, etc. quando os coletores e políticas estiverem prontos.
 
+# --- Endpoint de Análise GCP SCC (Orquestração) ---
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/scc/findings", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_scc_findings")
+async def analyze_gcp_scc_findings_orchestrated(
+    request: Request,
+    parent_resource: str = Query(..., description="Recurso pai para consulta no SCC (ex: organizations/ORG_ID/sources/-)."),
+    scc_filter: Optional[str] = Query(None, description="Filtro da API SCC."),
+    max_total_results: int = Query(1000, description="Número máximo de findings a coletar."),
+    current_user: TokenData = Depends(require_user),
+):
+    """Orquestra a coleta de findings do GCP SCC e seu processamento/transformação em alertas."""
+
+    # 1. Coletar Findings do SCC
+    collected_data: collector_gcp_scc_schemas.GCPSCCFindingCollection # Schema do API Gateway
+    try:
+        collector_full_path = "/collect/gcp/scc/findings" # Endpoint no Collector Service
+        collector_params = {
+            "parent_resource": parent_resource,
+            "max_total_results": max_total_results,
+        }
+        if scc_filter:
+            collector_params["scc_filter"] = scc_filter
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params)
+        if collector_response.status_code != 200:
+            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service (GCP SCC Findings): {collector_response.text}")
+
+        # Validar com o schema do API Gateway antes de passar para o Policy Engine
+        collected_data = collector_gcp_scc_schemas.GCPSCCFindingCollection(**collector_response.json())
+
+        if not collected_data.findings and collected_data.error_message:
+             raise HTTPException(status_code=500, detail=f"Collector Service (GCP SCC Findings) error: {collected_data.error_message}")
+        if not collected_data.findings:
+            return [] # Nenhum finding, retornar lista vazia de alertas
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to collect GCP SCC Findings data: {str(e)}")
+
+    # 2. Enviar para Policy Engine para processamento/transformação
+    # O 'account_id' para SCC pode ser o ID da organização ou projeto extraído do parent_resource
+    account_id_for_engine = parent_resource.split('/')[1] if parent_resource.startswith("organizations/") else (parent_resource.split('/')[1] if parent_resource.startswith("projects/") else parent_resource)
+
+    analysis_payload = {
+        "provider": "gcp",
+        "service": "gcp_scc_findings", # Serviço específico para o Policy Engine
+        "data": collected_data.model_dump(),
+        "account_id": account_id_for_engine
+    }
+
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload)
+        if engine_response.status_code != 200:
+            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine (GCP SCC Findings processing): {engine_response.text}")
+        alerts = engine_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to process GCP SCC Findings data: {str(e)}")
+
+    return alerts
+
 
 # --- Endpoints de Coleta Microsoft 365 (Proxy) ---
 M365_COLLECT_ROUTER_PREFIX = "/collect/m365"

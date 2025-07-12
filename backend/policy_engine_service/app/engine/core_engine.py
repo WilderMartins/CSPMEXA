@@ -149,6 +149,15 @@ class PolicyEngine:
                         project_id=account_id
                     )
                     generated_alert_data_list.extend(gke_alerts_data)
+            elif service == "gcp_scc_findings": # Novo para GCP SCC Findings
+                if not isinstance(data, GCPSCCFindingCollectionInput): # type: ignore
+                    logger.error(f"Data for GCP SCC Findings is not of type GCPSCCFindingCollectionInput. Skipping. Data: {type(data)}")
+                else:
+                    scc_alerts_data = gcp_scc_processing.process_gcp_scc_findings(
+                        scc_finding_collection=data, # type: ignore
+                        gcp_parent_resource_id=account_id # account_id aqui é o parent_resource (org/folder/project)
+                    )
+                    generated_alert_data_list.extend(scc_alerts_data)
             else:
                 logger.warning(f"Unsupported GCP service for analysis: {service}")
 
@@ -191,6 +200,15 @@ class PolicyEngine:
                         account_id=account_id
                     )
                     generated_alert_data_list.extend(iam_user_alerts_data)
+            elif service == "huawei_cts_logs": # Novo serviço para logs CTS
+                if not isinstance(data, CTSTraceCollectionInput): # type: ignore
+                    logger.error(f"Data for Huawei CTS logs is not of type CTSTraceCollectionInput. Data type: {type(data)}. Skipping.")
+                else:
+                    cts_alerts_data = huawei_cts_policies.evaluate_huawei_cts_policies(
+                        cts_trace_collection=data, # type: ignore
+                        account_id=account_id
+                    )
+                    generated_alert_data_list.extend(cts_alerts_data)
             else:
                 logger.warning(f"Unsupported Huawei Cloud service for analysis: {service}")
 
@@ -232,6 +250,21 @@ class PolicyEngine:
                     account_id=account_id
                 )
                 generated_alert_data_list.extend(drive_alerts_data)
+            elif service.startswith("gws_audit_logs_"): # Novo para GWS Audit Logs
+                app_name_extracted = service.replace("gws_audit_logs_", "")
+                if not isinstance(data, GWSAuditLogCollectionInput): # type: ignore
+                    logger.error(f"Data for GWS Audit Logs ({app_name_extracted}) is not of type GWSAuditLogCollectionInput. Skipping.")
+                else:
+                    # Garantir que o application_name_queried no payload seja consistente, se necessário
+                    if not data.application_name_queried or data.application_name_queried != app_name_extracted:
+                        logger.warning(f"Service name implies app '{app_name_extracted}' but payload reports '{data.application_name_queried}'. Using '{app_name_extracted}'.")
+                        data.application_name_queried = app_name_extracted # Forçar consistência
+
+                    gws_audit_alerts_data = gws_audit_policies.evaluate_gws_audit_log_policies(
+                        gws_log_collection=data, # type: ignore
+                        account_id=account_id
+                    )
+                    generated_alert_data_list.extend(gws_audit_alerts_data)
             else:
                 logger.warning(f"Unsupported Google Workspace service for analysis: {service}")
 
@@ -321,9 +354,47 @@ from app.schemas.aws.rds_input_schema import RDSInstanceDataInput
 from app.engine import gcp_gke_policies # Adicionado
 from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
 
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
 # Importar módulos de políticas e schemas de input para Microsoft 365
-from app.engine import m365_policies # Será criado
-from app.schemas.m365.m365_input_schemas import ( # Já criados
+from app.engine import m365_policies
+from app.schemas.m365.m365_input_schemas import (
     M365UserMFAStatusCollectionInput,
     M365ConditionalAccessPolicyCollectionInput
 )
+
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
+# Importar módulos de políticas e schemas de input para Microsoft 365
+from app.engine import m365_policies
+from app.schemas.m365.m365_input_schemas import (
+    M365UserMFAStatusCollectionInput,
+    M365ConditionalAccessPolicyCollectionInput
+)
+
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
+# Importar módulos de políticas e schemas de input para Microsoft 365
+from app.engine import m365_policies
+from app.schemas.m365.m365_input_schemas import (
+    M365UserMFAStatusCollectionInput,
+    M365ConditionalAccessPolicyCollectionInput
+)
+
+# Importar módulos de políticas e schemas de input para Huawei CTS
+from app.engine import huawei_cts_policies
+from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput
+
+# Importar módulos de políticas e schemas de input para Google Workspace Audit Logs
+from app.engine import gws_audit_policies
+from app.schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput
+
+# Importar módulos de processamento e schemas de input para GCP SCC Findings
+from app.engine import gcp_scc_processing # Adicionado
+from app.schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput # Adicionado
