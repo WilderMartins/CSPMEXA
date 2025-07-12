@@ -71,13 +71,13 @@ def _convert_sdk_finding_to_schema(sdk_finding: securitycenter_v1.types.Finding)
             state=securitycenter_v1.types.Finding.State(sdk_finding.state).name,
             category=sdk_finding.category,
             externalUri=sdk_finding.external_uri,
-            sourceProperties=source_properties_schema, # Usar o schema Pydantic
-            eventTime=sdk_finding.event_time.rfc3339() if hasattr(sdk_finding.event_time, 'rfc3339') else sdk_finding.event_time, # Ajustar para datetime
-            createTime=sdk_finding.create_time.rfc3339() if hasattr(sdk_finding.create_time, 'rfc3339') else sdk_finding.create_time,
-            updateTime=sdk_finding.update_time.rfc3339() if sdk_finding.update_time and hasattr(sdk_finding.update_time, 'rfc3339') else getattr(sdk_finding, 'update_time', None),
+            sourceProperties=source_properties_schema,
+            eventTime=sdk_finding.event_time.ToDatetime(tzinfo=datetime.timezone.utc) if hasattr(sdk_finding.event_time, 'ToDatetime') else None,
+            createTime=sdk_finding.create_time.ToDatetime(tzinfo=datetime.timezone.utc) if hasattr(sdk_finding.create_time, 'ToDatetime') else None,
+            updateTime=sdk_finding.update_time.ToDatetime(tzinfo=datetime.timezone.utc) if sdk_finding.update_time and hasattr(sdk_finding.update_time, 'ToDatetime') else None,
             severity=severity_str,
             canonicalName=sdk_finding.canonical_name,
-            description=getattr(sdk_finding, 'description', None), # Nem todos os findings têm descrição direta
+            description=getattr(sdk_finding, 'description', None),
             # Adicionar outros campos como vulnerability, misconfiguration se necessário
             project_id=project_id_extracted,
             organization_id=org_id,
@@ -136,42 +136,14 @@ async def get_gcp_scc_findings(
             )
 
             # A chamada ao SDK é síncrona. Será envolvida em run_in_threadpool no controller.
-            # response_pager = scc_client.list_findings(request=request) # Retorna um Pager
+            response_pager = scc_client.list_findings(request=request) # Retorna um Pager
 
-            # ------ INÍCIO DO BLOCO MOCKADO (SUBSTITUIR PELA CHAMADA REAL NO THREADPOOL) ------
-            class MockSDKFinding: # Simplificado
-                def __init__(self, i, org_id_mock, source_id_mock):
-                    self.name = f"organizations/{org_id_mock}/sources/{source_id_mock}/findings/finding_mock_{i}"
-                    self.parent = f"organizations/{org_id_mock}/sources/{source_id_mock}"
-                    self.resource_name = f"//cloudresourcemanager.googleapis.com/projects/project_mock_{i}"
-                    self.state = securitycenter_v1.types.Finding.State.ACTIVE
-                    self.category = "MISCONFIGURATION"
-                    self.external_uri = f"http://example.com/finding/{i}"
-                    self.source_properties = {"scanner_name": "MockScanner", "details_prop": f"prop_val_{i}"}
-                    self.event_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=i)
-                    self.create_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=i, minutes=10)
-                    self.update_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=i)
-                    self.severity = securitycenter_v1.types.Finding.Severity.HIGH if i % 2 == 0 else securitycenter_v1.types.Finding.Severity.MEDIUM
-                    self.canonical_name = f"mock.finding.type.{i}"
-                    self.description = f"This is a mock finding description for {i}."
+            # O código abaixo processa a resposta do Pager.
+            # É crucial que a estrutura de `item_result.finding` e `response_pager.next_page_token`
+            # corresponda ao que o SDK `google-cloud-securitycenter` retorna.
 
-            class MockListFindingsResponse:
-                 def __init__(self, items, next_token=None, total_size_val=None):
-                    self.list_findings_results = [securitycenter_v1.types.ListFindingsResponse.ListFindingsResult(finding=item) for item in items]
-                    self.next_page_token = next_token
-                    self.total_size = total_size_val
-
-            mock_findings_this_page = []
-            if collected_count < 20: # Simular 2 páginas de 10
-                num_to_gen = min(current_limit, 10)
-                mock_findings_this_page = [MockSDKFinding(collected_count + i, parent_resource.split('/')[1], parent_resource.split('/')[3] if parent_resource.split('/')[3] != '-' else 'mocksource') for i in range(num_to_gen)]
-
-            next_page_token_simulated = f"scc_token_page_{collected_count // 10 + 1}" if collected_count + len(mock_findings_this_page) < 20 and mock_findings_this_page else None
-            response_pager = MockListFindingsResponse(mock_findings_this_page, next_token=next_page_token_simulated, total_size_val=20 if collected_count == 0 else None)
-            # ------ FIM DO BLOCO MOCKADO ------
-
-            for item_result in response_pager.list_findings_results:
-                sdk_finding_obj = item_result.finding
+            for item_result in response_pager.list_findings_results: # Iterar sobre os resultados na página atual
+                sdk_finding_obj = item_result.finding # Cada item_result contém um 'finding'
                 schema_finding = _convert_sdk_finding_to_schema(sdk_finding_obj)
                 if schema_finding:
                     all_findings_schemas.append(schema_finding)

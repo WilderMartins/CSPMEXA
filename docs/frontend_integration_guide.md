@@ -153,6 +153,12 @@ O frontend (`DashboardPage.tsx`) já possui a lógica para chamar esses endpoint
 *   **Análise de GKE Clusters:**
     *   Endpoint: `/analyze/gcp/gke/clusters?project_id=<ID_DO_PROJETO>&location=<REGIAO_OU_ZONA_OU_'-'_PARA_TODAS>`
     *   Parâmetro de query adicional `location` (string, default: `-`).
+*   **Análise de Findings do Security Command Center (SCC):**
+    *   Endpoint: `/analyze/gcp/scc/findings?parent_resource=<RECURSO_PAI>&scc_filter=<FILTRO_OPCIONAL>&max_total_results=<NUM_MAX_OPCIONAL>`
+    *   Parâmetros:
+        *   `parent_resource` (string, obrigatório): Recurso pai para listar findings (ex: `organizations/ID_ORG/sources/-` ou `projects/ID_PROJETO/sources/-`). O sufixo `/sources/-` indica todas as fontes.
+        *   `scc_filter` (string, opcional): Filtro da API SCC (ex: `state="ACTIVE" AND severity="HIGH"`).
+        *   `max_total_results` (int, opcional, default: 1000): Número máximo de findings a retornar.
 
 #### 4.2.3. Azure
 
