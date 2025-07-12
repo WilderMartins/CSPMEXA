@@ -52,13 +52,42 @@
     "analyzeGWSUsersButton": "Analisar Usuários do Workspace",
     "analyzeGWSSharedDrivesButton": "Analisar Drives Compartilhados",
     "analyzingButton": "Analisando...",
+    "fetchAllAlertsButton": "Buscar Todos os Alertas Persistidos",
+    "allPersistedAlerts": "Todos os Alertas Persistidos",
+    "alertsFoundFor": "Alertas Encontrados para: {{type}}",
+    "unknownAnalysis": "Análise Desconhecida",
+    "noAlertsFound": "Nenhum alerta persistido encontrado no momento.",
+    "errorFetchingAllAlerts": "Erro ao buscar alertas persistidos: {{error}}",
+    "noNewAlertsForAnalysis": "Nenhum novo alerta gerado para esta análise: {{type}}.",
     "alertsFound": "Alertas Encontrados:",
-    "alertsFoundFor": "Alertas Encontrados para {{type}}:",
     "noAlerts": "Nenhum alerta encontrado ou nenhum recurso para analisar.",
     "noAlertsFor": "Nenhum alerta encontrado para {{type}} ou nenhum recurso correspondente para analisar.",
     "errorFetchingAlerts": "Falha ao buscar alertas.",
     "errorDuringAnalysis": "Erro durante a análise de {{provider}} {{type}}: {{error}}",
-    "loadingMessage": "Carregando análise de {{type}}..."
+    "errorNoPermissionToChangeStatus": "Você não tem permissão para alterar o status do alerta.",
+    "errorUpdatingStatus": "Erro ao atualizar o status do alerta.",
+    "errorUpdatingAlertStatus": "Erro ao atualizar o status para o alerta ID {{alertId}}: {{error}}",
+    "azureSubscriptionIdInvalid": "O ID da Subscrição Azure possui um formato inválido. Deve ser um GUID (ex: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "gwsAdminEmailInvalid": "O E-mail do Admin do Google Workspace possui um formato inválido.",
+    "loadingMessage": "Carregando análise de {{type}}...",
+    "errorTitle": "Erro",
+    "analyzeHuaweiIAMUsersButton": "Analisar Usuários IAM (Huawei)",
+    "gcpLocationLabel": "Localização GCP",
+    "gcpLocationPlaceholder": "ex: us-central1 ou us-central1-a",
+    "sccParentResourceLabel": "Recurso Pai SCC",
+    "sccParentResourcePlaceholder": "ex: organizations/123/sources/-",
+    "sccFilterLabel": "Filtro SCC (Opcional)",
+    "sccFilterPlaceholder": "ex: state=\\"ACTIVE\\"",
+    "caiScopeLabel": "Escopo CAI",
+    "caiScopePlaceholder": "ex: projects/seu-projeto-id",
+    "caiAssetTypesLabel": "Tipos de Ativos CAI (Opcional)",
+    "caiAssetTypesPlaceholder": "ex: compute.googleapis.com/Instance",
+    "analyzeSCCFindingsButton": "Analisar Descobertas SCC",
+    "analyzeCAIAssetsButton": "Analisar Ativos CAI",
+    "analyzeGKEClustersButton": "Analisar Clusters GKE",
+    "m365AnalysisTitle": "Análise Microsoft 365",
+    "analyzeM365MfaButton": "Analisar Status de MFA de Usuários",
+    "analyzeM365CaButton": "Analisar Políticas de Acesso Condicional"
   },
   "alertItem": {
     "resource": "ID do Recurso:",
@@ -94,72 +123,122 @@
     "navDashboard": "Painel",
     "navReports": "Relatórios",
     "navInsights": "Insights",
+    "navSettings": "Configurações",
     "btnLogout": "Sair"
   },
   "footer": {
     "copyright": "© {{year}} CSPMEXA. Todos os direitos reservados."
   },
+  "alertStatus": {
+    "OPEN": "Aberto",
+    "ACKNOWLEDGED": "Confirmado",
+    "RESOLVED": "Resolvido",
+    "IGNORED": "Ignorado"
+  },
   "reportsPage": {
-    "title": "Relatórios e Indicadores",
-    "securityScoreTrendTitle": "Tendência da Pontuação de Segurança",
+    "title": "Relatórios de Segurança",
+    "timeRangeFilterLabel": "Período",
+    "last7Days": "Últimos 7 dias",
+    "last30Days": "Últimos 30 dias",
+    "allTime": "Todo o período",
+    "refreshDataButton": "Atualizar Dados",
+    "loadingData": "Carregando dados dos relatórios...",
+    "errorFetchingAlerts": "Erro ao buscar dados de alertas para os relatórios.",
+    "errorFetchingAlertsDetails": "Erro ao buscar dados de alertas para os relatórios: {{error}}",
+    "errorTitle": "Erro no Relatório",
     "alertsBySeverityTitle": "Alertas por Severidade",
-    "complianceOverviewTitle": "Visão Geral de Compliance",
-    "topRisksTitle": "Principais Riscos",
-    "dataDisclaimer": "Nota: Os dados exibidos são de exemplo. Integração com o backend é necessária para métricas reais.",
-    "compliancePlaceholder": "A visualização do status de compliance estará aqui.",
-    "topRisksPlaceholder": "A lista ou gráfico de principais riscos estará aqui.",
-    "loadingData": "Carregando dados...",
-    "noDataAvailable": "Nenhum dado disponível para este relatório.",
-    "errorFetchingTrend": "Erro ao buscar dados de tendência da pontuação de segurança.",
-    "errorFetchingSeverity": "Erro ao buscar dados de alertas por severidade.",
-    "errorFetchingCompliance": "Erro ao buscar dados da visão geral de compliance.",
-    "errorFetchingTopRisks": "Erro ao buscar dados dos principais riscos.",
-    "securityScoreAxisLabel": "Pontuação de Segurança",
-    "alertsAxisLabel": "Nº de Alertas",
-    "overallScoreLegend": "Pontuação Geral",
-    "criticalAlertsLegend": "Alertas Críticos",
-    "highAlertsLegend": "Alertas Altos",
-    "alertCountLegend": "Contagem",
-    "filtersTitle": "Filtros",
-    "filterLabelPeriod": "Período",
-    "filterLabelProvider": "Provedor",
-    "filterOptions": {
-      "daily": "Diário",
-      "weekly": "Semanal",
-      "monthly": "Mensal",
-      "allProviders": "Todos os Provedores",
-      "selectPeriod": "Selecione o período",
-      "selectProvider": "Selecione o provedor"
-    }
+    "countLabel": "Contagem",
+    "noDataForSeverityChart": "Sem dados para o gráfico de severidade.",
+    "alertsByProviderTitle": "Alertas por Provedor",
+    "noDataForProviderChart": "Sem dados para o gráfico de provedor.",
+    "openAlertsTitle": "Alertas Abertos",
+    "noOpenAlerts": "Nenhum alerta aberto encontrado para o período selecionado."
   },
   "insightsPage": {
     "title": "Insights de Segurança",
-    "criticalAssetsTitle": "Ativos Críticos em Risco",
-    "attackPathsTitle": "Caminhos de Ataque Potenciais (Simplificado)",
-    "proactiveRecommendationsTitle": "Recomendações Proativas",
-    "placeholder": "Dados e visualizações de insights serão exibidos aqui quando os endpoints do backend estiverem disponíveis.",
-    "dataDisclaimer": "Nota: Integração com o backend é necessária para insights reais.",
-    "loadingCriticalAssets": "Carregando ativos críticos...",
-    "errorCriticalAssets": "Erro ao carregar ativos críticos:",
-    "noCriticalAssets": "Nenhum ativo crítico identificado no momento.",
-    "assetId": "ID do Ativo:",
-    "riskScore": "Pontuação de Risco:",
-    "relatedAlerts": "Alertas Relacionados:",
-    "loadingAttackPaths": "Carregando caminhos de ataque potenciais...",
-    "errorAttackPaths": "Erro ao carregar caminhos de ataque:",
-    "noAttackPaths": "Nenhum caminho de ataque potencial identificado no momento.",
-    "attackPathId": "ID do Caminho:",
-    "attackPathDescription": "Descrição:",
-    "pathSegments": "Segmentos:",
-    "loadingRecommendations": "Carregando recomendações proativas...",
-    "errorRecommendations": "Erro ao carregar recomendações:",
-    "noRecommendations": "Nenhuma recomendação proativa disponível no momento.",
-    "recommendationCategory": "Categoria:",
-    "recommendationSeverity": "Severidade:"
+    "refreshDataButton": "Atualizar Insights (Alertas Abertos)",
+    "description": "Esta página analisa os alertas ABERTOS para fornecer informações sobre as principais vulnerabilidades e políticas violadas.",
+    "loadingData": "Carregando insights...",
+    "errorFetchingAlerts": "Erro ao buscar dados de alertas para os insights.",
+    "errorFetchingAlertsDetails": "Erro ao buscar dados de alertas para os insights: {{error}}",
+    "errorTitle": "Erro no Insight",
+    "noOpenAlerts": "Nenhum alerta aberto encontrado para gerar insights no momento.",
+    "topViolatedPoliciesTitle": "Top 5 Políticas Mais Violadas",
+    "alertSuffixSingular": "alerta",
+    "alertsSuffixPlural": "alertas",
+    "noPolicyData": "Não há dados de políticas violadas para exibir.",
+    "topVulnerableResourcesTitle": "Top 5 Recursos Mais Vulneráveis",
+    "noResourceData": "Não há dados de recursos vulneráveis para exibir."
   },
   "oauthCallback": {
     "processing": "Processando login...",
     "error": "Erro OAuth: {{error}}",
+    "errorProcessing": "Erro ao processar o login. Por favor, tente novamente.",
     "invalidCallback": "Estado de callback inválido."
+  },
+  "common": {
+    "errorTitle": "Ocorreu um Erro"
+  },
+  "navbar": {
+    "mainMenu": "Menu Principal",
+    "providersMenu": "Provedores"
+  },
+  "dashboard": {
+    "welcome": {
+      "title": "Bem-vindo ao Painel de Controle",
+      "subtitle": "Selecione um provedor no menu para iniciar uma análise."
+    }
+  },
+  "settings": {
+    "title": "Configurações",
+    "menu": {
+      "notifications": "Notificações",
+      "users": "Gerenciamento de Usuários"
+    },
+    "notifications": {
+      "title": "Configurações de Notificação",
+      "email": {
+        "title": "Destinatários de E-mail",
+        "description": "Adicione endereços de e-mail para receber notificações de alertas críticos.",
+        "placeholder": "novo.email@exemplo.com",
+        "addButton": "Adicionar E-mail"
+      },
+      "webhook": {
+        "title": "Webhooks",
+        "description": "Configure URLs de webhook para receber dados de alertas como payloads JSON.",
+        "tableNameHeader": "Nome",
+        "tableUrlHeader": "URL",
+        "addButton": "Adicionar Webhook",
+        "addModalTitle": "Adicionar Novo Webhook",
+        "form": {
+            "nameLabel": "Nome",
+            "namePlaceholder": "ex: Alertas Slack",
+            "urlLabel": "URL",
+            "addButton": "Adicionar Webhook"
+        }
+      },
+      "gchat": {
+        "title": "Webhooks do Google Chat",
+        "description": "Configure webhooks do Google Chat para receber cards de alerta formatados em seus espaços.",
+        "noWebhooks": "Nenhum webhook do Google Chat configurado.",
+        "addButton": "Adicionar Webhook do Google Chat",
+        "addModalTitle": "Adicionar Novo Webhook do Google Chat"
+      }
+    },
+    "users": {
+        "title": "Gerenciamento de Usuários",
+        "table": {
+            "id": "ID",
+            "email": "E-mail",
+            "name": "Nome",
+            "role": "Papel",
+            "actions": "Ações"
+        }
+    },
+    "accessDenied": {
+      "title": "Acesso Negado",
+      "message": "Você não tem permissão para visualizar esta página.",
+      "button": "Leve-me para o painel"
+    }
   }
 }

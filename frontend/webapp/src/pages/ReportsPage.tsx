@@ -1,239 +1,210 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar
-} from 'recharts';
-import { Paper, Title, Select } from '@mantine/core'; // Usar Select da Mantine diretamente
-
-// Remover a definição do Select simulado localmente
+import { Title, Paper, Text, Group, Select, Button as MantineButton, SimpleGrid, Box, Skeleton } from '@mantine/core';
+import { BarChart, PieChart } from '@mantine/charts';
+// IconAlertCircle não é mais necessário diretamente aqui se ErrorMessage o encapsula
+import { useAuth } from '../contexts/AuthContext';
+import axios from 'axios';
+import AlertsTable, { Alert as AlertType } from '../components/Dashboard/AlertsTable';
+import ErrorMessage from '../components/Common/ErrorMessage';
+import { calculateSeverityData, calculateProviderData, ChartDataItem } from '../utils/reportUtils'; // Importar funções utilitárias
 
 /**
- * `ReportsPage` é a página responsável por exibir diversos relatórios e indicadores
- * de segurança, como tendência da pontuação de segurança, alertas por severidade, etc.
- * Utiliza a biblioteca Recharts para visualização de dados.
+ * `ReportsPage` é um componente de página que exibe vários relatórios de segurança
+ * com base nos dados de alertas. Inclui filtros por período e visualizações
+ * como contagem de alertas por severidade, por provedor e uma lista de alertas abertos.
  *
  * @component
  */
-import {
-  fetchSecurityScoreTrend,
-  fetchAlertsSummary,
-  fetchComplianceOverview,
-  fetchTopRisks,
-  SecurityScoreTrendPoint,
-  AlertsSummaryDataPoint,
-  ComplianceOverview as ComplianceOverviewType, // Renomeado para evitar conflito com nome de componente
-  TopRisk
-} from '../services/reportsService'; // Importar os serviços
-
-// Dados de exemplo para os gráficos - REMOVIDOS, serão buscados
-// const sampleTrendData = [...]
-// const sampleAlertsBySeverityData = [...]
-
 const ReportsPage: React.FC = () => {
   const { t } = useTranslation();
+  const auth = useAuth();
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Estados para os dados dos relatórios
-  const [securityScoreTrend, setSecurityScoreTrend] = useState<SecurityScoreTrendPoint[]>([]);
-  const [alertsBySeverity, setAlertsBySeverity] = useState<AlertsSummaryDataPoint[]>([]);
-  const [complianceOverview, setComplianceOverview] = useState<ComplianceOverviewType | null>(null);
-  const [topRisks, setTopRisks] = useState<TopRisk[]>([]);
+  const [allAlerts, setAllAlerts] = useState<AlertType[]>([]);
+  const [timeRange, setTimeRange] = useState<string>('last7days');
 
-  // Estados para os filtros
-  const [selectedPeriod, setSelectedPeriod] = useState<'weekly' | 'monthly' | 'daily' | 'custom'>('weekly');
-  const [selectedProvider, setSelectedProvider] = useState<string>(''); // '' para todos
-  // TODO: Adicionar estados para range_start, range_end se selectedPeriod for 'custom'
+  const apiClient = useMemo(() => {
+    return axios.create({
+      baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+      headers: { 'Authorization': `Bearer ${auth.token}` }
+    });
+  }, [auth.token]);
 
-  // Estados de Carregamento
-  const [isLoadingTrend, setIsLoadingTrend] = useState(true);
-  const [isLoadingSeverity, setIsLoadingSeverity] = useState(true);
-  const [isLoadingCompliance, setIsLoadingCompliance] = useState(true);
-  const [isLoadingTopRisks, setIsLoadingTopRisks] = useState(true);
-
-  const [errorTrend, setErrorTrend] = useState<string | null>(null);
-  const [errorSeverity, setErrorSeverity] = useState<string | null>(null);
-  const [errorCompliance, setErrorCompliance] = useState<string | null>(null);
-  const [errorTopRisks, setErrorTopRisks] = useState<string | null>(null);
+  /**
+   * Busca todos os dados de alertas da API.
+   * Atualmente, busca um grande número de alertas e aplica filtros no frontend.
+   * Considerar otimizações futuras com filtros de data na API.
+   */
+  const fetchAlertsData = async () => {
+    if (!auth.isAuthenticated) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // TODO: Otimizar esta chamada de API.
+      // Atualmente, busca todos os alertas (até o limite) e filtra no frontend.
+      // Idealmente, a API deveria aceitar parâmetros como:
+      // - date_from, date_to (para filtrar por período diretamente no backend)
+      // - status (para buscar apenas 'OPEN' para certos relatórios)
+      // - campos_para_agregar (para que o backend já retorne dados agregados para gráficos)
+      // Exemplo de chamada otimizada: apiClient.get<AggregatedData>('/alerts/summary?period=last7days&group_by=severity')
+      const response = await apiClient.get<AlertType[]>('/alerts?limit=1000&sort_by=created_at&sort_order=desc');
+      setAllAlerts(response.data || []);
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || err.message || t('reportsPage.errorFetchingAlerts', 'Erro ao buscar alertas.');
+      setError(t('reportsPage.errorFetchingAlertsDetails', { error: errorMessage }));
+      setAllAlerts([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      // Filtros a serem passados para as funções de serviço
-      const filters = {
-        period: selectedPeriod,
-        provider: selectedProvider || undefined, // Envia undefined se '' para não enviar o parâmetro
-        // range_start e range_end seriam adicionados aqui se selectedPeriod for 'custom'
-      };
+    if (auth.isAuthenticated) {
+        fetchAlertsData();
+    }
+  }, [auth.isAuthenticated]);
 
-      try {
-        setIsLoadingTrend(true);
-        const trendData = await fetchSecurityScoreTrend(filters);
-        setSecurityScoreTrend(trendData);
-        setErrorTrend(null);
-      } catch (err) {
-        setErrorTrend(t('reportsPage.errorFetchingTrend'));
-      } finally {
-        setIsLoadingTrend(false);
-      }
+  // TODO: Esta filtragem por tempo deve ser movida para o backend quando a API for otimizada.
+  const filteredAlertsByTime = useMemo(() => {
+    if (timeRange === 'allTime' || !allAlerts.length) {
+      return allAlerts;
+    }
+    const now = new Date();
+    const daysToSubtract = timeRange === 'last7days' ? 7 : 30;
+    // Cria uma nova data para não modificar 'now' diretamente com setDate
+    const startDate = new Date(new Date().setDate(now.getDate() - daysToSubtract));
 
-      try {
-        setIsLoadingSeverity(true);
-        // Para alertsSummary, podemos querer manter group_by fixo ou torná-lo outro filtro
-        const severityData = await fetchAlertsSummary({ group_by: 'severity', ...filters });
-        setAlertsBySeverity(severityData);
-        setErrorSeverity(null);
-      } catch (err) {
-        setErrorSeverity(t('reportsPage.errorFetchingSeverity'));
-      } finally {
-        setIsLoadingSeverity(false);
-      }
+    return allAlerts.filter(alert => {
+      const alertDate = new Date(alert.created_at);
+      return alertDate >= startDate;
+    });
+  }, [allAlerts, timeRange]);
 
-      try {
-        setIsLoadingCompliance(true);
-        const complianceData = await fetchComplianceOverview({ provider: filters.provider }); // Apenas provider por enquanto
-        setComplianceOverview(complianceData);
-        setErrorCompliance(null);
-      } catch (err) {
-        setErrorCompliance(t('reportsPage.errorFetchingCompliance'));
-      } finally {
-        setIsLoadingCompliance(false);
-      }
+  // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
+  const severityData = useMemo<ChartDataItem[]>(() => calculateSeverityData(filteredAlertsByTime), [filteredAlertsByTime]);
 
-      try {
-        setIsLoadingTopRisks(true);
-        const risksData = await fetchTopRisks({ provider: filters.provider, limit: 10 }); // Provider e um limite exemplo
-        setTopRisks(risksData);
-        setErrorTopRisks(null);
-      } catch (err) {
-        setErrorTopRisks(t('reportsPage.errorFetchingTopRisks'));
-      } finally {
-        setIsLoadingTopRisks(false);
-      }
-    };
-    loadData();
-  }, [t, selectedPeriod, selectedProvider]); // Re-executar quando os filtros mudarem
+  // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
+  const providerData = useMemo<ChartDataItem[]>(() => calculateProviderData(filteredAlertsByTime), [filteredAlertsByTime]);
 
-  // Opções para os seletores de filtro
-  const periodOptions = [
-    { value: 'daily', label: t('reportsPage.filterOptions.daily', 'Daily') },
-    { value: 'weekly', label: t('reportsPage.filterOptions.weekly', 'Weekly') },
-    { value: 'monthly', label: t('reportsPage.filterOptions.monthly', 'Monthly') },
-    // { value: 'custom', label: t('reportsPage.filterOptions.custom', 'Custom Range') }, // Para quando DatePicker for implementado
-  ];
+  const openAlertsForTable = useMemo(() => {
+    return filteredAlertsByTime.filter(alert => alert.status === 'OPEN');
+  }, [filteredAlertsByTime]);
 
-  const providerOptions = [
-    { value: '', label: t('reportsPage.filterOptions.allProviders', 'All Providers') },
-    { value: 'AWS', label: 'AWS' },
-    { value: 'GCP', label: 'GCP' },
-    { value: 'Azure', label: 'Azure' },
-    { value: 'Huawei', label: 'Huawei Cloud' },
-    { value: 'GoogleWorkspace', label: 'Google Workspace' },
-  ];
-
-  // A definição do Select simulado foi removida. Usaremos o Select importado da Mantine.
+   const mockUpdateStatus = async (alertId: number, newStatus: string) => {
+    // Não faz nada, pois a página de relatórios é para visualização
+    // Apenas loga para o console se necessário para depuração
+    // console.warn(`Attempted to update status for alert ${alertId} to ${newStatus} from reports page.`);
+  };
 
   return (
     <div className="reports-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title order={1} ta="center" mb="xl">{t('reportsPage.title')}</Title> {/* Usar props Mantine */}
+      <Title order={1} ta="center" mb="xl">{t('reportsPage.title', 'Relatórios de Segurança')}</Title>
 
-      {/* Seção de Filtros */}
-      <Paper p="lg" shadow="xs" radius="md" withBorder mb="xl" style={{background: 'var(--mantine-color-gray-0)'}}> {/* Usar props e theme Mantine */}
-        <Title order={3} mb="lg" style={{borderBottom: `1px solid var(--mantine-color-gray-3)`, paddingBottom: 'var(--mantine-spacing-sm)'}}>{t('reportsPage.filtersTitle', 'Filters')}</Title>
-        <div style={{display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '20px'}}> {/* alignItems: flex-end para alinhar labels e inputs */}
-          <Select // Este agora é o Mantine Select
-            label={t('reportsPage.filterLabelPeriod', 'Period')}
-            placeholder={t('reportsPage.filterOptions.selectPeriod', 'Select period')}
-            data={periodOptions}
-            value={selectedPeriod}
-            onChange={(value) => setSelectedPeriod(value as any)} // value pode ser null se clearable
-            clearable
-            allowDeselect={false}
-            style={{minWidth: '200px'}}
-            comboboxProps={{ shadow: 'md', transitionProps: { transition: 'pop', duration: 200 } }}
+      <Paper withBorder p="md" mb="xl" shadow="xs" radius="md">
+        <Group>
+          <Select
+            label={t('reportsPage.timeRangeFilterLabel', 'Período')}
+            value={timeRange}
+            onChange={(value) => setTimeRange(value || 'last7days')}
+            data={[
+              { value: 'last7days', label: t('reportsPage.last7Days', 'Últimos 7 dias') },
+              { value: 'last30days', label: t('reportsPage.last30Days', 'Últimos 30 dias') },
+              { value: 'allTime', label: t('reportsPage.allTime', 'Todo o período') },
+            ]}
+            style={{width: '200px'}}
+            disabled={loading}
           />
-          <Select // Este agora é o Mantine Select
-            label={t('reportsPage.filterLabelProvider', 'Provider')}
-            placeholder={t('reportsPage.filterOptions.selectProvider', 'Select provider')}
-            data={providerOptions}
-            value={selectedProvider}
-            onChange={(value) => setSelectedProvider(value || '')} // value pode ser null, converter para ''
-            clearable
-            style={{minWidth: '200px'}}
-            comboboxProps={{ shadow: 'md', transitionProps: { transition: 'pop', duration: 200 } }}
-          />
-          {/* TODO: Adicionar DatePickers aqui se selectedPeriod for 'custom' */}
-        </div>
+          <MantineButton onClick={fetchAlertsData} loading={loading}>
+            {t('reportsPage.refreshDataButton', 'Atualizar Dados')}
+          </MantineButton>
+        </Group>
       </Paper>
 
-      {/* Layout dos Gráficos: Considerar um layout de grade (ex: 2 colunas) para melhor visualização */}
-      {/* Exemplo: <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px' }}> */}
-      <Paper>
-        <Title order={2}>{t('reportsPage.securityScoreTrendTitle')}</Title>
-        {isLoadingTrend && <p>{t('reportsPage.loadingData')}</p>}
-        {errorTrend && <p style={{ color: 'red' }}>{errorTrend}</p>}
-        {!isLoadingTrend && !errorTrend && securityScoreTrend.length === 0 && <p>{t('reportsPage.noDataAvailable')}</p>}
-        {!isLoadingTrend && !errorTrend && securityScoreTrend.length > 0 && (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={securityScoreTrend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis yAxisId="left" label={{ value: t('reportsPage.securityScoreAxisLabel'), angle: -90, position: 'insideLeft', style: {textAnchor: 'middle'} }} />
-              <YAxis yAxisId="right" orientation="right" label={{ value: t('reportsPage.alertsAxisLabel'), angle: 90, position: 'insideRight', style: {textAnchor: 'middle'} }} />
-              <Tooltip />
-              <Legend />
-              <Line yAxisId="left" type="monotone" dataKey="overallScore" name={t('reportsPage.overallScoreLegend')} stroke="#8884d8" activeDot={{ r: 6 }} dot={{ r: 3 }}/>
-              <Line yAxisId="right" type="monotone" dataKey="criticalAlerts" name={t('reportsPage.criticalAlertsLegend')} stroke="#ff7300" dot={{ r: 3 }} />
-              <Line yAxisId="right" type="monotone" dataKey="highAlerts" name={t('reportsPage.highAlertsLegend')} stroke="#ffc658" dot={{ r: 3 }} />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-        {/* Mostrar aviso de dados mockados se não houver erro e os dados forem os mockados (identificável pela presença de awsScore por ex.) */}
-        {!isLoadingTrend && !errorTrend && securityScoreTrend.some(d => d.awsScore !== undefined) && <p style={{marginTop: '10px', fontSize: '0.8em', color: '#777'}}>{t('reportsPage.dataDisclaimer')}</p>}
-      </Paper>
+      <ErrorMessage message={error} onClose={() => setError(null)} title={t('reportsPage.errorTitle', 'Report Error')} />
 
-      <Paper>
-        <Title order={2}>{t('reportsPage.alertsBySeverityTitle')}</Title>
-        {isLoadingSeverity && <p>{t('reportsPage.loadingData')}</p>}
-        {errorSeverity && <p style={{ color: 'red' }}>{errorSeverity}</p>}
-        {!isLoadingSeverity && !errorSeverity && alertsBySeverity.length === 0 && <p>{t('reportsPage.noDataAvailable')}</p>}
-        {!isLoadingSeverity && !errorSeverity && alertsBySeverity.length > 0 && (
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={alertsBySeverity} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              {/* A chave do XAxis deve corresponder ao que é retornado pelo backend (severity, provider, etc.) */}
-              <XAxis dataKey={alertsBySeverity[0]?.severity ? "severity" : (alertsBySeverity[0]?.provider ? "provider" : "name")} />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="count" name={t('reportsPage.alertCountLegend')} fill="#82ca9d" />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-         {!isLoadingSeverity && !errorSeverity && alertsBySeverity.length > 0 && <p style={{marginTop: '10px', fontSize: '0.8em', color: '#777'}}>{t('reportsPage.dataDisclaimer')}</p>}
-      </Paper>
+      {loading && !error && (
+        <>
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" mt="xl">
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Skeleton height={30} width="60%" mx="auto" mb="md" /> {/* Title Skeleton */}
+              <Skeleton height={300} /> {/* Chart Skeleton */}
+            </Paper>
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Skeleton height={30} width="60%" mx="auto" mb="md" /> {/* Title Skeleton */}
+              <Skeleton height={300} /> {/* Chart Skeleton */}
+            </Paper>
+          </SimpleGrid>
+          <Paper withBorder p="md" shadow="sm" radius="md" mt="xl">
+            <Skeleton height={30} width="40%" mb="md" /> {/* Title Skeleton */}
+            <Skeleton height={25} mt="md" /> {/* Table Row Skeleton */}
+            <Skeleton height={25} mt="xs" />
+            <Skeleton height={25} mt="xs" />
+          </Paper>
+        </>
+      )}
 
-      <Paper>
-        <Title order={2}>{t('reportsPage.complianceOverviewTitle')}</Title>
-        <p>{t('reportsPage.dataDisclaimer')}</p>
-        {/* TODO: Implementar visualização de compliance. Ex: Tabela ou gráfico de pizza */}
-        <p>{t('reportsPage.compliancePlaceholder')}</p>
-        {/* Exemplo:
-          <ResponsiveContainer height={200}>
-             <PieChart> <Pie data={complianceData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} fill="#8884d8" label /> <Tooltip/> </PieChart>
-          </ResponsiveContainer>
-        */}
-      </Paper>
+      {!loading && !error && (
+        <>
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" mt="xl">
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Title order={3} mb="md" ta="center">{t('reportsPage.alertsBySeverityTitle', 'Alertas por Severidade')}</Title>
+              {severityData.length > 0 ? (
+                <Box h={300}>
+                  <PieChart
+                    h={300}
+                    data={severityData}
+                    withTooltip
+                    tooltipDataSource="segment" // Mostra dados do segmento no tooltip
+                    valueFormatter={(value) => value.toLocaleString()} // Formata o valor no tooltip
+                  />
+                </Box>
+              ) : (
+                <Text ta="center">{t('reportsPage.noDataForSeverityChart', 'Sem dados para o gráfico de severidade.')}</Text>
+              )}
+            </Paper>
 
-      <Paper>
-        <Title order={2}>{t('reportsPage.topRisksTitle')}</Title>
-        <p>{t('reportsPage.dataDisclaimer')}</p>
-        {/* TODO: Implementar visualização dos principais riscos. Ex: Lista ou tabela */}
-        <p>{t('reportsPage.topRisksPlaceholder')}</p>
-        {/* Exemplo:
-          <ul>
-            {topRisks.map(risk => <li key={risk.id}>{risk.description} - Severity: {risk.severity}</li>)}
-          </ul>
-        */}
-      </Paper>
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Title order={3} mb="md" ta="center">{t('reportsPage.alertsByProviderTitle', 'Alertas por Provedor')}</Title>
+              {providerData.length > 0 ? (
+                <Box h={300}>
+                  <BarChart
+                    h={300}
+                    data={providerData}
+                    dataKey="name"
+                    series={[{ name: 'value', color: 'blue.6', label: t('reportsPage.countLabel', 'Contagem') }]} // A cor aqui é para a legenda, as cores das barras vêm do `data`
+                    tickLine="y"
+                    yAxisProps={{ domain: [0, 'auto'] }}
+                    valueFormatter={(value) => value.toLocaleString()}
+                    barProps={{
+                        // A cor é definida por item no `providerData`
+                    }}
+                  />
+                </Box>
+              ) : (
+                <Text ta="center">{t('reportsPage.noDataForProviderChart', 'Sem dados para o gráfico de provedor.')}</Text>
+              )}
+            </Paper>
+          </SimpleGrid>
 
+          <Paper withBorder p="md" shadow="sm" radius="md" mt="xl">
+            <Title order={3} mb="md">
+              {t('reportsPage.openAlertsTitle', 'Alertas Abertos')} ({timeRange === 'last7days' ? t('reportsPage.last7Days') : timeRange === 'last30days' ? t('reportsPage.last30Days') : t('reportsPage.allTime')})
+            </Title>
+            {openAlertsForTable.length > 0 ? (
+                <AlertsTable
+                    alerts={openAlertsForTable}
+                    title=""
+                    onUpdateStatus={mockUpdateStatus}
+                    canUpdateStatus={false}
+                />
+            ) : (
+                <Text>{t('reportsPage.noOpenAlerts', 'Nenhum alerta aberto encontrado para o período selecionado.')}</Text>
+            )}
+          </Paper>
+        </>
+      )}
     </div>
   );
 };

@@ -52,13 +52,42 @@
     "analyzeGWSUsersButton": "Analyze Workspace Users",
     "analyzeGWSSharedDrivesButton": "Analyze Shared Drives",
     "analyzingButton": "Analyzing...",
+    "fetchAllAlertsButton": "Fetch All Persisted Alerts",
+    "allPersistedAlerts": "All Persisted Alerts",
+    "alertsFoundFor": "Alerts Found for: {{type}}",
+    "unknownAnalysis": "Unknown Analysis",
+    "noAlertsFound": "No persisted alerts found at the moment.",
+    "errorFetchingAllAlerts": "Error fetching persisted alerts: {{error}}",
+    "noNewAlertsForAnalysis": "No new alerts generated for this analysis: {{type}}.",
     "alertsFound": "Alerts Found:",
-    "alertsFoundFor": "Alerts Found for {{type}}:",
     "noAlerts": "No alerts found or no resources to analyze.",
     "noAlertsFor": "No alerts found for {{type}} or no matching resources to analyze.",
     "errorFetchingAlerts": "Failed to fetch alerts.",
     "errorDuringAnalysis": "Error during {{provider}} {{type}} analysis: {{error}}",
-    "loadingMessage": "Loading {{type}} analysis..."
+    "errorNoPermissionToChangeStatus": "You do not have permission to change alert status.",
+    "errorUpdatingStatus": "Error updating alert status.",
+    "errorUpdatingAlertStatus": "Error updating status for alert ID {{alertId}}: {{error}}",
+    "azureSubscriptionIdInvalid": "Azure Subscription ID has an invalid format. It should be a GUID (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).",
+    "gwsAdminEmailInvalid": "Google Workspace Admin Email has an invalid format.",
+    "loadingMessage": "Loading {{type}} analysis...",
+    "errorTitle": "Error",
+    "analyzeHuaweiIAMUsersButton": "Analyze Huawei IAM Users",
+    "gcpLocationLabel": "GCP Location",
+    "gcpLocationPlaceholder": "e.g., us-central1 or us-central1-a",
+    "sccParentResourceLabel": "SCC Parent Resource",
+    "sccParentResourcePlaceholder": "e.g., organizations/123/sources/-",
+    "sccFilterLabel": "SCC Filter (Optional)",
+    "sccFilterPlaceholder": "e.g., state=\\"ACTIVE\\"",
+    "caiScopeLabel": "CAI Scope",
+    "caiScopePlaceholder": "e.g., projects/your-project-id",
+    "caiAssetTypesLabel": "CAI Asset Types (Optional)",
+    "caiAssetTypesPlaceholder": "e.g., compute.googleapis.com/Instance",
+    "analyzeSCCFindingsButton": "Analyze SCC Findings",
+    "analyzeCAIAssetsButton": "Analyze CAI Assets",
+    "analyzeGKEClustersButton": "Analyze GKE Clusters",
+    "m365AnalysisTitle": "Microsoft 365 Analysis",
+    "analyzeM365MfaButton": "Analyze Users MFA Status",
+    "analyzeM365CaButton": "Analyze Conditional Access Policies"
   },
   "alertItem": {
     "resource": "Resource ID:",
@@ -94,72 +123,122 @@
     "navDashboard": "Dashboard",
     "navReports": "Reports",
     "navInsights": "Insights",
+    "navSettings": "Settings",
     "btnLogout": "Logout"
   },
   "footer": {
     "copyright": "© {{year}} CSPMEXA. All rights reserved."
   },
+  "alertStatus": {
+    "OPEN": "Open",
+    "ACKNOWLEDGED": "Acknowledged",
+    "RESOLVED": "Resolved",
+    "IGNORED": "Ignored"
+  },
   "reportsPage": {
-    "title": "Reports & Indicators",
-    "securityScoreTrendTitle": "Security Score Trend",
+    "title": "Security Reports",
+    "timeRangeFilterLabel": "Period",
+    "last7Days": "Last 7 days",
+    "last30Days": "Last 30 days",
+    "allTime": "All time",
+    "refreshDataButton": "Refresh Data",
+    "loadingData": "Loading report data...",
+    "errorFetchingAlerts": "Error fetching alert data for reports.",
+    "errorFetchingAlertsDetails": "Error fetching alert data for reports: {{error}}",
+    "errorTitle": "Report Error",
     "alertsBySeverityTitle": "Alerts by Severity",
-    "complianceOverviewTitle": "Compliance Overview",
-    "topRisksTitle": "Top Risks",
-    "dataDisclaimer": "Note: Data displayed is sample data. Integration with backend required for actual metrics.",
-    "compliancePlaceholder": "Compliance status visualization will be here.",
-    "topRisksPlaceholder": "Top risks list or chart will be here.",
-    "loadingData": "Loading data...",
-    "noDataAvailable": "No data available for this report.",
-    "errorFetchingTrend": "Error fetching security score trend data.",
-    "errorFetchingSeverity": "Error fetching alerts by severity data.",
-    "errorFetchingCompliance": "Error fetching compliance overview data.",
-    "errorFetchingTopRisks": "Error fetching top risks data.",
-    "securityScoreAxisLabel": "Security Score",
-    "alertsAxisLabel": "# of Alerts",
-    "overallScoreLegend": "Overall Score",
-    "criticalAlertsLegend": "Critical Alerts",
-    "highAlertsLegend": "High Alerts",
-    "alertCountLegend": "Count",
-    "filtersTitle": "Filters",
-    "filterLabelPeriod": "Period",
-    "filterLabelProvider": "Provider",
-    "filterOptions": {
-      "daily": "Daily",
-      "weekly": "Weekly",
-      "monthly": "Monthly",
-      "allProviders": "All Providers",
-      "selectPeriod": "Select period",
-      "selectProvider": "Select provider"
-    }
+    "countLabel": "Count",
+    "noDataForSeverityChart": "No data for severity chart.",
+    "alertsByProviderTitle": "Alerts by Provider",
+    "noDataForProviderChart": "No data for provider chart.",
+    "openAlertsTitle": "Open Alerts",
+    "noOpenAlerts": "No open alerts found for the selected period."
   },
   "insightsPage": {
     "title": "Security Insights",
-    "criticalAssetsTitle": "Critical Assets at Risk",
-    "attackPathsTitle": "Potential Attack Paths (Simplified)",
-    "proactiveRecommendationsTitle": "Proactive Recommendations",
-    "placeholder": "Insight data and visualizations will be displayed here once backend endpoints are available.",
-    "dataDisclaimer": "Note: Backend integration required for actual insights.",
-    "loadingCriticalAssets": "Loading critical assets...",
-    "errorCriticalAssets": "Error loading critical assets:",
-    "noCriticalAssets": "No critical assets identified at the moment.",
-    "assetId": "Asset ID:",
-    "riskScore": "Risk Score:",
-    "relatedAlerts": "Related Alerts:",
-    "loadingAttackPaths": "Loading potential attack paths...",
-    "errorAttackPaths": "Error loading attack paths:",
-    "noAttackPaths": "No potential attack paths identified at the moment.",
-    "attackPathId": "Path ID:",
-    "attackPathDescription": "Description:",
-    "pathSegments": "Segments:",
-    "loadingRecommendations": "Loading proactive recommendations...",
-    "errorRecommendations": "Error loading recommendations:",
-    "noRecommendations": "No proactive recommendations available at the moment.",
-    "recommendationCategory": "Category:",
-    "recommendationSeverity": "Severity:"
+    "refreshDataButton": "Refresh Insights (Open Alerts)",
+    "description": "This page analyzes OPEN alerts to provide information on top vulnerabilities and violated policies.",
+    "loadingData": "Loading insights...",
+    "errorFetchingAlerts": "Error fetching alert data for insights.",
+    "errorFetchingAlertsDetails": "Error fetching alert data for insights: {{error}}",
+    "errorTitle": "Insight Error",
+    "noOpenAlerts": "No open alerts found to generate insights at the moment.",
+    "topViolatedPoliciesTitle": "Top 5 Most Violated Policies",
+    "alertSuffixSingular": "alert",
+    "alertsSuffixPlural": "alerts",
+    "noPolicyData": "No violated policy data to display.",
+    "topVulnerableResourcesTitle": "Top 5 Most Vulnerable Resources",
+    "noResourceData": "No vulnerable resource data to display."
   },
   "oauthCallback": {
     "processing": "Processing login...",
     "error": "OAuth Error: {{error}}",
+    "errorProcessing": "Error processing login. Please try again.",
     "invalidCallback": "Invalid callback state."
+  },
+  "common": {
+    "errorTitle": "An Error Occurred"
+  },
+  "navbar": {
+    "mainMenu": "Main Menu",
+    "providersMenu": "Providers"
+  },
+  "dashboard": {
+    "welcome": {
+      "title": "Welcome to the Dashboard",
+      "subtitle": "Select a provider from the menu to start an analysis."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "menu": {
+      "notifications": "Notifications",
+      "users": "User Management"
+    },
+    "notifications": {
+      "title": "Notification Settings",
+      "email": {
+        "title": "Email Recipients",
+        "description": "Add email addresses to receive critical alert notifications.",
+        "placeholder": "new.email@example.com",
+        "addButton": "Add Email"
+      },
+      "webhook": {
+        "title": "Webhooks",
+        "description": "Configure webhook URLs to receive alert data as JSON payloads.",
+        "tableNameHeader": "Name",
+        "tableUrlHeader": "URL",
+        "addButton": "Add Webhook",
+        "addModalTitle": "Add New Webhook",
+        "form": {
+          "nameLabel": "Name",
+          "namePlaceholder": "e.g., Slack Alerts",
+          "urlLabel": "URL",
+          "addButton": "Add Webhook"
+        }
+      },
+      "gchat": {
+        "title": "Google Chat Webhooks",
+        "description": "Configure Google Chat webhooks to receive formatted alert cards in your spaces.",
+        "noWebhooks": "No Google Chat webhooks configured.",
+        "addButton": "Add Google Chat Webhook",
+        "addModalTitle": "Add New Google Chat Webhook"
+      }
+    },
+    "users": {
+        "title": "User Management",
+        "table": {
+            "id": "ID",
+            "email": "Email",
+            "name": "Name",
+            "role": "Role",
+            "actions": "Actions"
+        }
+    },
+    "accessDenied": {
+      "title": "Access Denied",
+      "message": "You do not have permission to view this page.",
+      "button": "Take me to the dashboard"
+    }
   }
 }

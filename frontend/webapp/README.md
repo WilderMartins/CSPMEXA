@@ -19,8 +19,9 @@ A aplicação é construída como um Single Page Application (SPA).
     *   `ts-jest` para integração do Jest com TypeScript.
     *   `@testing-library/jest-dom` para matchers customizados.
     *   `axios-mock-adapter` para mockar chamadas Axios em testes.
-*   **Recharts:** Para renderização de gráficos nos dashboards.
-*   **(Planejado/Simulado)** Uma biblioteca de componentes UI como [Mantine UI](https://mantine.dev/), Chakra UI, ou similar para padronização visual e componentes reutilizáveis. Os exemplos atuais usam simulações desses componentes.
+*   **@mantine/core & @mantine/hooks:** Biblioteca de componentes UI e hooks.
+*   **@mantine/charts:** Para renderização de gráficos.
+*   **@tabler/icons-react:** Biblioteca de ícones usada com Mantine.
 
 ## 3. Estrutura de Pastas (Principais)
 
@@ -35,22 +36,25 @@ frontend/webapp/
 ├── src/                        # Código fonte da aplicação
 │   ├── assets/                 # Imagens, fontes, etc.
 │   ├── components/             # Componentes React reutilizáveis
-│   │   └── Dashboard/          # Componentes específicos do Dashboard
-│   │       ├── ProviderAnalysisSection.tsx
-│   │   ├── ProviderAnalysisSection.tsx
-│   │       └── AlertsTable.tsx
-│   │   └── Insights/             # Componentes específicos do Dashboard de Insights
+│   │   ├── Dashboard/          # Componentes específicos do Dashboard
+│   │   │   ├── ProviderAnalysisSection.tsx
+│   │   │   ├── ProviderAnalysisSection.test.tsx
+│   │   │   ├── AlertsTable.tsx
+│   │   │   └── AlertsTable.test.tsx
+│   │   └── Insights/           # Componentes específicos para a página de Insights
 │   │       ├── CriticalAssetsDisplay.tsx
+│   │       ├── CriticalAssetsDisplay.test.tsx
 │   │       ├── AttackPathsDisplay.tsx
-│   │       └── ProactiveRecommendationsDisplay.tsx
+│   │       ├── AttackPathsDisplay.test.tsx
+│   │       ├── ProactiveRecommendationsDisplay.tsx
+│   │       └── ProactiveRecommendationsDisplay.test.tsx
 │   ├── contexts/               # Contextos React (ex: AuthContext.tsx)
 │   ├── pages/                  # Componentes de página (mapeados para rotas)
 │   │   ├── DashboardPage.tsx
 │   │   ├── LoginPage.tsx
 │   │   ├── ReportsPage.tsx
 │   │   └── InsightsPage.tsx
-│   ├── services/               # Lógica de chamada de API e manipulação de dados
-│   │   └── reportsService.ts
+│   ├── services/               # Lógica de chamada de API e manipulação de dados (ex: reportsService.ts)
 │   ├── App.tsx                 # Componente raiz da aplicação, define rotas e layout principal
 │   ├── main.tsx                # Ponto de entrada da aplicação, renderiza o App
 │   ├── i18n.ts                 # Configuração do i18next
@@ -148,13 +152,44 @@ Para detalhes sobre os endpoints de API e schemas de dados que o frontend espera
     2.  Importe e utilize no local desejado.
     3.  Se o componente tiver lógica complexa ou estado próprio, considere escrever testes para ele.
 
-## 8. Considerações Futuras e Melhorias
+## 9. Considerações Futuras e Melhorias
 
-*   **Integração completa de uma Biblioteca de Componentes UI:** Para melhorar a consistência visual, acessibilidade e velocidade de desenvolvimento.
-*   **Gerenciamento de Estado Avançado:** Se a complexidade da aplicação crescer muito, considerar bibliotecas como Zustand ou Jotai para estados globais além da autenticação.
+*   **Integração completa de uma Biblioteca de Componentes UI:** (Concluído com Mantine) - Manter foco em utilizar consistentemente os componentes Mantine.
+*   **Gerenciamento de Estado Avançado:** Se a complexidade da aplicação crescer muito, considerar bibliotecas como Zustand ou Jotai para estados globais específicos, complementando o React Context.
 *   **Otimizações de Performance:** Continuar monitorando e aplicando otimizações como code splitting, virtualização de listas longas, etc.
 *   **Cobertura de Testes:** Expandir a cobertura de testes para abranger mais cenários e componentes.
-*   **Tratamento de Erros e Notificações:** Implementar um sistema de notificações global (ex: toasts) para feedback ao usuário.
+*   **Tratamento de Erros e Notificações:** Implementar um sistema de notificações global (ex: toasts) para feedback ao usuário (parcialmente melhorado com `ErrorMessage.tsx`).
+
+## 10. Fluxo de Dados para Relatórios e Insights (Considerações de Performance)
+
+Atualmente, as páginas de Relatórios (`ReportsPage.tsx`) e Insights (`InsightsPage.tsx`) operam da seguinte maneira:
+
+1.  **Busca de Dados:** Ambas as páginas buscam uma lista potencialmente grande de alertas (todos os alertas ou todos os alertas abertos, com um limite alto) da API (`GET /alerts`).
+2.  **Processamento no Frontend:**
+    *   A filtragem por período (para relatórios) é feita no frontend.
+    *   A agregação de dados para gerar as contagens para os gráficos (ex: alertas por severidade, por provedor) e para os insights (top políticas, top recursos) também é realizada no frontend, utilizando `useMemo` hooks para otimizar o re-cálculo.
+
+**Limitações da Abordagem Atual:**
+
+*   **Performance:** Para um grande volume de alertas, buscar todos os dados e processá-los no cliente pode se tornar lento e consumir muita memória no navegador.
+*   **Transferência de Dados:** Tráfego de rede desnecessário ao buscar dados que poderiam ser agregados ou filtrados no backend.
+
+**Otimizações Sugeridas (Dependem de Evolução do Backend):**
+
+Para melhorar a performance e escalabilidade, as seguintes otimizações na API de backend são recomendadas:
+
+1.  **Endpoints de Agregação para Relatórios:**
+    *   A API poderia expor endpoints que já retornam dados agregados.
+    *   Exemplo: `GET /api/v1/reports/alerts-by-severity?period=last7days` retornaria `{ "CRITICAL": 10, "HIGH": 25, ... }`.
+    *   Exemplo: `GET /api/v1/reports/alerts-by-provider?period=last30days`.
+2.  **Endpoints de Agregação para Insights:**
+    *   Similarmente, endpoints para buscar diretamente os "top N" dados.
+    *   Exemplo: `GET /api/v1/insights/top-violated-policies?count=5&status=OPEN`
+    *   Exemplo: `GET /api/v1/insights/top-vulnerable-resources?count=5&status=OPEN`
+3.  **Filtragem Avançada no Endpoint `/alerts`:**
+    *   Permitir filtros mais granulares diretamente na API, como `date_from`, `date_to`, `status`, e outros campos relevantes, para que o frontend busque apenas o subconjunto de alertas necessário para tabelas detalhadas.
+
+Os arquivos `frontend/webapp/src/utils/reportUtils.ts` e `frontend/webapp/src/utils/insightUtils.ts` contêm a lógica de processamento que atualmente reside no frontend. Com a evolução da API, essa lógica seria gradualmente substituída por chamadas diretas aos novos endpoints otimizados. Os comentários `// TODO:` nos arquivos `ReportsPage.tsx` e `InsightsPage.tsx` indicam os locais onde essas otimizações seriam integradas.
 
 Este README serve como um guia inicial para o desenvolvimento do frontend do CSPMEXA.
 ```
