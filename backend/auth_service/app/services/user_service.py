@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from app.models.user_model import User
-from app.schemas.user_schema import UserCreate # Pode ser útil, ou criar um schema específico para OAuth
+from app.models.user_model import User, UserRole # Importar UserRole
+from app.schemas.user_schema import UserCreate, UserUpdateByAdmin # UserUpdateByAdmin é usado no tipo hint
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,9 @@ class UserService:
             google_id=google_id,
             full_name=full_name,
             profile_picture_url=profile_picture_url,
-            is_active=True, # Default, mas explícito
-            is_superuser=False, # Default, mas explícito
-            # role é 'user' por default no modelo
+            is_active=True,
+            is_superuser=False, # Manter is_superuser para compatibilidade ou usos futuros específicos
+            role=UserRole.USER # Definir explicitamente o papel padrão na criação
         )
         db.add(db_user)
         db.commit()
@@ -124,8 +124,10 @@ class UserService:
         db.refresh(user_to_update)
         return user_to_update
 
-    def set_user_role(self, db: Session, user: User, role: str) -> User:
-        # Adicionar validação para o 'role' se houver um enum de roles permitidos
+    def set_user_role(self, db: Session, user: User, role: UserRole) -> User:
+        """Define o papel de um usuário. O input 'role' deve ser um membro do Enum UserRole."""
+        if not isinstance(role, UserRole):
+            raise ValueError("O papel fornecido deve ser um membro do Enum UserRole.")
         user.role = role
         db.add(user)
         db.commit()
@@ -134,27 +136,33 @@ class UserService:
 
     def set_initial_admin_user(self, db: Session) -> Optional[User]:
         """
-        Define o primeiro usuário encontrado (ou um usuário específico por email) como admin,
-        se nenhum admin existir. Útil para setup inicial.
-        Retorna o usuário admin ou None se nenhum usuário foi modificado/encontrado.
+        Define o primeiro usuário encontrado como SuperAdministrator,
+        se nenhum SuperAdministrator existir. Útil para setup inicial.
+        Retorna o usuário SuperAdministrator ou None se nenhum usuário foi modificado/encontrado.
         """
-        # Verificar se já existe algum admin
-        admin_user = db.query(User).filter(User.role == "admin").first()
-        if admin_user:
-            logger.info(f"Admin user already exists: {admin_user.email}")
-            return admin_user
+        # Verificar se já existe algum SuperAdministrator
+        super_admin_user = db.query(User).filter(User.role == UserRole.SUPER_ADMINISTRATOR).first()
+        if super_admin_user:
+            logger.info(f"SuperAdministrator user already exists: {super_admin_user.email}")
+            return super_admin_user
 
-        # Se não houver admin, tornar o primeiro usuário (ordenado por ID) um admin
-        # Ou, alternativamente, procurar por um email específico configurado via .env
-        # first_user_email = settings.FIRST_SUPERUSER_EMAIL # Necessário adicionar FIRST_SUPERUSER_EMAIL às settings
-        # first_user = self.get_user_by_email(db, email=first_user_email)
+        # Alternativamente, verificar por Administrator também, se a lógica for essa
+        admin_user = db.query(User).filter(User.role == UserRole.ADMINISTRATOR).first()
+        if admin_user: # Se já houver um admin, talvez não criar um super automaticamente? Ou promover?
+            logger.info(f"Administrator user exists: {admin_user.email}. Consider promoting or defining SuperAdmin manually if needed.")
+            # Dependendo da lógica desejada, pode-se parar aqui ou continuar para criar um SuperAdmin
+            # return admin_user # Se um Admin já for suficiente
+
+        # Se não houver SuperAdmin, tornar o primeiro usuário (ordenado por ID) um SuperAdmin
         first_user = db.query(User).order_by(User.id).first()
 
         if first_user:
-            logger.info(f"Setting user {first_user.email} (ID: {first_user.id}) as initial admin.")
-            return self.set_user_role(db, user=first_user, role="admin")
+            logger.info(f"Setting user {first_user.email} (ID: {first_user.id}) as initial SuperAdministrator.")
+            # Adicionalmente, pode-se definir is_superuser = True, embora redundante com o role.
+            first_user.is_superuser = True
+            return self.set_user_role(db, user=first_user, role=UserRole.SUPER_ADMINISTRATOR)
         else:
-            logger.warning("No users found in the database to set as initial admin.")
+            logger.warning("No users found in the database to set as initial SuperAdministrator.")
             return None
 
 user_service = UserService()

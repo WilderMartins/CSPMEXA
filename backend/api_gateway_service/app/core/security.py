@@ -1,9 +1,34 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from pydantic import BaseModel, ValidationError
-from typing import Optional
+from pydantic import BaseModel, ValidationError # Importar Field se usar Pydantic V2 com default_factory
+from typing import Optional, List
+import enum # Para o Enum de Roles
+
 from app.core.config import settings
+
+
+# Definir os papéis aqui para que o security module os conheça.
+# Idealmente, isso viria de um local compartilhado se o auth_service também precisasse referenciá-lo
+# diretamente, mas como o token JWT conterá o valor string do UserRole do auth_service,
+# podemos definir um Enum correspondente aqui para facilitar a verificação.
+class UserRoleEnum(str, enum.Enum):
+    USER = "User"
+    TECHNICAL_LEAD = "TechnicalLead"
+    MANAGER = "Manager"
+    ADMINISTRATOR = "Administrator"
+    SUPER_ADMINISTRATOR = "SuperAdministrator"
+
+# Hierarquia dos papéis (do menos privilegiado para o mais privilegiado)
+# Isso ajudará a verificar se um usuário tem um papel "igual ou superior"
+ROLE_HIERARCHY = {
+    UserRoleEnum.USER: 1,
+    UserRoleEnum.TECHNICAL_LEAD: 2,
+    UserRoleEnum.MANAGER: 3,
+    UserRoleEnum.ADMINISTRATOR: 4,
+    UserRoleEnum.SUPER_ADMINISTRATOR: 5,
+}
+
 
 # Este é o URL que o frontend usaria para "logar" (obter o token).
 # No nosso caso, o login é via Google, e o token é obtido após o callback.
@@ -74,37 +99,84 @@ async def require_role(required_role: str, current_user: TokenData = Depends(get
     Verifica se o usuário atual possui o role especificado.
     Levanta HTTPException 403 se o role não corresponder.
     """
-    if not current_user.role or current_user.role.lower() != required_role.lower():
+    Verifica se o usuário atual possui o papel especificado ou um superior na hierarquia.
+    Levanta HTTPException 403 se o papel não for suficiente.
+    `required_role` pode ser um valor string do Enum UserRoleEnum.
+    """
+    if not current_user.role:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"User does not have the required '{required_role}' role.",
+            detail="User role is not defined in token.",
         )
-    return current_user
+    try:
+        # O 'role' no token é uma string, ex: "User", "Administrator"
+        user_role_enum_value = UserRoleEnum(current_user.role)
 
-async def require_admin_role(current_user: TokenData = Depends(get_current_user)):
-    """
-    Dependência específica para verificar se o usuário é um 'admin'.
-    """
-    return await require_role(required_role="admin", current_user=current_user)
+        # required_role (string) deve ser um valor do UserRoleEnum
+        if isinstance(required_role, str):
+            required_role_enum_value = UserRoleEnum(required_role)
+        elif isinstance(required_role, UserRoleEnum): # Se já for Enum (uso interno)
+            required_role_enum_value = required_role
+        else:
+            raise HTTPException(status_code=500, detail="Invalid required_role type for permission check.")
 
-async def require_user_role(current_user: TokenData = Depends(get_current_user)):
-    """
-    Dependência específica para verificar se o usuário é um 'user' (ou qualquer role não-admin,
-    se a lógica for apenas admin vs não-admin).
-    Para ser mais explícito, pode-se verificar se o role é 'user'.
-    Se um admin também puder fazer ações de usuário, essa verificação é mais simples.
-    """
-    # Se admin pode fazer tudo que user faz, então get_current_user é suficiente.
-    # Se for para distinguir estritamente, usar require_role("user", current_user)
-    # ou verificar if current_user.role not in ["admin", "outro_role_privilegiado"]
-    if not current_user.role: # Garante que o role existe
-         raise HTTPException(
+    except ValueError:
+        # Se o role no token ou o required_role não for um valor válido do Enum UserRoleEnum
+        raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="User role is not defined.",
+            detail=f"Invalid role specified or found in token. User role: '{current_user.role}'. Allowed roles: {[r.value for r in UserRoleEnum]}.",
         )
-    # Esta implementação permite qualquer usuário autenticado que tenha um role.
-    # Para restringir a apenas 'user' ou 'admin', use require_role.
+
+    user_level = ROLE_HIERARCHY.get(user_role_enum_value, 0)
+    required_level = ROLE_HIERARCHY.get(required_role_enum_value, float('inf'))
+
+    if user_level < required_level:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"User role '{current_user.role}' does not meet minimum requirement of '{required_role_enum_value.value}'.",
+        )
     return current_user
+
+# Funções de dependência específicas para cada nível mínimo de papel
+
+async def get_current_active_user(user: TokenData = Depends(get_current_user)): # Renomeado param para 'user'
+    # Esta função é um alias para get_current_user, mas pode ser expandida para verificar se o usuário está ativo
+    # se essa lógica for movida do auth_service para o gateway ou se o token tiver um claim 'is_active'.
+    # Por enquanto, get_current_user já garante um token válido.
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Inactive user or invalid token")
+    return user
+
+
+async def require_user(current_user: TokenData = Depends(get_current_active_user)):
+    return await require_role(UserRoleEnum.USER.value, current_user)
+
+async def require_technical_lead(current_user: TokenData = Depends(get_current_active_user)):
+    return await require_role(UserRoleEnum.TECHNICAL_LEAD.value, current_user)
+
+async def require_manager(current_user: TokenData = Depends(get_current_active_user)):
+    return await require_role(UserRoleEnum.MANAGER.value, current_user)
+
+async def require_administrator(current_user: TokenData = Depends(get_current_active_user)):
+    return await require_role(UserRoleEnum.ADMINISTRATOR.value, current_user)
+
+async def require_super_administrator(current_user: TokenData = Depends(get_current_active_user)):
+    return await require_role(UserRoleEnum.SUPER_ADMINISTRATOR.value, current_user)
+
+
+# require_admin_role antigo agora verifica UserRoleEnum.ADMINISTRATOR ou superior.
+async def require_admin_role(current_user: TokenData = Depends(get_current_active_user)):
+    """
+    Dependência específica para verificar se o usuário é um 'Administrator' ou superior.
+    """
+    return await require_role(required_role=UserRoleEnum.ADMINISTRATOR.value, current_user=current_user)
+
+# require_user_role antigo agora verifica UserRoleEnum.USER ou superior.
+async def require_user_role(current_user: TokenData = Depends(get_current_active_user)):
+    """
+    Dependência específica para verificar se o usuário tem pelo menos o papel 'User'.
+    """
+    return await require_role(required_role=UserRoleEnum.USER.value, current_user=current_user)
 
 
 # Exemplo de como seria uma dependência para superusuário (se 'is_superuser' estivesse no token)

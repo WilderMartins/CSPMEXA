@@ -2,18 +2,11 @@ from fastapi import FastAPI
 from app.core.config import settings
 from app.api.v1 import analysis_controller # Assuming your analysis controller is here
 from app.api.v1 import alerts_controller  # Import the new alerts controller
-from app.db.session import engine # Import engine for creating tables
-from app.models.alert_model import Base as AlertBase # Import Base from your models
+# from app.db.session import engine # No longer needed here for create_all
+# from app.models.alert_model import Base as AlertBase # No longer needed here for create_all
 
-# Function to create tables, can be called on startup for development/simplicity
-# For production, Alembic migrations are preferred.
-def create_db_and_tables():
-    # This will create tables based on models that use AlertBase
-    AlertBase.metadata.create_all(bind=engine)
-    # If you have other Bases for other models, create them here as well.
-    # e.g., from app.models.other_model import Base as OtherBase
-    # OtherBase.metadata.create_all(bind=engine)
-
+# A criação de tabelas agora é gerenciada pelo Alembic no auth_service.
+# A função create_db_and_tables() e sua chamada em on_startup são removidas.
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -22,14 +15,14 @@ app = FastAPI(
     # For older versions, use @app.on_event("startup") and @app.on_event("shutdown")
 )
 
-@app.on_event("startup")
-async def on_startup():
-    # Create database tables on startup
-    # In a production environment, you would typically use Alembic migrations
-    # This is okay for development or simple deployments
-    print("Creating database tables for Policy Engine Service...")
-    create_db_and_tables()
-    print("Database tables created (if they didn't exist).")
+# @app.on_event("startup")
+# async def on_startup():
+#     # A criação de tabelas foi movida para as migrações Alembic
+#     # gerenciadas a partir do auth_service, já que compartilham o mesmo DB.
+#     # print("Creating database tables for Policy Engine Service...")
+#     # create_db_and_tables() # Removido
+#     # print("Database tables created (if they didn't exist).")
+#     pass
 
 
 @app.get("/health", tags=["Health Check"])

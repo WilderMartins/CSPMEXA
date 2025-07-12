@@ -7,15 +7,27 @@ from alembic import context
 # Ajuste os imports conforme a estrutura do seu projeto FastAPI
 import sys
 from pathlib import Path
-# Adiciona o diretório 'app' ao sys.path para que possamos importar de app.*
-# Isso assume que env.py está em backend/auth_service/alembic/ e o app está em backend/auth_service/app/
-APP_DIR = Path(__file__).resolve().parent.parent.parent / "app"
-sys.path.insert(0, str(APP_DIR.parent)) # Adiciona backend/auth_service/ ao path
-                                       # para que 'from app...' funcione
+# Adiciona o diretório 'backend' ao sys.path para que possamos importar de outros serviços
+# Isso assume que env.py está em backend/auth_service/alembic/
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent.parent
+sys.path.insert(0, str(BACKEND_DIR))
 
-from app.db.session import Base # Base está em app.db.session
-from app.models.user_model import User # Modelo User existente
-from app.models.alert_model import Alert # Importar o novo modelo Alert
+# Modelos do auth_service
+from auth_service.app.db.session import Base as AuthBase
+from auth_service.app.models.user_model import User as AuthUser
+
+# Modelos do policy_engine_service (especificamente o AlertModel)
+# Certifique-se que policy_engine_service.app.models.alert_model não tem dependências circulares
+# ou complexas que dificultem a importação aqui.
+try:
+    from policy_engine_service.app.models.alert_model import Base as PolicyEngineAlertBase
+    # O modelo Alert em si não é explicitamente necessário aqui se usarmos target_metadata = [AuthBase.metadata, PolicyEngineAlertBase.metadata]
+    # from policy_engine_service.app.models.alert_model import Alert as PolicyEngineAlert
+except ImportError as e:
+    print(f"Erro ao importar modelos do policy_engine_service: {e}")
+    print("Verifique se o policy_engine_service está estruturado corretamente e PYTHONPATH está configurado se rodar alembic CLI manualmente.")
+    PolicyEngineAlertBase = None
+
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,7 +40,13 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-target_metadata = Base.metadata
+# target_metadata = Base.metadata # Antigo
+
+# Para múltiplos MetaData de diferentes Bases (de diferentes serviços/modelos)
+target_metadata_list = [AuthBase.metadata]
+if PolicyEngineAlertBase:
+    target_metadata_list.append(PolicyEngineAlertBase.metadata)
+target_metadata = target_metadata_list
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

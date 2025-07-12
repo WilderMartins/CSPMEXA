@@ -21,10 +21,19 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **S3:** Detalhes de buckets, ACLs, políticas, versionamento, logging, configuração de bloqueio de acesso público.
     *   **EC2:** Detalhes de instâncias (estado, tipo, IPs, perfil IAM, SGs, tags, região), Security Groups (regras de entrada/saída, tags, região).
     *   **IAM:** Detalhes de usuários (políticas, MFA, chaves de acesso com último uso, tags), Roles (políticas, assume role policy, último uso, tags), Políticas gerenciadas (documento da política).
+    *   **RDS:** Detalhes de instâncias (configuração, status, endpoint, SGs, MultiAZ, criptografia, backups, logging, etc.), tags.
 *   **Motor de Políticas AWS (Básico):**
     *   **S3:** Verificações para ACLs públicas, políticas públicas, versionamento desabilitado, logging desabilitado.
     *   **EC2:** Verificações para Security Groups com acesso público total ou a portas específicas (SSH, RDP), instâncias com IP público, instâncias sem perfil IAM.
     *   **IAM Users:** Verificações para MFA desabilitado, chaves de acesso não utilizadas, chaves de acesso ativas para usuário root.
+    *   **RDS:** Verificações para instâncias publicamente acessíveis, armazenamento não criptografado, backups desabilitados ou com baixa retenção.
+*   **Persistência de Alertas:**
+    *   Os alertas gerados pelo `policy_engine_service` são persistidos em um banco de dados PostgreSQL, permitindo consulta e gerenciamento (listagem, filtragem, atualização de status) via API.
+*   **Serviço de Notificação (`notification_service`):**
+    *   **E-mail:** Envio de notificações para alertas críticos via e-mail (configurável para usar AWS SES ou SMTP genérico).
+    *   **Webhook:** Capacidade de enviar dados de alertas para URLs de webhook configuráveis.
+    *   **Google Chat:** Capacidade de enviar mensagens de alerta formatadas para webhooks de espaços do Google Chat.
+    *   *Nota: A ativação e configuração específica de cada canal (e para quais alertas/severidades são enviados) é gerenciada no backend, com algumas configurações globais via variáveis de ambiente.*
 *   **Coleta de Dados Google Workspace:**
     *   **Usuários:** Detalhes de usuários (ID, email, nome, status de admin, status de 2SV/MFA, último login, data de criação, status da conta - suspenso/arquivado, OU).
     *   **Drive (MVP):** Foco em Drives Compartilhados - Detalhes (ID, nome, restrições de compartilhamento como `domainUsersOnly`, `driveMembersOnly`), e identificação de arquivos dentro desses drives que estão compartilhados publicamente ou via link "qualquer pessoa com o link".
@@ -41,10 +50,12 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
     *   **Cloud Storage:** Detalhes de buckets (IAM, versionamento, logging).
     *   **Compute Engine:** Detalhes de VMs (IPs, Service Accounts, tags), Firewalls VPC (regras).
     *   **IAM:** Políticas IAM a nível de projeto.
+    *   **GKE (Google Kubernetes Engine):** Detalhes de clusters (configuração, node pools, versões, status, networking, private cluster config, network policy, addons, logging/monitoring, autopilot), localização.
 *   **Motor de Políticas GCP (Básico):**
     *   **Cloud Storage:** Verificações para buckets públicos (IAM), versionamento desabilitado, logging desabilitado.
     *   **Compute Engine:** Verificações para VMs com IP público, VMs com Service Account padrão e acesso total, Firewalls VPC permitindo acesso público irrestrito.
     *   **IAM (Projeto):** Verificações para membros externos (`allUsers`, `allAuthenticatedUsers`) com papéis primitivos (Owner, Editor, Viewer).
+    *   **GKE:** Verificações para endpoint público do master, NetworkPolicy desabilitada, auto-upgrade de nós desabilitado, integração de logging/monitoring incompleta.
 *   **Coleta de Dados Huawei Cloud:**
     *   **OBS (Object Storage Service):** Detalhes de buckets (política, ACL, versionamento, logging).
     *   **ECS (Elastic Cloud Server):** Detalhes de VMs (IPs, SGs associados, etc.).

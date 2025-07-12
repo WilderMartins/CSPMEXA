@@ -234,6 +234,60 @@ class PolicyEngine:
                 generated_alert_data_list.extend(drive_alerts_data)
             else:
                 logger.warning(f"Unsupported Google Workspace service for analysis: {service}")
+
+        elif provider == "microsoft365":
+            # account_id para M365 é geralmente o Tenant ID
+            tenant_id = account_id
+
+            # Para M365, podemos ter um único payload com múltiplos tipos de dados
+            # ou o API Gateway pode chamar o /analyze com um 'service' específico.
+            # Vamos assumir que o 'data' pode conter chaves para cada tipo de dado coletado.
+            # Ex: request_data.data = {"users_mfa_status": ..., "conditional_access_policies": ...}
+            # Ou, se o 'service' especifica qual parte dos dados usar:
+
+            mfa_input_data: Optional[M365UserMFAStatusCollectionInput] = None
+            ca_policy_input_data: Optional[M365ConditionalAccessPolicyCollectionInput] = None
+
+            if service == "m365_users_mfa_status":
+                if not isinstance(data, M365UserMFAStatusCollectionInput): # type: ignore
+                    logger.error(f"Data for M365 MFA status is not of type M365UserMFAStatusCollectionInput. Data: {type(data)}. Skipping.")
+                else:
+                    mfa_input_data = data # type: ignore
+            elif service == "m365_conditional_access_policies":
+                if not isinstance(data, M365ConditionalAccessPolicyCollectionInput): # type: ignore
+                    logger.error(f"Data for M365 CA policies is not of type M365ConditionalAccessPolicyCollectionInput. Data: {type(data)}. Skipping.")
+                else:
+                    ca_policy_input_data = data # type: ignore
+            elif service == "m365_tenant_security": # Um serviço "agregado"
+                 # Tentar extrair os dados relevantes do payload 'data' que pode ser um dict
+                if isinstance(data, dict):
+                    mfa_payload = data.get("users_mfa_status")
+                    if mfa_payload:
+                        try:
+                            mfa_input_data = M365UserMFAStatusCollectionInput(**mfa_payload)
+                        except Exception as e_mfa:
+                            logger.error(f"Error parsing M365 MFA data for aggregated service: {e_mfa}")
+
+                    ca_payload = data.get("conditional_access_policies")
+                    if ca_payload:
+                        try:
+                            ca_policy_input_data = M365ConditionalAccessPolicyCollectionInput(**ca_payload)
+                        except Exception as e_ca:
+                            logger.error(f"Error parsing M365 CA policy data for aggregated service: {e_ca}")
+                else:
+                    logger.error(f"Data for aggregated M365 service '{service}' is not a dict. Skipping.")
+            else:
+                logger.warning(f"Unsupported Microsoft 365 service for analysis: {service}")
+
+            # Chamar a função de avaliação principal do m365_policies, passando os dados que temos.
+            # A função evaluate_m365_policies precisará lidar com dados potencialmente None.
+            if mfa_input_data or ca_policy_input_data: # Só chamar se tivermos algum dado
+                m365_alerts_data = m365_policies.evaluate_m365_policies(
+                    mfa_data=mfa_input_data,
+                    ca_policy_data=ca_policy_input_data,
+                    tenant_id=tenant_id
+                )
+                generated_alert_data_list.extend(m365_alerts_data)
         else:
             logger.warning(f"Unsupported provider for analysis: {provider}")
 
@@ -266,3 +320,10 @@ from app.schemas.aws.rds_input_schema import RDSInstanceDataInput
 # Importar o novo módulo de políticas GKE e o schema de input GKE
 from app.engine import gcp_gke_policies # Adicionado
 from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
+# Importar módulos de políticas e schemas de input para Microsoft 365
+from app.engine import m365_policies # Será criado
+from app.schemas.m365.m365_input_schemas import ( # Já criados
+    M365UserMFAStatusCollectionInput,
+    M365ConditionalAccessPolicyCollectionInput
+)

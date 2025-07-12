@@ -1,154 +1,156 @@
-from emails import Message
-from emails.template import JinjaTemplate
-from app.core.config import settings
+# Removida a importação de 'emails.Message' pois não será mais usada diretamente para envio SMTP.
+# from emails import Message
+from emails.template import JinjaTemplate # Mantido para renderização de HTML
+from app.core.config import settings # Supondo que settings agora inclua AWS_REGION e SES_FROM_EMAIL
 from app.schemas.notification_schema import AlertDataPayload
 import logging
-from typing import Optional, Union, List # Added List
-import datetime # Added datetime
+from typing import Optional, Union, List
+import datetime
+import boto3
+from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
 
 logger = logging.getLogger(__name__)
 
-# Synchronous function for sending email, as 'emails' library is blocking.
-# In FastAPI, this should be called via `run_in_threadpool` from an async endpoint
-# or used within a BackgroundTask.
+# HTML Body Template (mantido como estava)
+html_body_template_str = """
+<html>
+    <head>
+        <style>
+            body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+            .container { border: 1px solid #ddd; padding: 20px; border-radius: 8px; max-width: 650px; margin: 20px auto; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+            h2 { color: #c9302c; border-bottom: 2px solid #c9302c; padding-bottom: 10px; } /* Bootstrap danger-like red */
+            .alert-field { margin-bottom: 12px; line-height: 1.6; }
+            .alert-field strong { color: #555; min-width: 150px; display: inline-block; }
+            .details { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-top:20px; border-radius: 4px; }
+            pre { white-space: pre-wrap; word-wrap: break-word; background-color: #efefef; padding: 10px; border-radius: 3px; }
+            hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
+            .footer { font-size: 0.9em; color: #777; text-align: center; margin-top: 20px;}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>Critical Security Alert: {{ alert.title }}</h2>
+
+            <div class="alert-field"><strong>Severity:</strong> <span style="color: {% if alert.severity == 'CRITICAL' %}#c9302c{% elif alert.severity == 'HIGH' %}#f0ad4e{% else %}#333{% endif %}; font-weight: bold;">{{ alert.severity }}</span></div>
+            <div class="alert-field"><strong>Provider:</strong> {{ alert.provider.upper() if alert.provider else 'N/A' }}</div>
+            <div class="alert-field"><strong>Account ID:</strong> {{ alert.account_id or 'N/A' }}</div>
+            <div class="alert-field"><strong>Region:</strong> {{ alert.region or 'N/A' }}</div>
+            <div class="alert-field"><strong>Resource Type:</strong> {{ alert.resource_type }}</div>
+            <div class="alert-field"><strong>Resource ID:</strong> {{ alert.resource_id }}</div>
+
+            <div class="alert-field">
+                <strong>Description:</strong>
+                <p>{{ alert.description }}</p>
+            </div>
+
+            {% if alert.recommendation %}
+            <div class="alert-field">
+                <strong>Recommendation:</strong>
+                <p>{{ alert.recommendation }}</p>
+            </div>
+            {% endif %}
+
+            {% if alert.details %}
+            <div class="details">
+                <strong>Additional Details:</strong>
+                <pre>{{ alert.details | tojson(indent=2) if alert.details is mapping else alert.details }}</pre>
+            </div>
+            {% endif %}
+
+            <hr>
+            <p><small>Policy ID: {{ alert.policy_id }}</small></p>
+            <p><small>Alert Detected At: {{ alert.original_alert_created_at.strftime('%Y-%m-%d %H:%M:%S %Z') if alert.original_alert_created_at else 'N/A' }}</small></p>
+            <div class="footer">This is an automated notification from CSPMEXA.</div>
+        </div>
+    </body>
+</html>
+"""
+html_body_template = JinjaTemplate(html_body_template_str)
+
+
 def send_email_notification_sync(
-    recipient_email: Union[str, List[str]], # Can be a single email or list of emails
+    recipient_email: Union[str, List[str]],
     subject: str,
     alert_data: AlertDataPayload,
-    # template_name: str = "alert_notification.html" # Template string is now inline
 ) -> bool:
     """
-    Sends an email notification (synchronous blocking call).
+    Sends an email notification using AWS SES.
     Returns True if email was sent successfully, False otherwise.
     """
-    if not all([settings.SMTP_HOST, settings.SMTP_PORT, settings.EMAILS_FROM_EMAIL]):
-        logger.error("SMTP settings (SMTP_HOST, SMTP_PORT, EMAILS_FROM_EMAIL) are not fully configured. Cannot send email.")
+    # Verificar configurações essenciais para SES
+    if not all([settings.AWS_REGION, settings.EMAILS_FROM_EMAIL]): # EMAILS_FROM_EMAIL é o remetente verificado no SES
+        logger.error("AWS SES settings (AWS_REGION, EMAILS_FROM_EMAIL) are not fully configured. Cannot send email.")
         return False
 
-    # HTML Body Template
-    html_body_template_str = """
-    <html>
-        <head>
-            <style>
-                body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-                .container { border: 1px solid #ddd; padding: 20px; border-radius: 8px; max-width: 650px; margin: 20px auto; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-                h2 { color: #c9302c; border-bottom: 2px solid #c9302c; padding-bottom: 10px; } /* Bootstrap danger-like red */
-                .alert-field { margin-bottom: 12px; line-height: 1.6; }
-                .alert-field strong { color: #555; min-width: 150px; display: inline-block; }
-                .details { background-color: #f9f9f9; border: 1px solid #eee; padding: 15px; margin-top:20px; border-radius: 4px; }
-                pre { white-space: pre-wrap; word-wrap: break-word; background-color: #efefef; padding: 10px; border-radius: 3px; }
-                hr { border: 0; border-top: 1px solid #eee; margin: 20px 0; }
-                .footer { font-size: 0.9em; color: #777; text-align: center; margin-top: 20px;}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>Critical Security Alert: {{ alert.title }}</h2>
+    # Converter recipient_email para lista se for string única
+    if isinstance(recipient_email, str):
+        destination_emails = [recipient_email]
+    else:
+        destination_emails = recipient_email
 
-                <div class="alert-field"><strong>Severity:</strong> <span style="color: {% if alert.severity == 'CRITICAL' %}#c9302c{% elif alert.severity == 'HIGH' %}#f0ad4e{% else %}#333{% endif %}; font-weight: bold;">{{ alert.severity }}</span></div>
-                <div class="alert-field"><strong>Provider:</strong> {{ alert.provider.upper() if alert.provider else 'N/A' }}</div>
-                <div class="alert-field"><strong>Account ID:</strong> {{ alert.account_id or 'N/A' }}</div>
-                <div class="alert-field"><strong>Region:</strong> {{ alert.region or 'N/A' }}</div>
-                <div class="alert-field"><strong>Resource Type:</strong> {{ alert.resource_type }}</div>
-                <div class="alert-field"><strong>Resource ID:</strong> {{ alert.resource_id }}</div>
+    if not destination_emails:
+        logger.error("No recipient emails provided.")
+        return False
 
-                <div class="alert-field">
-                    <strong>Description:</strong>
-                    <p>{{ alert.description }}</p>
-                </div>
-
-                {% if alert.recommendation %}
-                <div class="alert-field">
-                    <strong>Recommendation:</strong>
-                    <p>{{ alert.recommendation }}</p>
-                </div>
-                {% endif %}
-
-                {% if alert.details %}
-                <div class="details">
-                    <strong>Additional Details:</strong>
-                    <pre>{{ alert.details | tojson(indent=2) if alert.details is mapping else alert.details }}</pre>
-                </div>
-                {% endif %}
-
-                <hr>
-                <p><small>Policy ID: {{ alert.policy_id }}</small></p>
-                <p><small>Alert Detected At: {{ alert.original_alert_created_at.strftime('%Y-%m-%d %H:%M:%S %Z') if alert.original_alert_created_at else 'N/A' }}</small></p>
-                <div class="footer">This is an automated notification from CSPMEXA.</div>
-            </div>
-        </body>
-    </html>
-    """
-
-    html_body_template = JinjaTemplate(html_body_template_str)
-
-    # Ensure alert_data is a dict for rendering, using by_alias for Pydantic model fields
+    # Renderizar o corpo HTML do e-mail
     alert_data_dict = alert_data.model_dump(by_alias=True) if hasattr(alert_data, 'model_dump') else alert_data.dict(by_alias=True)
-
     message_params = {"alert": alert_data_dict}
     html_content = html_body_template.render(**message_params)
 
-    msg = Message(
-        html=html_content,
-        subject=subject,
-        mail_from=(settings.EMAILS_FROM_NAME or "CSPMEXA Platform", settings.EMAILS_FROM_EMAIL)
-    )
+    # Criar um cliente SES
+    # As credenciais (Access Key, Secret Key) devem estar configuradas no ambiente
+    # ou via role IAM se rodando em um ambiente AWS (EC2, ECS, Lambda).
+    try:
+        ses_client = boto3.client("ses", region_name=settings.AWS_REGION)
+    except (NoCredentialsError, PartialCredentialsError) as e:
+        logger.error(f"AWS credentials for SES not found or incomplete in region {settings.AWS_REGION}: {e}")
+        return False
+    except Exception as e: # Outros erros ao criar o cliente, como região inválida
+        logger.error(f"Error creating SES client for region {settings.AWS_REGION}: {e}")
+        return False
 
-    smtp_options = {
-        "host": settings.SMTP_HOST,
-        "port": int(settings.SMTP_PORT), # Ensure port is int
-        "tls": settings.SMTP_TLS,
-        "ssl": settings.SMTP_SSL,
-        "user": settings.SMTP_USER or None, # Ensure None if empty string
-        "password": settings.SMTP_PASSWORD or None, # Ensure None if empty string
-        "timeout": 20, # Increased timeout
-    }
-    # Clean up None values for user/password as 'emails' lib might not handle empty strings well
-    if not smtp_options["user"]: del smtp_options["user"]
-    if not smtp_options["password"]: del smtp_options["password"]
+    # Construir o payload para a API send_email do SES
+    # O remetente formatado (ex: "Nome <email@example.com>") pode ser usado se SES_FROM_EMAIL_ARN não for usado.
+    sender_formatted = f"{settings.EMAILS_FROM_NAME or 'CSPMEXA Platform'} <{settings.EMAILS_FROM_EMAIL}>"
 
     try:
-        logger.info(f"Attempting to send email to {recipient_email} via {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-        response = msg.send(to=recipient_email, smtp=smtp_options)
-
-        # msg.send returns a Response object which might not have status_code directly in all cases or versions.
-        # Success is often indicated by the absence of an exception and a valid response.
-        # A common check for 'emails' library is that response is not None and no error in response.message
-        if response is not None: # Basic check, specific success codes depend on SMTP server and library version
-             # Example: response.status_code might be available if it's an SMTPResponse object
-            if hasattr(response, 'status_code') and response.status_code in [250, 251, 252]:
-                 logger.info(f"Email successfully sent to {recipient_email}. SMTP Response: {getattr(response, 'message', 'No message')}")
-                 return True
-            elif not hasattr(response, 'status_code'): # If no status_code, assume success if no exception
-                 logger.info(f"Email accepted for delivery to {recipient_email}. SMTP Response: {getattr(response, 'message', 'No message')}")
-                 return True
-            else: # Had status_code but not a success one
-                 error_msg = getattr(response, 'message', 'Unknown error (bad status code)')
-                 logger.error(f"Failed to send email to {recipient_email}. SMTP Status: {getattr(response, 'status_code', 'N/A')}, Message: {error_msg}")
-                 return False
-        else: # Response was None
-            logger.error(f"Failed to send email to {recipient_email}. No response from SMTP server or send method.")
-            return False
-
+        response = ses_client.send_email(
+            Source=sender_formatted, # Ou apenas settings.EMAILS_FROM_EMAIL se o nome não for desejado aqui
+            Destination={"ToAddresses": destination_emails},
+            Message={
+                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                "Body": {"Html": {"Data": html_content, "Charset": "UTF-8"}},
+            },
+            # SourceArn=settings.SES_FROM_EMAIL_ARN, # Opcional, para usar configurações de autorização de envio
+            # ConfigurationSetName=settings.SES_CONFIGURATION_SET_NAME # Opcional, para rastreamento de eventos
+        )
+        message_id = response.get("MessageId")
+        logger.info(f"Email successfully sent to {', '.join(destination_emails)} via AWS SES. Message ID: {message_id}")
+        return True
+    except ClientError as e:
+        error_code = e.response.get("Error", {}).get("Code")
+        error_message = e.response.get("Error", {}).get("Message")
+        logger.error(f"AWS SES ClientError sending email to {', '.join(destination_emails)}: [{error_code}] {error_message}")
+        return False
     except Exception as e:
-        logger.exception(f"Error sending email to {recipient_email} via {settings.SMTP_HOST}: {e}")
+        logger.exception(f"Unexpected error sending email via AWS SES to {', '.join(destination_emails)}: {e}")
         return False
 
 if __name__ == "__main__":
-    # This block is for local testing of the email sending functionality.
-    # It requires the .env file to be correctly set up at the root of this service,
-    # or relevant environment variables to be available.
+    # Este bloco de teste local precisará ser ajustado para SES.
+    # Requer que as variáveis de ambiente AWS (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN opcional)
+    # e AWS_REGION estejam configuradas, e que settings.EMAILS_FROM_EMAIL seja um endereço verificado no SES.
 
-    # Adjust path for dotenv to load from backend/notification_service/.env if it exists for local testing
-    # from dotenv import load_dotenv
-    # load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '../.env'))
-    # Re-initialize settings if you load .env here for a standalone test
-    # settings = get_settings(load_custom_env=True) # You'd need to modify get_settings for this
+    # Exemplo de como carregar settings para teste local se config.py existir e for configurável:
+    # from app.core.config import get_settings # Supondo que get_settings pode ser usado
+    # settings = get_settings() # Isso pode precisar de um .env na pasta do serviço
 
+    # Para testar, você precisaria mockar as settings ou ter um .env funcional.
+    # Exemplo simplificado (assumindo que `settings` já está carregado com os valores corretos):
     if not settings.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL:
-        print("Skipping email test: DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL not set in config.")
-    elif not all([settings.SMTP_HOST, settings.SMTP_PORT, settings.EMAILS_FROM_EMAIL]):
-        print("Skipping email test: SMTP settings (HOST, PORT, FROM_EMAIL) are not fully configured.")
+        print("Skipping SES email test: DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL not set in config.")
+    elif not all([settings.AWS_REGION, settings.EMAILS_FROM_EMAIL]):
+        print("Skipping SES email test: AWS_REGION or EMAILS_FROM_EMAIL not configured.")
     else:
         print(f"Preparing to send test email to: {settings.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}")
         print(f"From: {settings.EMAILS_FROM_NAME} <{settings.EMAILS_FROM_EMAIL}>")

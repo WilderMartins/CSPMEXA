@@ -1,17 +1,18 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 import datetime
+from auth_service.app.models.user_model import UserRole # Importar o Enum UserRole
 
 
 # Propriedades básicas do usuário
 class UserBase(BaseModel):
     email: EmailStr
-    is_active: Optional[bool] = True
-    is_superuser: Optional[bool] = False
-    role: Optional[str] = "user" # Adicionado role
+    is_active: Optional[bool] = Field(True)
+    is_superuser: Optional[bool] = Field(False) # Mantido para consistência, mas SuperAdministrator é o principal
+    role: Optional[UserRole] = Field(UserRole.USER) # Usar o Enum e definir default
     google_id: Optional[str] = None
-    full_name: Optional[str] = None # Adicionado full_name
-    profile_picture_url: Optional[str] = None # Adicionado profile_picture_url
+    full_name: Optional[str] = None
+    profile_picture_url: Optional[str] = None
 
 
 # Propriedades para criar um usuário via API (se necessário, menos relevante para OAuth inicial)
@@ -20,24 +21,23 @@ class UserCreate(UserBase):
 
 
 # Propriedades para ler um usuário via API
-class User(UserBase): # UserBase já inclui email, is_active, is_superuser, role, google_id, full_name, profile_picture_url
+class User(UserBase):
     id: int
-    # mfa_secret: Optional[str] = None # Não expor o segredo por padrão, a menos que seja para um admin específico
-    is_mfa_enabled: bool = False
+    is_mfa_enabled: bool = Field(False)
     created_at: datetime.datetime
     updated_at: Optional[datetime.datetime] = None
 
     class Config:
-        orm_mode = True  # Pydantic v1
-        # from_attributes = True # Pydantic v2
+        from_attributes = True # Pydantic v2 (orm_mode é para v1)
+        use_enum_values = True # Para que o Enum seja serializado para seu valor string
 
 
 # Propriedades para atualizar um usuário
 class UserUpdate(BaseModel): # Para uso por admins ou pelo próprio usuário para certos campos
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = None
-    is_superuser: Optional[bool] = None # Apenas admin pode mudar isso
-    role: Optional[str] = None # Apenas admin pode mudar isso
+    is_superuser: Optional[bool] = None # Apenas SuperAdministrator pode mudar isso
+    role: Optional[UserRole] = None # Apenas admin/superadmin pode mudar isso
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
 

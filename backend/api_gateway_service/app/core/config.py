@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Timeout para chamadas HTTP aos serviços downstream (em segundos)
     HTTP_CLIENT_TIMEOUT: int = 30
 
+    # Configurações específicas de provedores que o Gateway pode precisar
+    # Ex: Tenant ID padrão para M365 se não vier do frontend ou de outro lugar
+    M365_TENANT_ID: Optional[str] = None # Carregar de .env
+
     class Config:
         case_sensitive = True
         # env_file = ".env" # Para desenvolvimento local, carregar de .env

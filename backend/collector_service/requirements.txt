@@ -16,6 +16,7 @@ google-cloud-storage
 google-cloud-compute
 google-api-python-client
 google-auth
+google-cloud-securitycenter # Para GCP Security Command Center
 
 # Huawei Cloud Dependencies
 huaweicloudsdkcore # Core SDK
@@ -34,3 +35,6 @@ azure-mgmt-resource~=23.0.0
 google-api-python-client~=2.90.0
 google-auth-httplib2~=0.1.0
 google-auth-oauthlib~=1.0.0
+
+# Microsoft 365 / Graph API
+msal~=1.20 # Microsoft Authentication Library for Python

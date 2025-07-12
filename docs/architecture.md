@@ -64,17 +64,26 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
     *   **Porta Dev Padrão:** `3000`
 
 6.  **`notification-service` (Serviço de Notificações):**
-    *   **Status:** Não implementado no MVP Alpha. Permanece como um serviço planejado para futuras iterações.
+    *   **Status:** Implementado no MVP Alpha.
+    *   **Responsabilidades Atuais:**
+        *   Receber payloads de alerta e despachá-los para canais configurados.
+        *   **E-mail:** Envio de notificações formatadas em HTML via AWS SES (preferencial) ou SMTP genérico.
+        *   **Webhook:** Envio de payloads de alerta JSON para URLs de webhook genéricas.
+        *   **Google Chat:** Envio de mensagens de alerta formatadas como cards para webhooks de espaços do Google Chat.
+        *   Integrado com `policy-engine-service` para receber alertas críticos.
+    *   **Tecnologia:** Python com FastAPI, `httpx` (para webhooks), `boto3` (para SES). A biblioteca `emails` e `Jinja2` são usadas para formatação de e-mail HTML.
+    *   **Comunicação:** REST API (recebe alertas do `policy-engine-service` ou diretamente via API).
+    *   **Porta Dev Padrão:** `8003`
 
 ## Escolhas de Banco de Dados (MVP Alpha)
 
-*   **`auth-service`:** PostgreSQL (para usuários, tokens de refresh, configurações de MFA, etc.).
-*   **Dados de Configuração da Nuvem (Coletados):** Atualmente, os dados coletados pelo `collector-service` são transitórios. Eles são enviados para o `policy-engine-service` via API Gateway e não são persistidos em um banco de dados dedicado pelo collector ou engine.
-*   **Alertas/Resultados de Análise:** Os alertas gerados pelo `policy-engine-service` são retornados ao `api-gateway-service` e, subsequentemente, ao frontend. Não há persistência de alertas no backend neste MVP.
+*   **`auth-service`:** PostgreSQL (para usuários, tokens de refresh, configurações de MFA, etc.). As migrações são gerenciadas via Alembic.
+*   **`policy-engine-service` (Alertas):** Os alertas gerados são persistidos pelo `policy-engine-service` em uma tabela dedicada (`alerts`) dentro do mesmo banco de dados PostgreSQL utilizado pelo `auth-service`. A tabela de alertas é criada na inicialização do `policy-engine-service` se não existir (usando SQLAlchemy `Base.metadata.create_all(engine)`), não utilizando Alembic neste MVP.
+*   **Dados de Configuração da Nuvem (Coletados):** Atualmente, os dados coletados pelo `collector-service` são transitórios. Eles são enviados para o `policy-engine-service` via API Gateway e não são persistidos em um banco de dados dedicado pelo collector.
 
 **Limitações do MVP Alpha:**
-*   Não há persistência dos dados coletados nem dos alertas gerados. Cada análise é feita sob demanda.
-*   O `notification-service` não está implementado.
+*   Os dados de configuração da nuvem coletados não são persistidos; cada análise de configuração é feita sob demanda. (Alertas SÃO persistidos).
+*   O `notification-service` está parcialmente implementado (suporta e-mail para alertas críticos). Funcionalidades como configuração de múltiplos destinos ou outros canais (Slack, webhooks) são para futuras iterações.
 *   Cobertura de provedores atual: AWS (S3, EC2, IAM), GCP (Cloud Storage, Compute Engine VMs/Firewalls, IAM de Projeto), Huawei Cloud (OBS Buckets, ECS VMs, VPC SGs, IAM Users) e Azure (Virtual Machines, Storage Accounts).
 *   Conjunto de políticas de segurança ainda é básico para os serviços e provedores cobertos.
 
@@ -86,6 +95,33 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
 *   **API Gateway <-> Policy Engine Service:** HTTP/REST (API Gateway envia dados coletados para o Policy Engine nos fluxos de orquestração).
 
 A comunicação é predominantemente síncrona. Filas de mensagens (RabbitMQ, SQS) para desacoplamento e processamento assíncrono são consideradas para evoluções futuras, especialmente para a coleta de dados e o envio de notificações.
+
+### Considerações de Segurança na Comunicação Interna:
+*   **Autenticação de Usuário Final:** A autenticação do usuário final (via token JWT) é realizada exclusivamente pelo `api-gateway-service`. Os microsserviços internos (Collector, Policy Engine, Notification, Auth Service para operações pós-login) confiam que as requisições originadas do API Gateway já foram autenticadas.
+*   **Rede Interna:** Os serviços de backend são projetados para operar dentro de uma rede interna confiável (ex: rede Docker, VPC em nuvem). Não há, neste MVP, autenticação serviço-a-serviço implementada entre os microsserviços internos. O acesso direto a esses serviços de fora da rede interna deve ser bloqueado por configurações de firewall/rede.
+
+### Controle de Acesso Baseado em Função (RBAC) no API Gateway:
+*   O `api-gateway-service` implementa restrições de acesso aos seus endpoints com base no papel (`role`) do usuário, contido no token JWT.
+*   Os papéis definidos (com hierarquia crescente de permissões) são: `User`, `TechnicalLead`, `Manager`, `Administrator`, `SuperAdministrator`.
+*   **Política de Acesso (MVP Alpha):**
+    *   **User (Usuário):**
+        *   Visualizar informações do próprio perfil (`/users/me`).
+        *   Listar e visualizar detalhes de alertas (`GET /alerts`, `GET /alerts/{id}`).
+        *   Iniciar coletas de dados e análises de segurança (`GET /collect/...`, `POST /analyze/...`).
+    *   **TechnicalLead (Líder Técnico):**
+        *   Todas as permissões de `User`.
+        *   Modificar o status de alertas (Ex: Acusar Recebimento, Resolver, Ignorar - `PATCH /alerts/{id}/status`).
+    *   **Manager (Gerente):**
+        *   Todas as permissões de `TechnicalLead`.
+        *   Atualizar detalhes de alertas (Ex: descrição, recomendação customizada - `PUT /alerts/{id}`).
+    *   **Administrator (Administrador):**
+        *   Todas as permissões de `Manager`.
+        *   Deletar alertas (`DELETE /alerts/{id}`).
+        *   (Futuro) Gerenciar configurações da plataforma.
+    *   **SuperAdministrator (Super Administrador):**
+        *   Todas as permissões de `Administrator`.
+        *   (Futuro) Gerenciar usuários, papéis e configurações globais críticas.
+*   Endpoints de autenticação (`/auth/google/login`, `/auth/google/callback`) são públicos.
 
 ## Diagrama Conceitual (MVP Alpha)
 
@@ -103,7 +139,7 @@ graph TD
         C[Auth Service - Porta 8000]
         D[Collector Service (AWS, GCP, Huawei, Azure) - Porta 8001]
         E[Policy Engine Service (AWS, GCP, Huawei, Azure) - Porta 8002]
-        G((Notification Service - Planejado))
+        G[Notification Service (Email) - Porta 8003]
     end
 
     subgraph "Bancos de Dados & Externos"
@@ -134,11 +170,12 @@ graph TD
     D -- Dados Coletados AWS, GCP, Huawei, Azure, GWS (via B) --> E;
 
     E -- Alertas Gerados (via B) --> A;
-    E -.->|Alertas (Futuro)| G;
+    E ---|Persiste Alertas| DB1;
+    E -->|Notificar Alertas Críticos| G;
     G -.->|Email, Webhook (Futuro)| ExternalSystems[Sistemas Externos];
 
 ```
-*Os dados coletados e alertas não são persistidos no backend neste MVP Alpha.*
+*Os dados de configuração da nuvem coletados são transitórios. Alertas SÃO persistidos no backend neste MVP Alpha.*
 
 ## Considerações de Escalabilidade e Evolução
 
@@ -148,3 +185,68 @@ graph TD
 *   **Bancos de Dados Dedicados:** Conforme a carga aumenta, cada serviço pode ter seu próprio banco de dados otimizado.
 
 Este design inicial provê uma fundação sólida para o MVP e permite expansão futura.
+
+---
+
+## Alvos de Cobertura Detalhada por Provedor (Backlog para Expansão)
+
+Esta seção detalha os serviços e fontes de dados alvo para expansão da cobertura do CSPMEXA, com base no feedback e requisitos. A implementação será iterativa.
+
+### Visão Geral de Capacidades Essenciais por Provedor para CSPM:
+Para cada provedor, um CSPM robusto geralmente necessita de integração com serviços que forneçam:
+*   **Visibilidade de Ativos:** Descoberta e inventário de todos os recursos.
+*   **Logs de Auditoria e Atividade:** Registros detalhados de operações e acessos.
+*   **Gerenciamento de Identidade e Acesso (IAM):** Análise de permissões e políticas.
+*   **Configurações de Segurança de Serviços Chave:** Monitoramento de armazenamento, computação, rede, etc.
+*   **APIs de Segurança Nativas:** Integração com serviços de segurança do provedor (ex: Security Hub, SCC, Defender for Cloud) para consolidar e enriquecer descobertas.
+
+### Cobertura Alvo para AWS:
+*   **AWS CloudTrail:** Logs de atividade de API (essencial).
+*   **AWS Config:** Avaliação contínua de configurações de recursos (essencial).
+*   **AWS Identity and Access Management (IAM):** Análise profunda de permissões, roles, usuários, políticas (aprofundar o existente).
+*   **Amazon S3:** Configurações de buckets, acesso público, criptografia (aprofundar o existente).
+*   **Amazon EC2 e VPC:** Configurações de instâncias, Security Groups, Network ACLs, Flow Logs (aprofundar o existente).
+*   **AWS GuardDuty:** Consumo de descobertas de detecção de ameaças.
+*   **Outros Serviços Prioritários (a definir):** RDS (já iniciado), Lambda, EKS, etc.
+
+### Cobertura Alvo para GCP (Google Cloud Platform):
+*   **Security Command Center (SCC):** Integração para consumir e correlacionar descobertas (essencial).
+*   **Cloud Audit Logs:** Registros de auditoria para operações e acesso a dados (essencial).
+*   **Cloud Asset Inventory:** Catalogação e pesquisa de recursos (essencial).
+*   **Identity and Access Management (IAM):** Análise de políticas de acesso (aprofundar o existente).
+*   **Cloud Storage:** Configurações de buckets, permissões, criptografia (aprofundar o existente).
+*   **Compute Engine e VPC:** Segurança de VMs, firewalls, configurações de rede (aprofundar o existente).
+*   **Google Kubernetes Engine (GKE):** Configurações de segurança de clusters (aprofundar o existente).
+*   **Outros Serviços Prioritários (a definir):** Cloud SQL, BigQuery (permissões), etc.
+
+### Cobertura Alvo para Azure:
+*   **Azure Activity Log:** Logs de operações no Azure.
+*   **Azure Resource Graph:** Inventário e consulta de recursos.
+*   **Microsoft Entra ID (anteriormente Azure AD):** Análise de permissões, configurações de segurança de identidade.
+*   **Azure Storage Accounts:** Configurações de segurança de blobs, filas, tabelas (aprofundar o existente).
+*   **Azure Virtual Network (VNet) e Network Security Groups (NSGs):** Segurança de rede e VMs (aprofundar o existente).
+*   **Microsoft Defender for Cloud:** Consumo de recomendações e alertas de segurança.
+*   **Outros Serviços Prioritários (a definir):** Azure SQL Database, Azure Kubernetes Service (AKS), etc.
+
+### Cobertura Alvo para Huawei Cloud:
+*   **Cloud Security Guard (CSG):** Integração para obter dados de segurança.
+*   **Cloud Trace Service (CTS):** Logs de auditoria (em progresso inicial).
+*   **Identity and Access Management (IAM):** Gerenciamento e auditoria de permissões (aprofundar o existente).
+*   **Object Storage Service (OBS):** Segurança de buckets (aprofundar o existente).
+*   **Virtual Private Cloud (VPC) e Elastic Cloud Server (ECS):** Configurações de rede e VMs (aprofundar o existente).
+*   **Outros Serviços Prioritários (a definir).**
+
+### Cobertura Alvo para Google Workspace:
+*   **Google Admin Console (via APIs):** Auditoria de configurações de segurança e conformidade.
+*   **Audit Reports/Logs (Admin Console):** Logs de atividades de usuários, administradores e eventos de segurança (Gmail, Drive, Calendar, etc.).
+*   **Google Drive Security Settings:** Permissões de compartilhamento, acesso, criptografia (aprofundar o existente).
+*   **Gmail Security Settings:** Políticas anti-spam/phishing, roteamento, DLP.
+*   **Google Meet/Chat Security Settings:** Configurações de segurança de videoconferências e mensagens.
+*   **Google Cloud Identity (se aplicável):** Gerenciamento de identidades, autenticação, autorização.
+
+### Cobertura Alvo para Microsoft 365 (Novo Provedor):
+*   **Segurança do Tenant:** Políticas de MFA, Acesso Condicional (em progresso inicial).
+*   **Exchange Online:** Regras de transporte, anti-spam/malware.
+*   **SharePoint Online / OneDrive:** Configurações de compartilhamento externo.
+*   **Logs de Auditoria e Atividade de Login.**
+*   **Microsoft Defender for Office 365 / Microsoft Secure Score:** Consumo de descobertas.

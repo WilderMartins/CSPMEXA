@@ -78,5 +78,116 @@ class NotificationServiceClient:
             logger.exception(f"Unexpected error sending notification for alert ID {alert.id}: {e}")
             return False
 
+    async def send_critical_alert_webhook_notification(self, alert: AlertSchema, webhook_url: Optional[str] = None) -> bool:
+        """
+        Envia uma notificação de alerta crítico para um Webhook via Notification Service.
+        Retorna True se a notificação foi aceita, False caso contrário.
+        """
+        if not self.base_url:
+            logger.warning("NOTIFICATION_SERVICE_URL not configured. Skipping webhook notification.")
+            return False
+
+        if not settings.ENABLE_WEBHOOK_NOTIFICATIONS: # Adicionar um flag nas settings para habilitar/desabilitar globalmente
+            logger.info("Webhook notifications are globally disabled. Skipping.")
+            return False
+
+        notification_endpoint = f"{self.base_url}/notify/webhook"
+
+        # Mapeamento similar ao de e-mail
+        alert_data_for_notification = {
+            "resource_id": alert.resource_id,
+            "resource_type": alert.resource_type,
+            "account_id": alert.account_id,
+            "region": alert.region,
+            "provider": alert.provider,
+            "severity": alert.severity.value,
+            "title": alert.title,
+            "description": alert.description,
+            "policy_id": alert.policy_id,
+            "status": alert.status.value if alert.status else None,
+            "details": alert.details,
+            "recommendation": alert.recommendation,
+            "created_at": alert.created_at,
+            "updated_at": alert.updated_at,
+        }
+
+        payload_to_send = {
+            "webhook_url": webhook_url, # Pode ser None, para usar o default do notification_service
+            "alert_data": alert_data_for_notification
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(notification_endpoint, json=payload_to_send)
+
+            if response.status_code == 202: # Accepted
+                logger.info(f"Webhook notification for alert '{alert.title}' (ID: {alert.id}) accepted by Notification Service. Target URL: {webhook_url or 'default'}")
+                return True
+            else:
+                logger.error(f"Failed to send webhook notification for alert ID {alert.id} to Notification Service. "
+                             f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except httpx.RequestError as e:
+            logger.error(f"HTTPX RequestError sending webhook notification for alert ID {alert.id}: {e}")
+            return False
+        except Exception as e:
+            logger.exception(f"Unexpected error sending webhook notification for alert ID {alert.id}: {e}")
+            return False
+
+    async def send_critical_alert_google_chat_notification(self, alert: AlertSchema, google_chat_webhook_url: Optional[str] = None) -> bool:
+        """
+        Envia uma notificação de alerta crítico para um Webhook do Google Chat via Notification Service.
+        Retorna True se a notificação foi aceita, False caso contrário.
+        """
+        if not self.base_url:
+            logger.warning("NOTIFICATION_SERVICE_URL not configured. Skipping Google Chat notification.")
+            return False
+
+        if not settings.ENABLE_GOOGLE_CHAT_NOTIFICATIONS: # Adicionar um flag nas settings
+            logger.info("Google Chat notifications are globally disabled. Skipping.")
+            return False
+
+        notification_endpoint = f"{self.base_url}/notify/google-chat"
+
+        alert_data_for_notification = {
+            "resource_id": alert.resource_id,
+            "resource_type": alert.resource_type,
+            "account_id": alert.account_id,
+            "region": alert.region,
+            "provider": alert.provider,
+            "severity": alert.severity.value,
+            "title": alert.title,
+            "description": alert.description,
+            "policy_id": alert.policy_id,
+            "status": alert.status.value if alert.status else None,
+            "details": alert.details,
+            "recommendation": alert.recommendation,
+            "created_at": alert.created_at,
+            "updated_at": alert.updated_at,
+        }
+
+        payload_to_send = {
+            "webhook_url": google_chat_webhook_url, # Pode ser None, para usar o default do notification_service
+            "alert_data": alert_data_for_notification
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(notification_endpoint, json=payload_to_send)
+
+            if response.status_code == 202: # Accepted
+                logger.info(f"Google Chat notification for alert '{alert.title}' (ID: {alert.id}) accepted by Notification Service. Target URL: {'default' if not google_chat_webhook_url else 'specific'}")
+                return True
+            else:
+                logger.error(f"Failed to send Google Chat notification for alert ID {alert.id} to Notification Service. "
+                             f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except httpx.RequestError as e:
+            logger.error(f"HTTPX RequestError sending Google Chat notification for alert ID {alert.id}: {e}")
+            return False
+        except Exception as e:
+            logger.exception(f"Unexpected error sending Google Chat notification for alert ID {alert.id}: {e}")
+            return False
+
 # Instância do cliente para ser usada no serviço
 notification_client = NotificationServiceClient(base_url=settings.NOTIFICATION_SERVICE_URL)

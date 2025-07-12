@@ -29,6 +29,27 @@ const DashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userInfo, setUserInfo] = useState<any>(null);
   const { t } = useTranslation();
+  const [currentDisplayMode, setCurrentDisplayMode] = useState<'all_alerts' | 'analysis_result'>('all_alerts');
+  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
+
+
+  // Definição de papéis e hierarquia (espelhando o backend para lógica de UI)
+  const ROLES_HIERARCHY = {
+    User: 1,
+    TechnicalLead: 2,
+    Manager: 3,
+    Administrator: 4,
+    SuperAdministrator: 5,
+  };
+
+  const hasPermission = (requiredRole: keyof typeof ROLES_HIERARCHY) => {
+    if (!userInfo || !userInfo.role) {
+      return false;
+    }
+    const userLevel = ROLES_HIERARCHY[userInfo.role as keyof typeof ROLES_HIERARCHY] || 0;
+    const requiredLevel = ROLES_HIERARCHY[requiredRole];
+    return userLevel >= requiredLevel;
+  };
 
   // Estado para o GCP Project ID
   const [gcpProjectId, setGcpProjectId] = useState<string>('');
@@ -164,6 +185,32 @@ const DashboardPage: React.FC = () => {
       setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, provider: provider.toUpperCase(), error: errorMessage }));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateAlertStatus = async (alertId: number, newStatus: string) => {
+    if (!hasPermission('TechnicalLead')) {
+      setError(t('dashboardPage.errorNoPermissionToChangeStatus'));
+      return;
+    }
+    setIsLoading(true); // Pode ter um loading específico para a linha do alerta
+    setError(null);
+    try {
+      const response = await apiClient.patch(`/alerts/${alertId}/status?new_status=${newStatus}`);
+      // Atualizar o alerta na lista local
+      setAlerts(prevAlerts =>
+        prevAlerts.map(alert =>
+          alert.id === alertId ? { ...alert, status: response.data.status, updated_at: response.data.updated_at } : alert
+        )
+      );
+      // Opcional: Mostrar uma notificação de sucesso (toast)
+      alert(t('dashboardPage.alertStatusUpdatedSuccess', { alertId, newStatus })); // Simples alert, idealmente usar um sistema de toast
+    } catch (err: any) {
+      console.error(`Erro ao atualizar status do alerta ${alertId}:`, err);
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorUpdatingStatus');
+      setError(t('dashboardPage.errorUpdatingAlertStatus', { alertId, error: errorMessage }));
+    } finally {
+      setIsLoading(false); // Resetar loading específico se houver
     }
   };
 
@@ -370,7 +417,7 @@ const DashboardPage: React.FC = () => {
                  <th style={tableHeaderStyle}>{t('alertItem.status')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.firstSeen')}</th>
                 <th style={tableHeaderStyle}>{t('alertItem.lastSeen')}</th>
-                {/* <th style={tableHeaderStyle}>{t('alertItem.description')}</th> */}
+                {hasPermission('TechnicalLead') && <th style={tableHeaderStyle}>{t('alertItem.actions')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -385,7 +432,29 @@ const DashboardPage: React.FC = () => {
                   <td style={tableCellStyle}>{alert.status}</td>
                   <td style={tableCellStyle}>{new Date(alert.first_seen_at).toLocaleString()}</td>
                   <td style={tableCellStyle}>{new Date(alert.last_seen_at).toLocaleString()}</td>
-                  {/* <td style={tableCellStyle}>{alert.description}</td> */}
+                  {hasPermission('TechnicalLead') && (
+                    <td style={tableCellStyle}>
+                      {alert.status === 'OPEN' && (
+                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'ACKNOWLEDGED')} style={{ marginRight: '5px' }}>
+                          {t('alertActions.acknowledge')}
+                        </button>
+                      )}
+                      {(alert.status === 'OPEN' || alert.status === 'ACKNOWLEDGED') && (
+                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'RESOLVED')} style={{ marginRight: '5px' }}>
+                          {t('alertActions.resolve')}
+                        </button>
+                      )}
+                      {alert.status !== 'IGNORED' && ( // Só mostrar "Ignore" se não estiver já ignorado
+                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'IGNORED')}>
+                          {t('alertActions.ignore')}
+                        </button>
+                      )}
+                       {/* Futuro: Botão de Detalhes/Editar aqui, se necessário, com permissão de Manager */}
+                       {/* {hasPermission('Manager') && ( <button>Editar Detalhes</button> )} */}
+                       {/* Futuro: Botão de Deletar aqui, com permissão de Administrator */}
+                       {/* {hasPermission('Administrator') && ( <button>Deletar</button> )} */}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

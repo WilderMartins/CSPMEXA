@@ -3,11 +3,13 @@ from typing import List, Optional, Any
 import datetime
 
 from app.services.http_client import policy_engine_service_client
-from app.core.security import get_current_user, TokenData
-# Assume a similar Alert schema is defined in the gateway's schemas or can be imported
-# from policy_engine_service.app.schemas.alert_schema import AlertSchema, AlertUpdate (if directly using)
-# For now, let's define a placeholder or use Any if schemas are not perfectly mirrored.
-# It's better to define them in api_gateway_service/app/schemas/policy_engine_alert_schema.py
+from app.core.security import (
+    TokenData, # Mantido
+    require_user, # Nova dependência de papel mínimo
+    require_technical_lead,
+    require_manager,
+    require_administrator
+)
 from app.schemas.policy_engine_alert_schema import AlertSchema, AlertUpdate, AlertStatusEnum, AlertSeverityEnum
 
 import logging
@@ -82,7 +84,7 @@ async def _proxy_alerts_request(
 @router.get("/", response_model=List[AlertSchema], name="alerts:list_alerts")
 async def list_alerts_gateway(
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_user), # Papel mínimo: User
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     sort_by: Optional[str] = Query(None),
@@ -116,7 +118,7 @@ async def list_alerts_gateway(
 async def get_alert_gateway(
     alert_id: int,
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_user), # Papel mínimo: User
 ):
     """
     Proxy to get a specific alert by ID from the Policy Engine Service.
@@ -128,7 +130,7 @@ async def update_alert_details_gateway(
     alert_id: int,
     alert_in: AlertUpdate, # Use the schema defined in gateway
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_manager), # Papel mínimo: Manager
 ):
     """
     Proxy to update an alert's details in the Policy Engine Service.
@@ -140,7 +142,7 @@ async def update_alert_status_gateway(
     alert_id: int,
     new_status: AlertStatusEnum = Query(..., description="The new status for the alert"),
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_technical_lead), # Papel mínimo: TechnicalLead
 ):
     """
     Proxy to update only the status of an alert in the Policy Engine Service.
@@ -153,7 +155,7 @@ async def update_alert_status_gateway(
 async def delete_alert_gateway(
     alert_id: int,
     request: Request,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_administrator), # Papel mínimo: Administrator
 ):
     """
     Proxy to delete an alert by ID from the Policy Engine Service.

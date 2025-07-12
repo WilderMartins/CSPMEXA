@@ -471,3 +471,182 @@ async def collect_gws_public_files_data(
     except Exception as e:
         logger.exception(f"Unexpected error in collect_gws_public_files_data endpoint")
         raise HTTPException(status_code=500, detail=f"Unexpected server error: {str(e)}")
+
+
+# --- Endpoints de Coleta Microsoft 365 ---
+# Importar coletores e schemas M365
+from app.m365 import m365_tenant_security_collector
+from app.schemas.m365 import m365_security_schemas
+
+M365_ROUTER_PREFIX = "/collect/m365" # Ou apenas /m365 se o prefixo /collect for adicionado no main.py
+
+@router.get(f"{M365_ROUTER_PREFIX}/users-mfa-status", response_model=m365_security_schemas.M365UserMFAStatusCollection, name="m365:collect_users_mfa_status")
+async def collect_m365_users_mfa_status_data(
+    # tenant_id: Optional[str] = Query(None, description="ID do Tenant M365. Se não fornecido, tenta obter das settings."),
+    # A autenticação via m365_client_manager já usa o tenant_id das settings.
+    # Se precisarmos suportar múltiplos tenants dinamicamente, o client_manager precisaria ser ajustado.
+):
+    """Coleta dados de status de MFA de usuários do Microsoft 365."""
+    try:
+        # O m365_tenant_security_collector usará o m365_client_manager que é configurado com Client ID, Secret e Tenant ID das settings.
+        data = await m365_tenant_security_collector.get_m365_users_mfa_status()
+        if data.error_message and not data.users_mfa_status: # Erro global sem nenhum dado parcial
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during M365 User MFA Status collection: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception("Unexpected error in collect_m365_users_mfa_status_data endpoint")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+
+@router.get(f"{M365_ROUTER_PREFIX}/conditional-access-policies", response_model=m365_security_schemas.M365ConditionalAccessPolicyCollection, name="m365:collect_ca_policies")
+async def collect_m365_ca_policies_data(
+    # tenant_id: Optional[str] = Query(None, description="ID do Tenant M365."),
+):
+    """Coleta dados de Políticas de Acesso Condicional do Microsoft 365 / Azure AD."""
+    try:
+        data = await m365_tenant_security_collector.get_m365_conditional_access_policies()
+        if data.error_message and not data.policies: # Erro global sem nenhum dado parcial
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during M365 Conditional Access Policies collection: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception("Unexpected error in collect_m365_ca_policies_data endpoint")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# Adicionar imports para o novo coletor GWS Audit e seus schemas
+from app.google_workspace import gws_audit_collector
+from app.schemas.google_workspace import gws_audit_log_schemas
+import datetime # Para os tipos de data nos query params
+
+@router.get(f"{GWS_ROUTER_PREFIX}/auditlogs", response_model=gws_audit_log_schemas.GWSAuditLogCollection, name="gws:collect_audit_logs")
+async def collect_gws_audit_logs_data(
+    application_name: str = Query(..., description="Nome da aplicação para filtrar logs (ex: login, drive, admin, token)."),
+    customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace (e.g., 'my_customer' ou C0xxxxxxx)."),
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação."),
+    max_total_results: int = Query(1000, ge=100, le=10000, description="Número máximo de logs a serem retornados."),
+    start_time_iso: Optional[str] = Query(None, description="Timestamp ISO 8601 de início (UTC). Default: 24h atrás."),
+    end_time_iso: Optional[str] = Query(None, description="Timestamp ISO 8601 de fim (UTC). Default: agora."),
+):
+    """Coleta logs de auditoria do Google Workspace para uma aplicação específica."""
+    try:
+        start_time_dt: Optional[datetime.datetime] = None
+        end_time_dt: Optional[datetime.datetime] = None
+        if start_time_iso:
+            try:
+                start_time_dt = datetime.datetime.fromisoformat(start_time_iso.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de start_time_iso inválido. Use ISO 8601 UTC (ex: YYYY-MM-DDTHH:MM:SSZ).")
+        if end_time_iso:
+            try:
+                end_time_dt = datetime.datetime.fromisoformat(end_time_iso.replace("Z", "+00:00"))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Formato de end_time_iso inválido. Use ISO 8601 UTC.")
+
+        # A função get_gws_audit_logs é síncrona (devido ao SDK do Google).
+        # Usar run_in_threadpool.
+        data = await run_in_threadpool(
+            gws_audit_collector.get_gws_audit_logs,
+            application_name=application_name,
+            customer_id=customer_id,
+            delegated_admin_email=delegated_admin_email,
+            max_total_results=max_total_results,
+            start_time=start_time_dt,
+            end_time=end_time_dt
+        )
+        if data.error_message and not data.items: # Erro global sem nenhum dado parcial
+            # Decidir se o erro é 4xx ou 5xx baseado na mensagem
+            if "not configured" in data.error_message or "Failed to get Google Workspace service client" in data.error_message:
+                 raise HTTPException(status_code=400, detail=data.error_message) # Erro de configuração
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during GWS Audit Logs collection for app '{application_name}': {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_gws_audit_logs_data endpoint for app '{application_name}'")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# Adicionar imports para o novo coletor CTS Huawei e seus schemas
+from app.huawei import huawei_cts_collector
+from app.schemas.huawei import huawei_cts_schemas
+
+# Adicionar imports para o novo coletor GCP SCC e seus schemas
+from app.gcp import gcp_scc_collector
+from app.schemas.gcp import gcp_scc_schemas
+
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/cts/traces", response_model=huawei_cts_schemas.CTSTraceCollection, name="huawei:collect_cts_traces")
+async def collect_huawei_cts_traces_data(
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud para escopo de recursos."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud para o endpoint do cliente CTS."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio da conta Huawei Cloud para autenticação IAM."),
+    tracker_name: str = Query("system", description="Nome do tracker CTS (ex: 'system' ou um nome customizado)."),
+    max_total_traces: int = Query(1000, ge=10, le=10000, description="Número máximo de traces a serem retornados no total."),
+    # Datas podem ser adicionadas como parâmetros se necessário para o frontend controlar o período
+    # from_date: Optional[datetime.datetime] = Query(None, description="Start date for traces (ISO format)"),
+    # to_date: Optional[datetime.datetime] = Query(None, description="End date for traces (ISO format)"),
+):
+    """Coleta traces do Cloud Trace Service (CTS) da Huawei Cloud."""
+    try:
+        # A função get_huawei_cts_traces é síncrona devido ao SDK da Huawei ser síncrono.
+        # Precisamos rodá-la em um threadpool para não bloquear o event loop do FastAPI.
+        # O run_in_threadpool é importado de fastapi.concurrency.
+        # (Se não estiver, adicione: from fastapi.concurrency import run_in_threadpool)
+
+        # Definir os parâmetros de tempo se não forem passados (ex: últimas 24h)
+        # Ou deixar o coletor usar seus defaults.
+        # time_to = to_date or datetime.datetime.now(datetime.timezone.utc)
+        # time_from = from_date or (time_to - datetime.timedelta(days=1))
+
+        data = await run_in_threadpool(
+            huawei_cts_collector.get_huawei_cts_traces,
+            project_id=project_id,
+            region_id=region_id,
+            domain_id=domain_id,
+            tracker_name=tracker_name,
+            max_total_traces=max_total_traces
+            # time_from=time_from, # Passar se os query params forem adicionados
+            # time_to=time_to      # Passar se os query params forem adicionados
+        )
+        if data.error_message and not data.traces: # Erro global sem nenhum dado parcial
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei CTS Traces collection: {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception("Unexpected error in collect_huawei_cts_traces_data endpoint")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{GCP_ROUTER_PREFIX}/scc/findings", response_model=gcp_scc_schemas.GCPSCCFindingCollection, name="gcp:collect_scc_findings")
+async def collect_gcp_scc_findings_data(
+    parent_resource: str = Query(..., description="Recurso pai para listar findings (ex: 'organizations/ORG_ID/sources/-' ou 'projects/PROJECT_ID/sources/-')."),
+    scc_filter: Optional[str] = Query(None, description="Filtro para a API SCC (ex: 'state=\"ACTIVE\" AND severity=\"HIGH\"')."),
+    max_total_results: int = Query(1000, ge=100, le=10000, description="Número máximo de findings a serem retornados."),
+):
+    """Coleta findings do GCP Security Command Center."""
+    try:
+        # A função get_gcp_scc_findings é síncrona devido ao SDK do Google.
+        # Usar run_in_threadpool.
+        data = await run_in_threadpool(
+            gcp_scc_collector.get_gcp_scc_findings,
+            parent_resource=parent_resource,
+            scc_filter=scc_filter,
+            max_total_results=max_total_results
+        )
+        if data.error_message and not data.findings: # Erro global sem nenhum dado parcial
+            if "DefaultCredentialsError" in data.error_message or "PERMISSION_DENIED" in data.error_message:
+                 raise HTTPException(status_code=403, detail=data.error_message) # Erro de permissão/credencial
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during GCP SCC Findings collection for parent '{parent_resource}': {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in collect_gcp_scc_findings_data endpoint for parent '{parent_resource}'")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")

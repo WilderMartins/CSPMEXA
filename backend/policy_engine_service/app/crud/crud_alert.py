@@ -203,10 +203,23 @@ async def create_alert_and_notify(db: Session, *, alert_in: AlertCreate) -> Aler
         import asyncio # Adicionado para create_task
         # Disparar a notificação sem esperar pela conclusão para não atrasar a resposta principal.
         # Isso é um "fire-and-forget". Erros serão logados pelo notification_client.
+
+        # Notificação por Email
         asyncio.create_task(notification_client.send_critical_alert_notification(alert_schema_for_notification))
+
+        # Notificação por Webhook (chamada se configurado e habilitado)
+        # A URL do webhook específica pode vir de uma configuração de política/alerta no futuro.
+        # Por agora, se chamado, usará a URL default do notification_service.
+        asyncio.create_task(notification_client.send_critical_alert_webhook_notification(alert_schema_for_notification))
+
+        # Notificação por Google Chat (chamada se configurado e habilitado)
+        asyncio.create_task(notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification))
+
 
         # Se precisarmos garantir que foi enviado antes de retornar (não recomendado para APIs síncronas):
         # await notification_client.send_critical_alert_notification(alert_schema_for_notification)
+        # await notification_client.send_critical_alert_webhook_notification(alert_schema_for_notification)
+        # await notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification)
 
     return created_alert_model
 
