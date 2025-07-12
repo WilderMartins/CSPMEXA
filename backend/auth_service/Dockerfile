@@ -8,11 +8,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar o código da aplicação
 COPY ./app /app
+COPY alembic.ini /app/alembic.ini
+COPY alembic/ /app/alembic
 
-# Comando para rodar a aplicação
-EXPOSE 8000 # Expor a porta que o uvicorn (ou python app/main.py) vai usar
-# O comando CMD será definido no docker-compose.yml para flexibilidade (ex: reload em dev)
-# Se fosse definir aqui, seria algo como:
-# CMD ["python", "/app/app/main.py"]
-# ou para produção sem reload:
-# CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Copiar e configurar o ponto de entrada
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Expor a porta que o serviço usa
+EXPOSE 8000
+
+# Definir o ponto de entrada
+ENTRYPOINT ["/app/entrypoint.sh"]
+
+# O CMD padrão pode ser definido aqui, mas será sobrescrito pelo docker-compose.
+# Isso é útil para rodar o container de forma independente.
+CMD ["python", "/app/main.py"]

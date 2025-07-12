@@ -89,7 +89,13 @@ DEBUG_MODE=false
 
         subprocess.run(cmd, check=True, cwd=working_dir, capture_output=True, text=True)
 
-        # Redireciona para a página de sucesso, passando a porta do frontend
+        # Passo 2: Executar a migração inicial do banco de dados no auth_service
+        print("Executando migração inicial do banco de dados...")
+        migrate_cmd = ["docker", "compose", "exec", "auth_service", "alembic", "upgrade", "head"]
+        subprocess.run(migrate_cmd, check=True, cwd=working_dir, capture_output=True, text=True)
+        print("Migração inicial concluída.")
+
+        # Passo 3: Redirecionar para a página de sucesso
         frontend_port = form_data.get('FRONTEND_PORT', '3000')
         return redirect(f'/success?frontend_port={frontend_port}')
 
