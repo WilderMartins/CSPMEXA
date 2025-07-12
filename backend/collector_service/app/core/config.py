@@ -1,83 +1,54 @@
+import os
+import hvac
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional, List # ADICIONADO Optional e List
-from pydantic import Field # ADICIONADO Field
-
+from typing import Optional, Dict, Any
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "CollectorService"
     API_V1_STR: str = "/api/v1"
 
-    # AWS Settings (opcional, pode ser configurado via variáveis de ambiente do Boto3)
-    AWS_REGION_NAME: str = (
-        "us-east-1"  # Região padrão para algumas operações globais ou se não especificado
-    )
-    # AWS_ACCESS_KEY_ID: Optional[str] = None
-    # AWS_SECRET_ACCESS_KEY: Optional[str] = None
+    # Configurações não-secretas
+    AWS_REGION_NAME: str = "us-east-1"
 
-    # GCP Settings - A autenticação é via GOOGLE_APPLICATION_CREDENTIALS (variável de ambiente)
-    # GCP_PROJECT_ID: Optional[str] = None # Pode ser fornecido via API ou configurado aqui como default
-
-    # Huawei Cloud Settings
-    # HUAWEICLOUD_SDK_AK: Optional[str] = None
-    # HUAWEICLOUD_SDK_SK: Optional[str] = None
-from typing import Optional, List # Adicionado List aqui também
-from pydantic import Field # Adicionado Field, embora não usado diretamente aqui, mas bom para consistência
-
-class Settings(BaseSettings):
-    PROJECT_NAME: str = "CollectorService"
-    API_V1_STR: str = "/api/v1"
-
-    # AWS Settings (opcional, pode ser configurado via variáveis de ambiente do Boto3)
-    AWS_REGION_NAME: str = (
-        "us-east-1"  # Região padrão para algumas operações globais ou se não especificado
-    )
-    # AWS_ACCESS_KEY_ID: Optional[str] = None
-    # AWS_SECRET_ACCESS_KEY: Optional[str] = None
-
-    # GCP Settings - A autenticação é via GOOGLE_APPLICATION_CREDENTIALS (variável de ambiente)
-    # GCP_PROJECT_ID: Optional[str] = None # Pode ser fornecido via API ou configurado aqui como default
-
-    # Huawei Cloud Settings
-    # HUAWEICLOUD_SDK_AK: Optional[str] = None
-    # HUAWEICLOUD_SDK_SK: Optional[str] = None
-    # HUAWEICLOUD_SDK_PROJECT_ID: Optional[str] = None # Project ID para escopo de recursos
-    # HUAWEICLOUD_SDK_DOMAIN_ID: Optional[str] = None # Domain ID (Account ID) para IAM
-
-    # Azure Settings
-    AZURE_SUBSCRIPTION_ID: Optional[str] = Field(default=None, env="AZURE_SUBSCRIPTION_ID")
-    AZURE_TENANT_ID: Optional[str] = Field(default=None, env="AZURE_TENANT_ID")
-    AZURE_CLIENT_ID: Optional[str] = Field(default=None, env="AZURE_CLIENT_ID")
-    AZURE_CLIENT_SECRET: Optional[str] = Field(default=None, env="AZURE_CLIENT_SECRET")
-
-    # Google Workspace Settings
-    GOOGLE_WORKSPACE_CUSTOMER_ID: str = Field(default="my_customer", env="GOOGLE_WORKSPACE_CUSTOMER_ID")
-    GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL: Optional[str] = Field(default=None, env="GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL")
-    GOOGLE_SERVICE_ACCOUNT_KEY_PATH: Optional[str] = Field(default=None, env="GOOGLE_SERVICE_ACCOUNT_KEY_PATH")
-    # GOOGLE_WORKSPACE_SCOPES: List[str] = Field(default_factory=lambda: [ # Definir escopos no código é mais seguro
-    #     "https://www.googleapis.com/auth/admin.directory.user.readonly",
-    #     "https://www.googleapis.com/auth/admin.reports.audit.readonly",
-    #     "https://www.googleapis.com/auth/apps.alerts"
-    # ])
+    # Endereço do Vault
+    VAULT_ADDR: str = "http://vault:8200"
+    VAULT_TOKEN: Optional[str] = None
 
     class Config:
         case_sensitive = True
-        # Pydantic v2 usaria model_config em vez de Config
-        # Pydantic v1:
-        # Para Pydantic v1, se você quiser carregar de .env automaticamente para a classe Settings:
-        # env_file = ".env"
-        # env_file_encoding = "utf-8"
-        # Para Pydantic v2, seria:
-        # model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
-        # No entanto, o .env é geralmente carregado por python-dotenv no main.py ou globalmente.
-        # Pydantic-settings lerá automaticamente as variáveis de ambiente.
 
-from typing import Optional, List # Adicionar List
-from pydantic import Field # Adicionar Field
+@lru_cache()
+def get_vault_client() -> Optional[hvac.Client]:
+    vault_addr = os.getenv("VAULT_ADDR")
+    vault_token = os.getenv("VAULT_TOKEN")
+    if not vault_token:
+        return None
+    try:
+        client = hvac.Client(url=vault_addr, token=vault_token)
+        if client.is_authenticated():
+            return client
+    except Exception as e:
+        print(f"ERRO: Não foi possível conectar ao Vault no CollectorService. Erro: {e}")
+    return None
+
+def get_credentials_from_vault(provider: str) -> Optional[Dict[str, Any]]:
+    """Busca as credenciais para um provedor específico do Vault."""
+    client = get_vault_client()
+    if not client:
+        print(f"AVISO: Cliente do Vault não disponível. Não é possível buscar credenciais para {provider}.")
+        return None
+
+    path = f"{provider}_credentials"
+    try:
+        response = client.secrets.kv.v2.read_secret_version(path=path)
+        return response['data']['data']
+    except Exception as e:
+        print(f"AVISO: Falha ao buscar credenciais para '{provider}' do Vault. Erro: {e}")
+        return None
 
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
-
 
 settings = get_settings()

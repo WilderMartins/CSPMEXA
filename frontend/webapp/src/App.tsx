@@ -6,7 +6,7 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigate, NavLink } from
 import { useTranslation } from 'react-i18next';
 import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton, Loader, Center, NavLink as MantineNavLink } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
+import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
 import { useAuth } from './contexts/AuthContext';
 
 // Lazy load das páginas principais
@@ -15,6 +15,7 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const ReportsPage = lazy(() => import('./pages/ReportsPage'));
 const InsightsPage = lazy(() => import('./pages/InsightsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const CredentialsPage = lazy(() => import('./pages/Admin/CredentialsPage')); // Adicionado
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
 
 // Componentes de rota não precisam de lazy load
@@ -86,6 +87,7 @@ function App() {
     { icon: <IconChartInfographic size={22} />, label: t('header.navReports', 'Reports'), to: '/reports' },
     { icon: <IconBulb size={22} />, label: t('header.navInsights', 'Insights'), to: '/insights' },
     { icon: <IconSettings size={22} />, label: t('header.navSettings', 'Settings'), to: '/settings' },
+    { icon: <IconKey size={22} />, label: t('header.navCredentials', 'Credentials'), to: '/settings/credentials' }, // Adicionado
   ];
 
   const providerLinks = [
@@ -170,14 +172,16 @@ function App() {
               <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
               <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
               <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
-              <Route
-                path="/settings/*"
-                element={
+              <Route path="/settings" element={
                   <ProtectedRoute requiredRole="Administrator">
                     <SettingsPage />
                   </ProtectedRoute>
-                }
-              />
+                } />
+              <Route path="/settings/credentials" element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <CredentialsPage />
+                  </ProtectedRoute>
+                } />
               <Route path="/access-denied" element={<AccessDeniedPage />} />
               <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
             </Routes>

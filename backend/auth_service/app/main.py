@@ -54,8 +54,12 @@ async def health_check():
     return {"status": "ok"}
 
 
+from app.api.v1 import admin_controller # Adicionado
+
 # Incluir roteadores da API
 app.include_router(auth_controller.router, prefix=settings.API_V1_STR, tags=["Authentication"])
+app.include_router(admin_controller.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
+
 
 if __name__ == "__main__":
     import uvicorn

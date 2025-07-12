@@ -99,14 +99,20 @@ services:
       - M365_TENANT_ID=${M365_TENANT_ID}
       - M365_HTTP_CLIENT_TIMEOUT=${M365_HTTP_CLIENT_TIMEOUT:-30}
       - DEBUG_MODE=${DEBUG_MODE:-false}
+    environment:
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      # Conexão com o Vault
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=root
     volumes:
       - ./backend/collector_service:/app
-      # Montar arquivos de credenciais do host para o container.
-      # O usuário deve criar uma pasta 'secrets' na raiz e colocar os arquivos lá,
+      # Montar arquivos de credenciais JSON ainda pode ser necessário se não forem gerenciados pelo Vault
       - ${GCP_CREDENTIALS_PATH_HOST:-./secrets/gcp-credentials.json}:/app/secrets/gcp-credentials.json:ro
       - ${GWS_SA_KEY_PATH_HOST:-./secrets/gws-sa-key.json}:/app/secrets/gws-sa-key.json:ro
     networks:
       - cspmexa_net
+    depends_on:
+      - vault-setup
 
   policy_engine_service:
     profiles: ["app"]

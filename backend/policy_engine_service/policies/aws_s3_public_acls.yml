@@ -1,0 +1,20 @@
+id: "aws_s3_public_acls"
+provider: "aws"
+service: "s3"
+resource_type: "bucket"
+description: "Verifica se um bucket S3 possui ACLs que concedem acesso público de leitura ou escrita."
+severity: "critical"
+remediation: "Revise as Access Control Lists (ACLs) do bucket e remova as permissões para 'AllUsers' (http://acs.amazonaws.com/groups/global/AllUsers) e 'AuthenticatedUsers' (http://acs.amazonaws.com/groups/global/AuthenticatedUsers)."
+
+# A lógica de verificação será baseada na presença de 'grants' perigosos.
+# A lógica do motor irá iterar sobre os 'grants' de uma ACL.
+# Esta definição é mais conceitual e será interpretada pelo motor.
+# O motor terá uma lógica específica para 'contains_any_of' em listas de objetos.
+rules:
+  - field: "acl.grants"
+    operator: "contains_any_of"
+    value:
+      - "http://acs.amazonaws.com/groups/global/AllUsers"
+      - "http://acs.amazonaws.com/groups/global/AuthenticatedUsers"
+    # A lógica específica do motor para 'contains_any_of' irá verificar se o 'Grantee.URI'
+    # dentro de qualquer um dos itens da lista 'acl.grants' corresponde a um dos valores.
