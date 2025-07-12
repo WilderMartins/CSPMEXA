@@ -47,6 +47,13 @@ const ReportsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      // TODO: Otimizar esta chamada de API.
+      // Atualmente, busca todos os alertas (até o limite) e filtra no frontend.
+      // Idealmente, a API deveria aceitar parâmetros como:
+      // - date_from, date_to (para filtrar por período diretamente no backend)
+      // - status (para buscar apenas 'OPEN' para certos relatórios)
+      // - campos_para_agregar (para que o backend já retorne dados agregados para gráficos)
+      // Exemplo de chamada otimizada: apiClient.get<AggregatedData>('/alerts/summary?period=last7days&group_by=severity')
       const response = await apiClient.get<AlertType[]>('/alerts?limit=1000&sort_by=created_at&sort_order=desc');
       setAllAlerts(response.data || []);
     } catch (err: any) {
@@ -64,6 +71,7 @@ const ReportsPage: React.FC = () => {
     }
   }, [auth.isAuthenticated]);
 
+  // TODO: Esta filtragem por tempo deve ser movida para o backend quando a API for otimizada.
   const filteredAlertsByTime = useMemo(() => {
     if (timeRange === 'allTime' || !allAlerts.length) {
       return allAlerts;
@@ -79,6 +87,7 @@ const ReportsPage: React.FC = () => {
     });
   }, [allAlerts, timeRange]);
 
+  // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
   const severityData = useMemo<ChartDataItem[]>(() => {
     const counts: Record<string, number> = {};
     filteredAlertsByTime.forEach(alert => {
@@ -99,6 +108,7 @@ const ReportsPage: React.FC = () => {
     });
   }, [filteredAlertsByTime]);
 
+  // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
   const providerData = useMemo<ChartDataItem[]>(() => {
     const counts: Record<string, number> = {};
     filteredAlertsByTime.forEach(alert => {

@@ -41,7 +41,10 @@ const InsightsPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Focar em alertas abertos para insights acionáveis, buscar um bom número para análise.
+      // TODO: Otimizar esta chamada de API.
+      // Atualmente, busca todos os alertas ABERTOS (até o limite) e processa no frontend.
+      // Idealmente, a API poderia fornecer endpoints de agregação para gerar esses insights diretamente no backend.
+      // Ex: /alerts/insights?type=top_policies ou /alerts/insights?type=top_resources
       const response = await apiClient.get<AlertType[]>('/alerts?limit=1000&status=OPEN&sort_by=created_at&sort_order=desc');
       setAllAlerts(response.data || []);
     } catch (err: any) {
@@ -59,6 +62,7 @@ const InsightsPage: React.FC = () => {
     }
   }, [auth.isAuthenticated]);
 
+  // TODO: Esta agregação para 'Top Políticas Violadas' deve ser movida para o backend quando a API for otimizada.
   const topViolatedPolicies = useMemo<InsightDataItem[]>(() => {
     if (!allAlerts.length) return [];
     const policyCounts: Record<string, number> = {};
@@ -71,6 +75,7 @@ const InsightsPage: React.FC = () => {
       .slice(0, 5); // Top 5
   }, [allAlerts]);
 
+  // TODO: Esta agregação para 'Top Recursos Vulneráveis' deve ser movida para o backend quando a API for otimizada.
   const topVulnerableResources = useMemo<InsightDataItem[]>(() => {
     if (!allAlerts.length) return [];
     const resourceCounts: Record<string, number> = {};

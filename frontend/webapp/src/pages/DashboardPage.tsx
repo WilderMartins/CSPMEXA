@@ -88,53 +88,64 @@ const DashboardPage: React.FC = () => {
     let url = `/analyze/${provider}/${servicePath}`;
     const queryParams = new URLSearchParams();
 
-    // Lógica de parâmetros para cada provedor
+    // Lógica de parâmetros para cada provedor com validações básicas
     if (provider === 'gcp') {
-      if (idParams?.projectId) {
-        queryParams.append('project_id', idParams.projectId);
-      } else {
-        setError(t('dashboardPage.gcpProjectIdRequired'));
+      if (!idParams?.projectId || idParams.projectId.trim() === '') {
+        setError(t('dashboardPage.gcpProjectIdRequired', 'GCP Project ID is required.'));
         setIsLoading(false);
         return;
       }
-      // Adicionar location para GKE se necessário e fornecido em idParams
-      if (servicePath.startsWith('gke/') && idParams?.gcpLocation) {
-        queryParams.append('location', idParams.gcpLocation);
-      } else if (servicePath.startsWith('gke/')) {
-        queryParams.append('location', '-'); // Default para todas as localizações
+      queryParams.append('project_id', idParams.projectId.trim());
+      if (servicePath.startsWith('gke/')) {
+        queryParams.append('location', idParams?.gcpLocation?.trim() || '-');
       }
     } else if (provider === 'azure') {
-      if (idParams?.subscriptionId) {
-        queryParams.append('subscription_id', idParams.subscriptionId);
-      } else {
-        setError(t('dashboardPage.azureSubscriptionIdRequired'));
+      const subId = idParams?.subscriptionId?.trim();
+      const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+      if (!subId) {
+        setError(t('dashboardPage.azureSubscriptionIdRequired', 'Azure Subscription ID is required.'));
         setIsLoading(false);
         return;
       }
+      if (!guidRegex.test(subId)) {
+        setError(t('dashboardPage.azureSubscriptionIdInvalid', 'Azure Subscription ID has an invalid format.'));
+        setIsLoading(false);
+        return;
+      }
+      queryParams.append('subscription_id', subId);
     } else if (provider === 'huawei') {
-      if (idParams?.projectId) queryParams.append('project_id', idParams.projectId);
-      // Alguns endpoints Huawei (ex: IAM Users) podem usar domain_id em vez de project_id
-      // e todos precisam de region_id.
-      if (idParams?.regionId) {
-        queryParams.append('region_id', idParams.regionId);
-      } else {
-        setError(t('dashboardPage.huaweiRegionIdRequired'));
+      const region = idParams?.regionId?.trim();
+      if (!region) {
+        setError(t('dashboardPage.huaweiRegionIdRequired', 'Huawei Cloud Region ID is required.'));
         setIsLoading(false);
         return;
       }
-      if (idParams?.domainId) queryParams.append('domain_id', idParams.domainId); // Opcional para alguns, mas pode ser necessário
+      // Huawei Project ID é opcional para IAM Users se Domain ID for fornecido, mas requerido para outros.
+      // A API do backend deve lidar com a lógica exata de qual ID usar.
+      // Aqui, apenas garantimos que a região seja fornecida.
+      if (idParams?.projectId) queryParams.append('project_id', idParams.projectId.trim());
+      queryParams.append('region_id', region);
+      if (idParams?.domainId) queryParams.append('domain_id', idParams.domainId.trim());
+
     } else if (provider === 'googleworkspace') {
-      if (idParams?.customerId) queryParams.append('customer_id', idParams.customerId);
-      if (idParams?.adminEmail) queryParams.append('delegated_admin_email', idParams.adminEmail);
-      // Adicionar application_name para auditlogs se necessário
-      if (servicePath.includes('auditlogs') && idParams?.gwsApplicationName) {
-        queryParams.append('application_name', idParams.gwsApplicationName);
-      } else if (servicePath.includes('auditlogs') && !idParams?.gwsApplicationName) {
-        // Definir um default ou exigir, dependendo da API de backend
-        // Por enquanto, vamos assumir que pode ser opcional ou ter um default no backend se não fornecido
+      const adminEmail = idParams?.adminEmail?.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      // Admin Email é opcional no backend (pega do .env se não fornecido), mas se fornecido, deve ser válido.
+      if (adminEmail && !emailRegex.test(adminEmail)) {
+          setError(t('dashboardPage.gwsAdminEmailInvalid', 'Google Workspace Admin Email has an invalid format.'));
+          setIsLoading(false);
+          return;
+      }
+      if (idParams?.customerId) queryParams.append('customer_id', idParams.customerId.trim());
+      if (adminEmail) queryParams.append('delegated_admin_email', adminEmail);
+
+      if (servicePath.includes('auditlogs')) {
+        // gwsApplicationName seria validado se fosse um input obrigatório aqui.
+        // Por ora, se existir, é adicionado.
+        if (idParams?.gwsApplicationName) queryParams.append('application_name', idParams.gwsApplicationName.trim());
       }
     }
-    // AWS não requer IDs na URL para os endpoints atuais, eles são pegos do ambiente/config do backend
+    // AWS não requer IDs na URL para os endpoints atuais.
 
     const fullUrl = `${url}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
 
