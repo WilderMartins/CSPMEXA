@@ -579,6 +579,14 @@ from app.schemas.huawei import huawei_cts_schemas
 from app.gcp import gcp_scc_collector
 from app.schemas.gcp import gcp_scc_schemas
 
+# Adicionar imports para o novo coletor GCP CAI e seus schemas
+from app.gcp import gcp_asset_inventory_collector
+from app.schemas.gcp import gcp_cai_schemas
+
+# Adicionar imports para o novo coletor GCP Cloud Audit Logs e seus schemas
+from app.gcp import gcp_cloud_audit_logs_collector
+from app.schemas.gcp import gcp_cloud_audit_log_schemas
+
 
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/cts/traces", response_model=huawei_cts_schemas.CTSTraceCollection, name="huawei:collect_cts_traces")
 async def collect_huawei_cts_traces_data(
@@ -649,4 +657,62 @@ async def collect_gcp_scc_findings_data(
         raise http_exc
     except Exception as e:
         logger.exception(f"Unexpected error in collect_gcp_scc_findings_data endpoint for parent '{parent_resource}'")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{GCP_ROUTER_PREFIX}/cai/assets", response_model=gcp_cai_schemas.GCPAssetCollection, name="gcp:list_cai_assets")
+async def list_gcp_cai_assets_data(
+    scope: str = Query(..., description="Escopo da consulta CAI (ex: 'projects/PROJECT_ID', 'organizations/ORG_ID')."),
+    asset_types: Optional[List[str]] = Query(None, description="Lista de tipos de ativos a serem retornados (ex: ['compute.googleapis.com/Instance']). Todos se não especificado."),
+    content_type: str = Query("RESOURCE", description="Tipo de conteúdo a ser retornado (RESOURCE, IAM_POLICY, etc.)."),
+    max_total_results: int = Query(1000, ge=10, le=100000, description="Número máximo de ativos a serem retornados no total."),
+):
+    """Lista ativos do GCP Cloud Asset Inventory para um escopo e tipos de ativo específicos."""
+    try:
+        # A função get_gcp_cloud_assets é síncrona. Usar run_in_threadpool.
+        data = await run_in_threadpool(
+            gcp_asset_inventory_collector.get_gcp_cloud_assets,
+            scope=scope,
+            asset_types=asset_types,
+            content_type=content_type,
+            max_total_results=max_total_results
+        )
+        if data.error_message and not data.assets: # Erro global sem nenhum dado parcial
+            if "DefaultCredentialsError" in data.error_message or "InvalidArgument" in data.error_message or "PERMISSION_DENIED" in data.error_message:
+                 raise HTTPException(status_code=400, detail=data.error_message) # Erro de config/permissão
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during GCP CAI Assets list for scope '{scope}': {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in list_gcp_cai_assets_data endpoint for scope '{scope}'")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{GCP_ROUTER_PREFIX}/auditlogs", response_model=gcp_cloud_audit_log_schemas.GCPCloudAuditLogCollection, name="gcp:list_cloud_audit_logs")
+async def list_gcp_cloud_audit_logs_data(
+    project_ids: List[str] = Query(..., description="Lista de IDs de Projeto GCP para consultar logs. Pode ser um único ID de projeto, ou múltiplos para consulta mais ampla se suportado pelo backend (ex: via organização)."),
+    log_filter: Optional[str] = Query(None, description="Filtro avançado para a API de Logging do GCP (ex: 'protoPayload.methodName=\"storage.objects.delete\"')."),
+    max_total_results: int = Query(1000, ge=10, le=50000, description="Número máximo de entradas de log a serem retornadas."),
+    # Adicionar start_time, end_time se o frontend precisar controlar isso finamente.
+    # O coletor atual usa defaults (últimas 24h) se não passados.
+):
+    """Lista entradas de log do GCP Cloud Logging, com foco em Audit Logs."""
+    try:
+        # A função get_gcp_cloud_audit_logs é síncrona. Usar run_in_threadpool.
+        data = await run_in_threadpool(
+            gcp_cloud_audit_logs_collector.get_gcp_cloud_audit_logs,
+            project_ids=project_ids, # Passando a lista de project_ids
+            log_filter=log_filter,
+            max_total_results=max_total_results
+        )
+        if data.error_message and not data.entries: # Erro global sem nenhum dado parcial
+            if "DefaultCredentialsError" in data.error_message or "InvalidArgument" in data.error_message or "PERMISSION_DENIED" in data.error_message:
+                 raise HTTPException(status_code=400, detail=data.error_message)
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during GCP Cloud Audit Logs list for projects '{project_ids}': {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in list_gcp_cloud_audit_logs_data endpoint for projects '{project_ids}'")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")

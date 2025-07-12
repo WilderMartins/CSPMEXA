@@ -167,6 +167,24 @@ class PolicyEngine:
                         gcp_parent_resource_id=account_id # account_id aqui é o parent_resource (org/folder/project)
                     )
                     generated_alert_data_list.extend(scc_alerts_data)
+            elif service == "gcp_cloud_asset_inventory": # Novo para GCP CAI
+                if not isinstance(data, GCPAssetCollectionInput): # type: ignore
+                    logger.error(f"Data for GCP CAI is not of type GCPAssetCollectionInput. Skipping. Data: {type(data)}")
+                else:
+                    cai_alerts_data = gcp_cai_policies.evaluate_gcp_cai_policies(
+                        asset_collection=data, # type: ignore
+                        account_id=account_id # account_id aqui é o escopo da consulta (project/folder/org)
+                    )
+                    generated_alert_data_list.extend(cai_alerts_data)
+            elif service == "gcp_cloud_audit_logs": # Novo para GCP Cloud Audit Logs
+                if not isinstance(data, GCPCloudAuditLogCollectionInput): # type: ignore
+                    logger.error(f"Data for GCP Cloud Audit Logs is not of type GCPCloudAuditLogCollectionInput. Skipping. Data: {type(data)}")
+                else:
+                    audit_log_alerts_data = gcp_cloud_audit_policies.evaluate_gcp_cloud_audit_log_policies(
+                        log_collection=data, # type: ignore
+                        account_id=account_id
+                    )
+                    generated_alert_data_list.extend(audit_log_alerts_data)
             else:
                 logger.warning(f"Unsupported GCP service for analysis: {service}")
 
@@ -404,6 +422,56 @@ from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput
 from app.engine import gws_audit_policies
 from app.schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput
 
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
+# Importar módulos de políticas e schemas de input para Microsoft 365
+from app.engine import m365_policies
+from app.schemas.m365.m365_input_schemas import (
+    M365UserMFAStatusCollectionInput,
+    M365ConditionalAccessPolicyCollectionInput
+)
+
+# Importar módulos de políticas e schemas de input para Huawei CTS
+from app.engine import huawei_cts_policies
+from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput
+
+# Importar módulos de políticas e schemas de input para Google Workspace Audit Logs
+from app.engine import gws_audit_policies
+from app.schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput
+
 # Importar módulos de processamento e schemas de input para GCP SCC Findings
-from app.engine import gcp_scc_processing # Adicionado
-from app.schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput # Adicionado
+from app.engine import gcp_scc_processing
+from app.schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput
+
+# Importar o novo módulo de políticas GKE e o schema de input GKE
+from app.engine import gcp_gke_policies # Adicionado
+from app.schemas.gcp.gke_input_schema import GKEClusterDataInput # Adicionado
+
+# Importar módulos de políticas e schemas de input para Microsoft 365
+from app.engine import m365_policies
+from app.schemas.m365.m365_input_schemas import (
+    M365UserMFAStatusCollectionInput,
+    M365ConditionalAccessPolicyCollectionInput
+)
+
+# Importar módulos de políticas e schemas de input para Huawei CTS
+from app.engine import huawei_cts_policies
+from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput
+
+# Importar módulos de políticas e schemas de input para Google Workspace Audit Logs
+from app.engine import gws_audit_policies
+from app.schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput
+
+# Importar módulos de processamento e schemas de input para GCP SCC Findings
+from app.engine import gcp_scc_processing
+from app.schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput
+
+# Importar módulos de políticas e schemas de input para GCP Cloud Asset Inventory
+from app.engine import gcp_cai_policies
+from app.schemas.gcp.gcp_cai_input_schemas import GCPAssetCollectionInput
+
+# Importar módulos de políticas e schemas de input para GCP Cloud Audit Logs
+from app.engine import gcp_cloud_audit_policies # Adicionado
+from app.schemas.gcp.gcp_cloud_audit_input_schemas import GCPCloudAuditLogCollectionInput # Adicionado

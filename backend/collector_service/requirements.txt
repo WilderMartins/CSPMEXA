@@ -17,6 +17,7 @@ google-cloud-compute
 google-api-python-client
 google-auth
 google-cloud-securitycenter # Para GCP Security Command Center
+google-cloud-logging # Para GCP Cloud Audit Logs
 
 # Huawei Cloud Dependencies
 huaweicloudsdkcore # Core SDK
