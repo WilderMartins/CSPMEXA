@@ -123,6 +123,7 @@
     "navDashboard": "Painel",
     "navReports": "Relatórios",
     "navInsights": "Insights",
+    "navSettings": "Configurações",
     "btnLogout": "Sair"
   },
   "footer": {
@@ -186,6 +187,35 @@
     "welcome": {
       "title": "Bem-vindo ao Painel de Controle",
       "subtitle": "Selecione um provedor no menu para iniciar uma análise."
+    }
+  },
+  "settings": {
+    "title": "Configurações",
+    "menu": {
+      "notifications": "Notificações",
+      "users": "Gerenciamento de Usuários"
+    },
+    "notifications": {
+      "title": "Configurações de Notificação",
+      "email": {
+        "title": "Destinatários de E-mail",
+        "description": "Adicione endereços de e-mail para receber notificações de alertas críticos.",
+        "placeholder": "novo.email@exemplo.com",
+        "addButton": "Adicionar E-mail"
+      },
+      "webhook": {
+        "title": "Webhooks",
+        "description": "Configure URLs de webhook para receber dados de alertas como payloads JSON.",
+        "tableNameHeader": "Nome",
+        "tableUrlHeader": "URL",
+        "addButton": "Adicionar Webhook"
+      },
+      "gchat": {
+        "title": "Webhooks do Google Chat",
+        "description": "Configure webhooks do Google Chat para receber cards de alerta formatados em seus espaços.",
+        "noWebhooks": "Nenhum webhook do Google Chat configurado.",
+        "addButton": "Adicionar Webhook do Google Chat"
+      }
     }
   }
 }

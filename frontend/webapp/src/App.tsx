@@ -6,11 +6,12 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigate, NavLink } from
 import { useTranslation } from 'react-i18next';
 import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton, Loader, Center, NavLink as MantineNavLink } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconGauge, IconChartInfographic, IconBulb, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
+import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ReportsPage from './pages/ReportsPage';
 import InsightsPage from './pages/InsightsPage';
+import SettingsPage from './pages/SettingsPage'; // Importar SettingsPage
 import AwsDashboardPage from './pages/Dashboard/AwsDashboardPage'; // Importar a nova página
 import { useAuth } from './contexts/AuthContext';
 
@@ -79,6 +80,7 @@ function App() {
     { icon: <IconGauge size={22} />, label: t('header.navDashboard', 'Dashboard'), to: '/dashboard' },
     { icon: <IconChartInfographic size={22} />, label: t('header.navReports', 'Reports'), to: '/reports' },
     { icon: <IconBulb size={22} />, label: t('header.navInsights', 'Insights'), to: '/insights' },
+    { icon: <IconSettings size={22} />, label: t('header.navSettings', 'Settings'), to: '/settings' },
   ];
 
   const providerLinks = [
@@ -159,11 +161,10 @@ function App() {
         <Routes>
           <Route path="/" element={!auth.isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/auth/callback" element={<OAuthCallbackPage />} />
-          <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />}>
-            {/* A rota aninhada será tratada dentro do DashboardPage.tsx */}
-          </Route>
+          <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
           <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
           <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
+          <Route path="/settings/*" element={auth.isAuthenticated ? <SettingsPage /> : <Navigate to="/" replace />} />
           <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
         </Routes>
       </AppShell.Main>
