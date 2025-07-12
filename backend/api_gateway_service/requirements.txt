@@ -4,3 +4,4 @@ pydantic
 pydantic-settings
 httpx
 python-jose[cryptography]
+hvac # Cliente Python para o Vault

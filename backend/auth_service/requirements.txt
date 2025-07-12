@@ -10,5 +10,4 @@ pyotp
 python-multipart
 httpx
 alembic
-python-dotenv
-alembic
+hvac # Cliente Python para o Vault

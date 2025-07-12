@@ -53,12 +53,21 @@ services:
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
     volumes:
       - ./backend/auth_service:/app # Monta o código para hot-reloading
-    # As portas não são mais expostas ao host, a comunicação é interna na rede Docker
+    environment:
+      # As configurações não-secretas ainda podem ser passadas por aqui
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
+      - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
+      # Endereço do Vault para o cliente hvac
+      - VAULT_ADDR=http://vault:8200
+      # Token para autenticar no Vault (usando o token raiz de dev)
+      - VAULT_TOKEN=root
     networks:
       - cspmexa_net
     depends_on:
       postgres_auth_db:
         condition: service_healthy
+      vault-setup:
+        condition: service_completed_successfully
 
   collector_service:
     profiles: ["app"]
@@ -108,11 +117,11 @@ services:
     restart: unless-stopped
     command: python /app/app/main.py
     environment:
-      # Aponta para o mesmo DB do auth_service para alertas
-      - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
       - DEBUG_MODE=${DEBUG_MODE:-false}
-      # URL para o notification_service, usado pelo policy_engine para enviar notificações
       - NOTIFICATION_SERVICE_URL=http://notification_service:8003/api/v1
+      # Conexão com o Vault
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=root
     volumes:
       - ./backend/policy_engine_service:/app
     networks:
@@ -120,6 +129,8 @@ services:
     depends_on:
       postgres_auth_db:
         condition: service_healthy
+      vault-setup:
+        condition: service_completed_successfully
 
   notification_service:
     profiles: ["app"]
@@ -130,25 +141,22 @@ services:
     restart: unless-stopped
     command: python /app/app/main.py
     environment:
-      - PROJECT_NAME=NotificationService
-      - API_V1_STR=/api/v1
+      # Configs não-secretas
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RELOAD_UVICORN=${DEBUG_MODE:-false}
-      - PORT=8003 # Porta interna do container
-      # SMTP settings from root .env file
-      - SMTP_HOST=${SMTP_HOST}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_TLS=${SMTP_TLS:-true}
-      - SMTP_SSL=${SMTP_SSL:-false}
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
       - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CSPMEXA Notification}
       - DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=${DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}
+      # Conexão com o Vault
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=root
     volumes:
       - ./backend/notification_service/app:/app/app
     networks:
       - cspmexa_net
+    depends_on:
+      vault-setup:
+        condition: service_completed_successfully
 
   api_gateway_service:
     profiles: ["app"]
@@ -159,17 +167,14 @@ services:
     restart: unless-stopped
     command: python /app/app/main.py
     environment:
-      - AUTH_SERVICE_URL=http://auth_service:8000/api/v1
-      - COLLECTOR_SERVICE_URL=http://collector_service:8001/api/v1
-      - POLICY_ENGINE_SERVICE_URL=http://policy_engine_service:8002/api/v1
-      - NOTIFICATION_SERVICE_URL=http://notification_service:8003/api/v1
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway}
-      - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
+      # URLs dos serviços downstream são agora definidas no config.py, mas podem ser sobrescritas aqui se necessário.
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60}
       - DEBUG_MODE=${DEBUG_MODE:-false}
+      # Conexão com o Vault
+      - VAULT_ADDR=http://vault:8200
+      - VAULT_TOKEN=root
     volumes:
       - ./backend/api_gateway_service:/app
-    # A porta do API Gateway não é mais exposta diretamente. O acesso é via Nginx no frontend.
     networks:
       - cspmexa_net
     depends_on:
@@ -177,6 +182,7 @@ services:
       - collector_service
       - policy_engine_service
       - notification_service
+      - vault-setup
 
   # --- Frontend WebApp (com Reverse Proxy Nginx) ---
   frontend_webapp:
