@@ -71,7 +71,23 @@
     "gwsAdminEmailInvalid": "O E-mail do Admin do Google Workspace possui um formato inválido.",
     "loadingMessage": "Carregando análise de {{type}}...",
     "errorTitle": "Erro",
-    "analyzeHuaweiIAMUsersButton": "Analisar Usuários IAM (Huawei)"
+    "analyzeHuaweiIAMUsersButton": "Analisar Usuários IAM (Huawei)",
+    "gcpLocationLabel": "Localização GCP",
+    "gcpLocationPlaceholder": "ex: us-central1 ou us-central1-a",
+    "sccParentResourceLabel": "Recurso Pai SCC",
+    "sccParentResourcePlaceholder": "ex: organizations/123/sources/-",
+    "sccFilterLabel": "Filtro SCC (Opcional)",
+    "sccFilterPlaceholder": "ex: state=\\"ACTIVE\\"",
+    "caiScopeLabel": "Escopo CAI",
+    "caiScopePlaceholder": "ex: projects/seu-projeto-id",
+    "caiAssetTypesLabel": "Tipos de Ativos CAI (Opcional)",
+    "caiAssetTypesPlaceholder": "ex: compute.googleapis.com/Instance",
+    "analyzeSCCFindingsButton": "Analisar Descobertas SCC",
+    "analyzeCAIAssetsButton": "Analisar Ativos CAI",
+    "analyzeGKEClustersButton": "Analisar Clusters GKE",
+    "m365AnalysisTitle": "Análise Microsoft 365",
+    "analyzeM365MfaButton": "Analisar Status de MFA de Usuários",
+    "analyzeM365CaButton": "Analisar Políticas de Acesso Condicional"
   },
   "alertItem": {
     "resource": "ID do Recurso:",
@@ -161,5 +177,15 @@
   },
   "common": {
     "errorTitle": "Ocorreu um Erro"
+  },
+  "navbar": {
+    "mainMenu": "Menu Principal",
+    "providersMenu": "Provedores"
+  },
+  "dashboard": {
+    "welcome": {
+      "title": "Bem-vindo ao Painel de Controle",
+      "subtitle": "Selecione um provedor no menu para iniciar uma análise."
+    }
   }
 }

@@ -71,7 +71,23 @@
     "gwsAdminEmailInvalid": "Google Workspace Admin Email has an invalid format.",
     "loadingMessage": "Loading {{type}} analysis...",
     "errorTitle": "Error",
-    "analyzeHuaweiIAMUsersButton": "Analyze Huawei IAM Users"
+    "analyzeHuaweiIAMUsersButton": "Analyze Huawei IAM Users",
+    "gcpLocationLabel": "GCP Location",
+    "gcpLocationPlaceholder": "e.g., us-central1 or us-central1-a",
+    "sccParentResourceLabel": "SCC Parent Resource",
+    "sccParentResourcePlaceholder": "e.g., organizations/123/sources/-",
+    "sccFilterLabel": "SCC Filter (Optional)",
+    "sccFilterPlaceholder": "e.g., state=\\"ACTIVE\\"",
+    "caiScopeLabel": "CAI Scope",
+    "caiScopePlaceholder": "e.g., projects/your-project-id",
+    "caiAssetTypesLabel": "CAI Asset Types (Optional)",
+    "caiAssetTypesPlaceholder": "e.g., compute.googleapis.com/Instance",
+    "analyzeSCCFindingsButton": "Analyze SCC Findings",
+    "analyzeCAIAssetsButton": "Analyze CAI Assets",
+    "analyzeGKEClustersButton": "Analyze GKE Clusters",
+    "m365AnalysisTitle": "Microsoft 365 Analysis",
+    "analyzeM365MfaButton": "Analyze Users MFA Status",
+    "analyzeM365CaButton": "Analyze Conditional Access Policies"
   },
   "alertItem": {
     "resource": "Resource ID:",
@@ -161,5 +177,15 @@
   },
   "common": {
     "errorTitle": "An Error Occurred"
+  },
+  "navbar": {
+    "mainMenu": "Main Menu",
+    "providersMenu": "Providers"
+  },
+  "dashboard": {
+    "welcome": {
+      "title": "Welcome to the Dashboard",
+      "subtitle": "Select a provider from the menu to start an analysis."
+    }
   }
 }

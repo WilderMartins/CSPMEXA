@@ -1,412 +1,45 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../contexts/AuthContext';
-import ProviderAnalysisSection from '../components/Dashboard/ProviderAnalysisSection';
-import AlertsTable, { Alert as AlertType } from '../components/Dashboard/AlertsTable';
-import ErrorMessage from '../components/Common/ErrorMessage'; // Importar ErrorMessage
-import { Tabs, Button as MantineButton, Title, Paper, Text, Skeleton, Box } from '@mantine/core';
-// MantineAlert e IconAlertCircle não são mais necessários diretamente aqui se ErrorMessage os encapsula
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Title, Text, Container } from '@mantine/core';
 
-const DashboardPage: React.FC = () => {
+// Importar as novas páginas de análise por provedor
+import AwsDashboardPage from './Dashboard/AwsDashboardPage';
+import GcpDashboardPage from './Dashboard/GcpDashboardPage';
+import AzureDashboardPage from './Dashboard/AzureDashboardPage';
+import HuaweiDashboardPage from './Dashboard/HuaweiDashboardPage';
+import GwsDashboardPage from './Dashboard/GwsDashboardPage';
+import M365DashboardPage from './Dashboard/M365DashboardPage';
+
+const DashboardHomePage = () => {
   const { t } = useTranslation();
-  const auth = useAuth();
-
-  // --- Estados do Componente ---
-  const [alerts, setAlerts] = useState<AlertType[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [userInfo, setUserInfo] = useState<any>(null); // Adicionado da branch 'feature'
-  const [currentDisplayMode, setCurrentDisplayMode] = useState<'all_alerts' | 'analysis_result'>('all_alerts'); [cite: 8]
-  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null); [cite: 8]
-
-  // Estados para IDs dos provedores
-  const [gcpProjectId, setGcpProjectId] = useState<string>('');
-  const [huaweiProjectId, setHuaweiProjectId] = useState<string>('');
-  const [huaweiRegionId, setHuaweiRegionId] = useState<string>(''); [cite: 13]
-  const [huaweiDomainId, setHuaweiDomainId] = useState<string>(''); [cite: 13]
-  const [azureSubscriptionId, setAzureSubscriptionId] = useState<string>(''); [cite: 13]
-  const [googleWorkspaceCustomerId, setGoogleWorkspaceCustomerId] = useState<string>('my_customer'); [cite: 13]
-  const [googleWorkspaceAdminEmail, setGoogleWorkspaceAdminEmail] = useState<string>(''); [cite: 14]
-
-  // --- Lógica de Permissões (da branch 'feature') ---
-  const ROLES_HIERARCHY = { [cite: 9]
-    User: 1,
-    TechnicalLead: 2,
-    Manager: 3,
-    Administrator: 4,
-    SuperAdministrator: 5,
-  };
-
-  const hasPermission = (requiredRole: keyof typeof ROLES_HIERARCHY) => { [cite: 10]
-    if (!auth.user || !auth.user.role) {
-      return false;
-    }
-    const userLevel = ROLES_HIERARCHY[auth.user.role as keyof typeof ROLES_HIERARCHY] || 0;
-    const requiredLevel = ROLES_HIERARCHY[requiredRole];
-    return userLevel >= requiredLevel; [cite: 12]
-  };
-
-  // --- Funções de API ---
-  const apiClient = useMemo(() => { [cite: 15]
-    return axios.create({
-      baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-      headers: { 'Authorization': `Bearer ${auth.token}` }
-    });
-  }, [auth.token]);
-
-  const fetchAllAlerts = async () => { [cite: 16]
-    if (!auth.isAuthenticated) return;
-    setIsLoading(true);
-    setError(null);
-    setAlerts([]);
-    setCurrentDisplayMode('all_alerts');
-    setCurrentAnalysisType(null);
-    try { [cite: 17]
-      const response = await apiClient.get<Alert[]>('/alerts?limit=100&sort_by=last_seen_at&sort_order=desc'); [cite: 17]
-      setAlerts(response.data || []); [cite: 18]
-      if (response.data.length === 0) setError(t('dashboardPage.noAlertsFound')); [cite: 18]
-    } catch (err: any) { [cite: 19]
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts'); [cite: 20]
-      setError(t('dashboardPage.errorFetchingAllAlerts', { error: errorMessage })); [cite: 20]
-    } finally { [cite: 21]
-      setIsLoading(false); [cite: 21]
-    }
-  };
-
-  const handleAnalysis = async ( [cite: 23]
-    provider: 'aws' | 'gcp' | 'huawei' | 'azure' | 'googleworkspace',
-    servicePath: string,
-    analysisType: string,
-    idParams?: Record<string, string | undefined>
-  ) => {
-    setIsLoading(true); [cite: 23]
-    setError(null); [cite: 24]
-    setAlerts([]); [cite: 24]
-    setCurrentDisplayMode('analysis_result'); [cite: 24]
-    setCurrentAnalysisType(analysisType); [cite: 24]
-
-    let url = `/analyze/${provider}/${servicePath}`;
-    const queryParams = new URLSearchParams();
-
-    // Lógica de parâmetros para cada provedor com validações básicas
-    if (provider === 'gcp') {
-      if (!idParams?.projectId || idParams.projectId.trim() === '') {
-        setError(t('dashboardPage.gcpProjectIdRequired', 'GCP Project ID is required.'));
-        setIsLoading(false);
-        return;
-      }
-      queryParams.append('project_id', idParams.projectId.trim());
-      if (servicePath.startsWith('gke/')) {
-        queryParams.append('location', idParams?.gcpLocation?.trim() || '-');
-      }
-    } else if (provider === 'azure') {
-      const subId = idParams?.subscriptionId?.trim();
-      const guidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (!subId) {
-        setError(t('dashboardPage.azureSubscriptionIdRequired', 'Azure Subscription ID is required.'));
-        setIsLoading(false);
-        return;
-      }
-      if (!guidRegex.test(subId)) {
-        setError(t('dashboardPage.azureSubscriptionIdInvalid', 'Azure Subscription ID has an invalid format.'));
-        setIsLoading(false);
-        return;
-      }
-      queryParams.append('subscription_id', subId);
-    } else if (provider === 'huawei') {
-      const region = idParams?.regionId?.trim();
-      if (!region) {
-        setError(t('dashboardPage.huaweiRegionIdRequired', 'Huawei Cloud Region ID is required.'));
-        setIsLoading(false);
-        return;
-      }
-      // Huawei Project ID é opcional para IAM Users se Domain ID for fornecido, mas requerido para outros.
-      // A API do backend deve lidar com a lógica exata de qual ID usar.
-      // Aqui, apenas garantimos que a região seja fornecida.
-      if (idParams?.projectId) queryParams.append('project_id', idParams.projectId.trim());
-      queryParams.append('region_id', region);
-      if (idParams?.domainId) queryParams.append('domain_id', idParams.domainId.trim());
-
-    } else if (provider === 'googleworkspace') {
-      const adminEmail = idParams?.adminEmail?.trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      // Admin Email é opcional no backend (pega do .env se não fornecido), mas se fornecido, deve ser válido.
-      if (adminEmail && !emailRegex.test(adminEmail)) {
-          setError(t('dashboardPage.gwsAdminEmailInvalid', 'Google Workspace Admin Email has an invalid format.'));
-          setIsLoading(false);
-          return;
-      }
-      if (idParams?.customerId) queryParams.append('customer_id', idParams.customerId.trim());
-      if (adminEmail) queryParams.append('delegated_admin_email', adminEmail);
-
-      if (servicePath.includes('auditlogs')) {
-        // gwsApplicationName seria validado se fosse um input obrigatório aqui.
-        // Por ora, se existir, é adicionado.
-        if (idParams?.gwsApplicationName) queryParams.append('application_name', idParams.gwsApplicationName.trim());
-      }
-    }
-    // AWS não requer IDs na URL para os endpoints atuais.
-
-    const fullUrl = `${url}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-
-    try {
-      const response = await apiClient.post<Alert[]>(fullUrl, {});
-      setAlerts(response.data || []); [cite: 34]
-      if (response.data.length === 0) setError(t('dashboardPage.noNewAlertsForAnalysis', { type: analysisType })); [cite: 35]
-    } catch (err: any) { [cite: 36]
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts'); [cite: 36]
-      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, provider: provider.toUpperCase(), error: errorMessage })); [cite: 36]
-    } finally { [cite: 37]
-      setIsLoading(false); [cite: 37]
-    }
-  };
-
-  // Função para atualizar o status do alerta (da branch 'feature')
-  const handleUpdateAlertStatus = async (alertId: number, newStatus: string) => { [cite: 38]
-    if (!hasPermission('TechnicalLead')) {
-      setError(t('dashboardPage.errorNoPermissionToChangeStatus')); [cite: 38]
-      return; [cite: 39]
-    }
-    setIsLoading(true);
-    setError(null); [cite: 39]
-    try { [cite: 40]
-      const response = await apiClient.patch(`/alerts/${alertId}/status?new_status=${newStatus}`); [cite: 40]
-      setAlerts(prevAlerts => [cite: 41]
-        prevAlerts.map(alert => [cite: 41]
-          alert.id === alertId ? { ...alert, status: response.data.status, updated_at: response.data.updated_at } : alert [cite: 41]
-        ) [cite: 41]
-      );
-    } catch (err: any) { [cite: 43]
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorUpdatingStatus'); [cite: 44]
-      setError(t('dashboardPage.errorUpdatingAlertStatus', { alertId, error: errorMessage })); [cite: 44]
-    } finally { [cite: 45]
-      setIsLoading(false); [cite: 45]
-    }
-  };
-
-  // --- Efeitos ---
-  useEffect(() => { [cite: 22]
-    if (auth.isAuthenticated) {
-      setUserInfo(auth.user); // Garante que userInfo tenha os dados do usuário logado
-      fetchAllAlerts(); [cite: 22]
-    }
-  }, [auth.isAuthenticated, auth.user]);
-
-  // --- Configuração da UI (da branch 'main') ---
-  // TODO: Adicionar chaves de tradução para os novos placeholders e labels
-  const providerConfigs = {
-    aws: {
-      providerNameKey: 'dashboardPage.awsAnalysisTitle',
-      analysisButtons: [
-        { id: 's3', labelKey: 'dashboardPage.analyzeS3Button', servicePath: 's3', analysisType: 'AWS S3 Buckets' },
-        { id: 'ec2Instances', labelKey: 'dashboardPage.analyzeEC2InstancesButton', servicePath: 'ec2/instances', analysisType: 'AWS EC2 Instances' },
-        { id: 'ec2Sgs', labelKey: 'dashboardPage.analyzeEC2SGsButton', servicePath: 'ec2/security-groups', analysisType: 'AWS EC2 Security Groups' },
-        { id: 'iamUsers', labelKey: 'dashboardPage.analyzeIAMUsersButton', servicePath: 'iam/users', analysisType: 'AWS IAM Users' },
-        { id: 'rdsInstances', labelKey: 'dashboardPage.analyzeRDSInstancesButton', servicePath: 'rds/instances', analysisType: 'AWS RDS Instances' },
-      ]
-    },
-    gcp: {
-      providerNameKey: 'dashboardPage.gcpAnalysisTitle',
-      inputFields: [
-        { id: 'gcpProjectId', name: 'projectId', labelKey: 'dashboardPage.gcpProjectIdLabel', placeholderKey: 'dashboardPage.gcpProjectIdPlaceholder', value: gcpProjectId, setter: setGcpProjectId }
-        // Adicionar campo para gcpLocation se quisermos que seja configurável para GKE
-      ],
-      analysisButtons: [
-        { id: 'gcpStorage', labelKey: 'dashboardPage.analyzeGCPStorageButton', servicePath: 'storage/buckets', analysisType: 'GCP Storage Buckets', requiredParams: ['projectId'] },
-        { id: 'gcpComputeInstances', labelKey: 'dashboardPage.analyzeGCPInstancesButton', servicePath: 'compute/instances', analysisType: 'GCP Compute Instances', requiredParams: ['projectId'] },
-        { id: 'gcpFirewalls', labelKey: 'dashboardPage.analyzeGCPFirewallsButton', servicePath: 'compute/firewalls', analysisType: 'GCP Compute Firewalls', requiredParams: ['projectId'] },
-        { id: 'gcpIam', labelKey: 'dashboardPage.analyzeGCPIAMButton', servicePath: 'iam/project-policies', analysisType: 'GCP Project IAM', requiredParams: ['projectId'] },
-        { id: 'gcpGke', labelKey: 'dashboardPage.analyzeGKEClustersButton', servicePath: 'gke/clusters', analysisType: 'GCP GKE Clusters', requiredParams: ['projectId'] }, // Adicionar gcpLocation como opcional aqui
-      ]
-    },
-    huawei: {
-      providerNameKey: 'dashboardPage.huaweiAnalysisTitle',
-      inputFields: [
-        { id: 'huaweiProjectIdInput', name: 'projectId', labelKey: 'dashboardPage.huaweiProjectIdLabel', placeholderKey: 'dashboardPage.huaweiProjectIdPlaceholder', value: huaweiProjectId, setter: setHuaweiProjectId },
-        { id: 'huaweiRegionIdInput', name: 'regionId', labelKey: 'dashboardPage.huaweiRegionIdLabel', placeholderKey: 'dashboardPage.huaweiRegionIdPlaceholder', value: huaweiRegionId, setter: setHuaweiRegionId },
-        { id: 'huaweiDomainIdInput', name: 'domainId', labelKey: 'dashboardPage.huaweiDomainIdLabel', placeholderKey: 'dashboardPage.huaweiDomainIdPlaceholder', value: huaweiDomainId, setter: setHuaweiDomainId, isOptional: true }
-      ],
-      analysisButtons: [
-        { id: 'huaweiObs', labelKey: 'dashboardPage.analyzeHuaweiOBSButton', servicePath: 'obs/buckets', analysisType: 'Huawei OBS Buckets', requiredParams: ['projectId', 'regionId'] },
-        { id: 'huaweiEcs', labelKey: 'dashboardPage.analyzeHuaweiECSButton', servicePath: 'ecs/instances', analysisType: 'Huawei ECS Instances', requiredParams: ['projectId', 'regionId'] },
-        { id: 'huaweiSgs', labelKey: 'dashboardPage.analyzeHuaweiSGsButton', servicePath: 'vpc/security-groups', analysisType: 'Huawei VPC SGs', requiredParams: ['projectId', 'regionId'] },
-        { id: 'huaweiIamUsers', labelKey: 'dashboardPage.analyzeHuaweiIAMUsersButton', servicePath: 'iam/users', analysisType: 'Huawei IAM Users', requiredParams: ['regionId'] }, // projectId ou domainId podem ser usados
-      ]
-    },
-    azure: {
-      providerNameKey: 'dashboardPage.azureAnalysisTitle',
-      inputFields: [
-        { id: 'azureSubId', name: 'subscriptionId', labelKey: 'dashboardPage.azureSubscriptionIdLabel', placeholderKey: 'dashboardPage.azureSubscriptionIdPlaceholder', value: azureSubscriptionId, setter: setAzureSubscriptionId }
-      ],
-      analysisButtons: [
-        { id: 'azureVms', labelKey: 'dashboardPage.analyzeAzureVMsButton', servicePath: 'virtualmachines', analysisType: 'Azure Virtual Machines', requiredParams: ['subscriptionId'] },
-        { id: 'azureStorage', labelKey: 'dashboardPage.analyzeAzureStorageButton', servicePath: 'storageaccounts', analysisType: 'Azure Storage Accounts', requiredParams: ['subscriptionId'] },
-      ]
-    },
-    googleworkspace: {
-      providerNameKey: 'dashboardPage.gwsAnalysisTitle',
-      inputFields: [
-        { id: 'gwsCustomerId', name: 'customerId', labelKey: 'dashboardPage.gwsCustomerIdLabel', placeholderKey: 'dashboardPage.gwsCustomerIdPlaceholder', value: googleWorkspaceCustomerId, setter: setGoogleWorkspaceCustomerId, isOptional: true },
-        { id: 'gwsAdminEmail', name: 'adminEmail', labelKey: 'dashboardPage.gwsAdminEmailLabel', placeholderKey: 'dashboardPage.gwsAdminEmailPlaceholder', value: googleWorkspaceAdminEmail, setter: setGoogleWorkspaceAdminEmail, isOptional: true },
-        // Adicionar campo para gwsApplicationName se quisermos que seja configurável para AuditLogs
-      ],
-      analysisButtons: [
-        { id: 'gwsUsers', labelKey: 'dashboardPage.analyzeGWSUsersButton', servicePath: 'users', analysisType: 'Google Workspace Users' },
-        { id: 'gwsSharedDrives', labelKey: 'dashboardPage.analyzeGWSSharedDrivesButton', servicePath: 'drive/shared-drives', analysisType: 'Google Workspace Shared Drives' },
-        // Adicionar botão para GWS AuditLogs, passando gwsApplicationName
-      ]
-    }
-  };
-
-  // --- Renderização ---
-  return ( [cite: 111]
-    <div className="dashboard-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <Title order={1} ta="center" mb="xl">{t('dashboardPage.title')}</Title>
-
-      {userInfo && (
-        <Paper withBorder p="md" mb="xl" shadow="xs" radius="md" style={{backgroundColor: "var(--mantine-color-gray-0)"}}>
-          <Text>{t('dashboardPage.welcomeMessage', { userId: userInfo.user_id || userInfo.email || 'Usuário' })}</Text>
-        </Paper>
-      )}
-
-      <MantineButton [cite: 112]
-        onClick={fetchAllAlerts} [cite: 112]
-        loading={isLoading && currentDisplayMode === 'all_alerts'} [cite: 112]
-        mb="xl" [cite: 112]
-        variant="filled" [cite: 112]
-      >
-        {t('dashboardPage.fetchAllAlertsButton')} [cite: 112]
-      </MantineButton>
-
-      <Tabs defaultValue="aws" variant="outline" radius="md"> [cite: 112]
-        <Tabs.List grow>
-          <Tabs.Tab value="aws">AWS</Tabs.Tab> [cite: 112]
-          <Tabs.Tab value="gcp">GCP</Tabs.Tab> [cite: 112]
-          <Tabs.Tab value="huawei">Huawei Cloud</Tabs.Tab> [cite: 113]
-          <Tabs.Tab value="azure">Azure</Tabs.Tab> [cite: 113]
-          <Tabs.Tab value="gws">Google Workspace</Tabs.Tab> [cite: 113]
-        </Tabs.List>
-
-        <Tabs.Panel value="aws" pt="xs"> [cite: 114]
-          <ProviderAnalysisSection
-            providerId="aws"
-            providerNameKey={providerConfigs.aws.providerNameKey}
-            analysisButtons={providerConfigs.aws.analysisButtons}
-            onAnalyze={handleAnalysis} [cite: 114]
-            isLoading={isLoading}
-            currentAnalysisType={currentAnalysisType}
-          />
-        </Tabs.Panel>
-        <Tabs.Panel value="gcp" pt="xs">
-           <ProviderAnalysisSection
-            providerId="gcp"
-            providerNameKey={providerConfigs.gcp.providerNameKey}
-            inputFields={providerConfigs.gcp.inputFields}
-            analysisButtons={providerConfigs.gcp.analysisButtons}
-            onAnalyze={(provider, service, type, buttonParams) => handleAnalysis(
-              provider,
-              service,
-              type,
-              {
-                projectId: gcpProjectId,
-                // gcpLocation: gcpLocation, // Descomentar se adicionar input para location
-              }
-            )}
-            isLoading={isLoading}
-            currentAnalysisType={currentAnalysisType}
-          />
-        </Tabs.Panel>
-        <Tabs.Panel value="huawei" pt="xs">
-          <ProviderAnalysisSection
-            providerId="huawei"
-            providerNameKey={providerConfigs.huawei.providerNameKey}
-            inputFields={providerConfigs.huawei.inputFields}
-            analysisButtons={providerConfigs.huawei.analysisButtons}
-            onAnalyze={(provider, service, type, buttonParams) => handleAnalysis(
-              provider,
-              service,
-              type,
-              {
-                projectId: huaweiProjectId,
-                regionId: huaweiRegionId,
-                domainId: huaweiDomainId,
-              }
-            )}
-            isLoading={isLoading}
-            currentAnalysisType={currentAnalysisType}
-          />
-        </Tabs.Panel>
-        <Tabs.Panel value="azure" pt="xs">
-          <ProviderAnalysisSection
-            providerId="azure"
-            providerNameKey={providerConfigs.azure.providerNameKey}
-            inputFields={providerConfigs.azure.inputFields}
-            analysisButtons={providerConfigs.azure.analysisButtons}
-            onAnalyze={(provider, service, type, buttonParams) => handleAnalysis(
-              provider,
-              service,
-              type,
-              {
-                subscriptionId: azureSubscriptionId,
-              }
-            )}
-            isLoading={isLoading}
-            currentAnalysisType={currentAnalysisType}
-          />
-        </Tabs.Panel>
-        <Tabs.Panel value="gws" pt="xs">
-          <ProviderAnalysisSection
-            providerId="googleworkspace"
-            providerNameKey={providerConfigs.googleworkspace.providerNameKey}
-            inputFields={providerConfigs.googleworkspace.inputFields}
-            analysisButtons={providerConfigs.googleworkspace.analysisButtons}
-            onAnalyze={(provider, service, type, buttonParams) => handleAnalysis(
-              provider,
-              service,
-              type,
-              {
-                customerId: googleWorkspaceCustomerId,
-                adminEmail: googleWorkspaceAdminEmail,
-                // gwsApplicationName: gwsApplicationName, // Descomentar se adicionar input/select para app name
-              }
-            )}
-            isLoading={isLoading}
-            currentAnalysisType={currentAnalysisType}
-          />
-        </Tabs.Panel>
-      </Tabs>
-
-      {/* Exibição de Loading e Erro */}
-      <ErrorMessage message={error} onClose={() => setError(null)} title={t('dashboardPage.errorTitle', 'Analysis Error')} />
-
-      {isLoading && !error && (
-        <Box mt="xl">
-          <Skeleton height={40} mb="md" width="25%" /> {/* Título da Tabela */}
-          <Skeleton height={30} mb="sm" width="70%" /> {/* Filtros */}
-          <Skeleton height={25} mt="md" />
-          <Skeleton height={25} mt="xs" />
-          <Skeleton height={25} mt="xs" />
-          <Skeleton height={25} mt="xs" />
-          <Skeleton height={25} mt="xs" />
-          <Skeleton height={30} mt="md" width="20%" style={{ marginLeft: 'auto' }}/> {/* Paginação */}
-        </Box>
-      )}
-
-      {!isLoading && !error && (
-        <AlertsTable
-          alerts={alerts as AlertType[]}
-          onUpdateStatus={handleUpdateAlertStatus} // Prop para a função de update
-          canUpdateStatus={hasPermission('TechnicalLead')} // Prop para verificar permissão
-          title={
-            currentDisplayMode === 'all_alerts'
-              ? t('dashboardPage.allPersistedAlerts')
-              : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType || t('dashboardPage.unknownAnalysis') })
-          }
-        />
-      )}
-    </div>
+  return (
+    <Container>
+      <Title order={2} ta="center" mt="xl">{t('dashboard.welcome.title', 'Welcome to the Dashboard')}</Title>
+      <Text ta="center" mt="md" c="dimmed">{t('dashboard.welcome.subtitle', 'Select a provider from the menu to start an analysis.')}</Text>
+    </Container>
   );
 };
 
-export default DashboardPage; [cite: 125]
+/**
+ * `DashboardPage` agora atua como um roteador para as sub-páginas de cada provedor.
+ * Ele renderiza a página de análise específica com base na URL.
+ *
+ * @component
+ */
+const DashboardPage: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<DashboardHomePage />} />
+      <Route path="aws" element={<AwsDashboardPage />} />
+      <Route path="gcp" element={<GcpDashboardPage />} />
+      <Route path="azure" element={<AzureDashboardPage />} />
+      <Route path="huawei" element={<HuaweiDashboardPage />} />
+      <Route path="google-workspace" element={<GwsDashboardPage />} />
+      <Route path="microsoft365" element={<M365DashboardPage />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
+};
+
+export default DashboardPage;
