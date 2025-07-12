@@ -177,39 +177,194 @@ iam_user_policies_to_evaluate: List[IAMPolicy] = [
     IAMRootUserActiveAccessKeyPolicy(),
 ]
 
-# Adicionar listas para IAM Roles e IAM Policies (gerenciadas) quando as classes de política forem criadas
+# Nova Política: Usuário IAM com Políticas Inline
+class IAMUserHasInlinePolicies(IAMPolicy):
+    def __init__(self):
+        super().__init__(
+            policy_id="IAM_User_Has_Inline_Policies",
+            title="Usuário IAM Possui Políticas Inline Anexadas",
+            description="O usuário IAM possui uma ou mais políticas inline. Políticas inline podem dificultar o gerenciamento e auditoria de permissões em escala.",
+            severity="Medium",
+            recommendation="Considere substituir políticas inline por políticas gerenciadas pela AWS ou pelo cliente para facilitar o gerenciamento, o versionamento e a reutilização de políticas."
+        )
+
+    def check(self, user: IAMUserDataInput, account_id: Optional[str]) -> Optional[Alert]:
+        if user.inline_policies and len(user.inline_policies) > 0: # user.inline_policies já é o nome correto do schema
+            policy_names = [p.policy_name for p in user.inline_policies if p.policy_name] # p.policy_name já é o nome correto do schema
+            details = {
+                "user_name": user.user_name,
+                "user_arn": user.arn,
+                "inline_policy_names": policy_names,
+                "inline_policies_count": len(user.inline_policies)
+            }
+            return Alert(
+                id=str(uuid.uuid4()), resource_id=user.arn, resource_type="IAMUser",
+                account_id=account_id or "N/A", region="global", provider="aws",
+                severity=self.severity, title=self.title,
+                description=f"{self.description} Políticas inline encontradas: {', '.join(policy_names)}.",
+                policy_id=self.policy_id, details=details, recommendation=self.recommendation
+            )
+        return None
+iam_user_policies_to_evaluate.append(IAMUserHasInlinePolicies())
+
+
+# Nova Política: Chave de Acesso do Usuário precisa de rotação (ex: > 90 dias)
+ACCESS_KEY_ROTATION_THRESHOLD_DAYS = 90
+class IAMUserAccessKeyRotationNeeded(IAMPolicy):
+    def __init__(self):
+        super().__init__(
+            policy_id="IAM_User_AccessKey_Needs_Rotation",
+            title=f"Chave de Acesso do Usuário IAM Mais Antiga que {ACCESS_KEY_ROTATION_THRESHOLD_DAYS} Dias",
+            description=f"Uma ou mais chaves de acesso ativas para o usuário IAM têm mais de {ACCESS_KEY_ROTATION_THRESHOLD_DAYS} dias. Chaves de acesso de longa duração aumentam o risco se comprometidas.",
+            severity="Medium",
+            recommendation=f"Rotacione as chaves de acesso IAM regularmente, pelo menos a cada {ACCESS_KEY_ROTATION_THRESHOLD_DAYS} dias. Exclua chaves antigas após a rotação bem-sucedida."
+        )
+
+    def check(self, user: IAMUserDataInput, account_id: Optional[str]) -> Optional[Alert]:
+        alerts_list: List[Alert] = [] # Um usuário pode ter múltiplas chaves que precisam de rotação
+        if not user.access_keys:
+            return None
+
+        now = datetime.now(timezone.utc)
+        for key in user.access_keys:
+            if key.status == "Active":
+                age_days = (now - key.create_date).days
+                if age_days > ACCESS_KEY_ROTATION_THRESHOLD_DAYS:
+                    details = {
+                        "user_name": user.user_name,
+                        "access_key_id": key.access_key_id,
+                        "created_date": key.create_date.isoformat(),
+                        "age_days": age_days,
+                        "rotation_threshold_days": ACCESS_KEY_ROTATION_THRESHOLD_DAYS
+                    }
+                    alerts_list.append(Alert(
+                        id=str(uuid.uuid4()), resource_id=key.access_key_id, resource_type="AWS::IAM::AccessKey",
+                        account_id=account_id or "N/A", region="global", provider="aws",
+                        severity=self.severity, title=self.title,
+                        description=f"Chave de acesso '{key.access_key_id}' para o usuário '{user.user_name}' tem {age_days} dias.",
+                        policy_id=self.policy_id, details=details, recommendation=self.recommendation
+                    ))
+        return alerts_list if alerts_list else None # Retorna lista de alertas ou None
+iam_user_policies_to_evaluate.append(IAMUserAccessKeyRotationNeeded())
+
+
+# --- Políticas para Roles IAM ---
+iam_role_policies_to_evaluate: List[IAMPolicy] = [] # Lista para políticas de Role
+
+class IAMRoleHasInlinePolicies(IAMPolicy):
+    def __init__(self):
+        super().__init__(
+            policy_id="IAM_Role_Has_Inline_Policies",
+            title="Role IAM Possui Políticas Inline Anexadas",
+            description="A role IAM possui uma ou mais políticas inline. Políticas inline podem dificultar o gerenciamento e auditoria de permissões.",
+            severity="Medium",
+            recommendation="Considere substituir políticas inline por políticas gerenciadas pela AWS ou pelo cliente para facilitar o gerenciamento e a reutilização."
+        )
+
+    def check(self, role: IAMRoleDataInput, account_id: Optional[str]) -> Optional[Alert]:
+        if role.inline_policies and len(role.inline_policies) > 0: # role.inline_policies já é o nome correto do schema
+            policy_names = [p.policy_name for p in role.inline_policies if p.policy_name] # p.policy_name já é o nome correto do schema
+            details = {
+                "role_name": role.role_name, # role.role_name é o correto
+                "role_arn": role.arn, # role.arn é o correto
+                "inline_policy_names": policy_names,
+                "inline_policies_count": len(role.inline_policies)
+            }
+            return Alert(
+                id=str(uuid.uuid4()), resource_id=role.arn, resource_type="IAMRole",
+                account_id=account_id or "N/A", region="global", provider="aws",
+                severity=self.severity, title=self.title,
+                description=f"{self.description} Políticas inline encontradas: {', '.join(policy_names)}.",
+                policy_id=self.policy_id, details=details, recommendation=self.recommendation
+            )
+        return None
+iam_role_policies_to_evaluate.append(IAMRoleHasInlinePolicies())
+
 
 # --- Funções de Avaliação ---
 
-def evaluate_iam_user_policies(users_data: List[IAMUserDataInput], account_id: Optional[str]) -> List[Alert]:
-    all_alerts: List[Alert] = []
+def evaluate_iam_user_policies(users_data: List[IAMUserDataInput], account_id: Optional[str]) -> List[Dict[str, Any]]:
+    all_alerts_data: List[Dict[str, Any]] = []
+    if not users_data: return all_alerts_data
     logger.info(f"Avaliando {len(users_data)} usuários IAM para a conta {account_id or 'N/A'}.")
 
     for user in users_data:
         if user.error_details:
             logger.warning(f"Skipping IAM user {user.user_name} due to previous collection error: {user.error_details}")
+            # Adicionar alerta informativo sobre falha na coleta do usuário
+            all_alerts_data.append({
+                "resource_id": user.user_name or user.arn or "UnknownUser",
+                "resource_type": "IAMUser", "provider": "aws", "severity": "Informational",
+                "title": "Falha na Coleta de Detalhes do Usuário IAM",
+                "description": f"Não foi possível coletar todos os detalhes para o usuário IAM '{user.user_name or user.user_id}'. Erro: {user.error_details}",
+                "policy_id": "IAM_User_Collection_Error", "account_id": account_id, "region": "global",
+                "details": {"user_info": user.user_name or user.user_id, "error": user.error_details}
+            })
             continue
 
         for policy in iam_user_policies_to_evaluate:
             try:
-                alert = policy.check(user, account_id)
-                if alert:
-                    all_alerts.append(alert)
+                # O método check pode retornar um único Alert ou uma Lista de Alerts
+                result = policy.check(user, account_id)
+                if result:
+                    if isinstance(result, list):
+                        for alert_obj in result:
+                            all_alerts_data.append(alert_obj.model_dump()) # Pydantic V2
+                            # all_alerts_data.append(alert_obj.dict()) # Pydantic V1
+                    else: # Single Alert object
+                        all_alerts_data.append(result.model_dump()) # Pydantic V2
+                        # all_alerts_data.append(result.dict()) # Pydantic V1
             except Exception as e:
                 logger.error(f"Error evaluating policy {policy.policy_id} for IAM user {user.user_name}: {e}", exc_info=True)
-                all_alerts.append(Alert(
+                all_alerts_data.append(Alert(
                     id=str(uuid.uuid4()), resource_id=user.arn, resource_type="IAMUser",
                     account_id=account_id or "N/A", region="global", provider="aws",
                     severity="Medium", title=f"Erro ao Avaliar Política {policy.policy_id} para Usuário IAM",
                     description=f"Ocorreu um erro interno ao tentar avaliar a política '{policy.title}' para o usuário {user.user_name}. Detalhe: {str(e)}",
                     policy_id="POLICY_ENGINE_ERROR", details={"failed_policy_id": policy.policy_id, "user_arn": user.arn},
                     recommendation="Verifique os logs do Policy Engine."
-                ))
+                ).model_dump()) # Pydantic V2
 
-    logger.info(f"Avaliação de Usuários IAM concluída. {len(all_alerts)} alertas gerados.")
-    return all_alerts
+    logger.info(f"Avaliação de Usuários IAM concluída. {len(all_alerts_data)} alertas gerados.")
+    return all_alerts_data
 
 # Funções para evaluate_iam_role_policies e evaluate_iam_managed_policy_policies serão adicionadas aqui
-# quando as respectivas classes de política e listas forem definidas.
-# def evaluate_iam_role_policies(roles_data: List[IAMRoleDataInput], account_id: Optional[str]) -> List[Alert]: ...
+def evaluate_iam_role_policies(roles_data: List[IAMRoleDataInput], account_id: Optional[str]) -> List[Dict[str, Any]]:
+    all_alerts_data: List[Dict[str, Any]] = []
+    if not roles_data: return all_alerts_data
+    logger.info(f"Avaliando {len(roles_data)} roles IAM para a conta {account_id or 'N/A'}.")
+
+    for role_item in roles_data: # Renomeado para role_item para evitar conflito com o módulo role
+        if role_item.error_details:
+            logger.warning(f"Skipping IAM role {role_item.role_name} due to collection error: {role_item.error_details}")
+            all_alerts_data.append({
+                "resource_id": role_item.role_name or role_item.arn or "UnknownRole",
+                "resource_type": "IAMRole", "provider": "aws", "severity": "Informational",
+                "title": "Falha na Coleta de Detalhes da Role IAM",
+                "description": f"Não foi possível coletar todos os detalhes para a role IAM '{role_item.role_name}'. Erro: {role_item.error_details}",
+                "policy_id": "IAM_Role_Collection_Error", "account_id": account_id, "region": "global",
+                "details": {"role_info": role_item.role_name or role_item.arn, "error": role_item.error_details}
+            })
+            continue
+        for policy in iam_role_policies_to_evaluate:
+            try:
+                result = policy.check(role_item, account_id)
+                if result:
+                    if isinstance(result, list):
+                         for alert_obj in result: all_alerts_data.append(alert_obj.model_dump())
+                    else:
+                         all_alerts_data.append(result.model_dump())
+            except Exception as e:
+                logger.error(f"Error evaluating policy {policy.policy_id} for IAM role {role_item.role_name}: {e}", exc_info=True)
+                all_alerts_data.append(Alert(
+                    id=str(uuid.uuid4()), resource_id=role_item.arn, resource_type="IAMRole",
+                    account_id=account_id or "N/A", region="global", provider="aws",
+                    severity="Medium", title=f"Erro ao Avaliar Política {policy.policy_id} para Role IAM",
+                    description=f"Ocorreu um erro interno ao tentar avaliar a política '{policy.title}' para a role {role_item.role_name}. Detalhe: {str(e)}",
+                    policy_id="POLICY_ENGINE_ERROR", details={"failed_policy_id": policy.policy_id, "role_arn": role_item.arn},
+                    recommendation="Verifique os logs do Policy Engine."
+                ).model_dump())
+    logger.info(f"Avaliação de Roles IAM concluída. {len(all_alerts_data)} alertas gerados.")
+    return all_alerts_data
+
 # def evaluate_iam_managed_policy_policies(policies_data: List[IAMPolicyDataInput], account_id: Optional[str]) -> List[Alert]: ...

@@ -100,6 +100,15 @@ class PolicyEngine:
                     account_id=account_id
                 )
                 generated_alert_data_list.extend(iam_user_alerts_data)
+            elif service == "iam_roles": # Novo serviço para Roles IAM
+                if not all(isinstance(item, IAMRoleDataInput) for item in data): # type: ignore
+                    logger.error("Data for iam_roles is not List[IAMRoleDataInput]. Skipping.")
+                else:
+                    iam_role_alerts_data = aws_iam_policies.evaluate_iam_role_policies(
+                        roles_data=data, # type: ignore
+                        account_id=account_id
+                    )
+                    generated_alert_data_list.extend(iam_role_alerts_data)
             else:
                 logger.warning(f"Unsupported AWS service for analysis: {service}")
 
