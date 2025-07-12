@@ -208,14 +208,32 @@
         "description": "Configure webhook URLs to receive alert data as JSON payloads.",
         "tableNameHeader": "Name",
         "tableUrlHeader": "URL",
-        "addButton": "Add Webhook"
+        "addButton": "Add Webhook",
+        "addModalTitle": "Add New Webhook",
+        "form": {
+          "nameLabel": "Name",
+          "namePlaceholder": "e.g., Slack Alerts",
+          "urlLabel": "URL",
+          "addButton": "Add Webhook"
+        }
       },
       "gchat": {
         "title": "Google Chat Webhooks",
         "description": "Configure Google Chat webhooks to receive formatted alert cards in your spaces.",
         "noWebhooks": "No Google Chat webhooks configured.",
-        "addButton": "Add Google Chat Webhook"
+        "addButton": "Add Google Chat Webhook",
+        "addModalTitle": "Add New Google Chat Webhook"
       }
+    },
+    "users": {
+        "title": "User Management",
+        "table": {
+            "id": "ID",
+            "email": "Email",
+            "name": "Name",
+            "role": "Role",
+            "actions": "Actions"
+        }
     }
   }
 }

@@ -4,10 +4,10 @@ import { NavLink, Routes, Route, Navigate } from 'react-router-dom';
 import { Title, Paper, Group, NavLink as MantineNavLink } from '@mantine/core';
 import { IconBell, IconUserShield } from '@tabler/icons-react';
 import NotificationSettingsPage from './Settings/NotificationSettingsPage';
-// import UserManagementPage from './Settings/UserManagementPage';
+import UserManagementPage from './Settings/UserManagementPage';
 
 /**
- * `SettingsPage` atua como um layout e roteador para as várias sub-páginas de configurações,
+ * `SettingsPage` atua como um layout e roteador para as várias sub-áginas de configurações,
  * como Notificações e Gerenciamento de Usuários.
  *
  * @component
@@ -36,11 +36,8 @@ const SettingsPage: React.FC = () => {
         <div style={{ flex: 1 }}>
             <Routes>
                 <Route path="notifications" element={<NotificationSettingsPage />} />
-                {/*
-                  As rotas abaixo serão descomentadas à medida que as páginas forem criadas.
-                  <Route path="users" element={<UserManagementPage />} />
-                */}
-                 <Route path="/" element={<Navigate to="/settings/notifications" replace />} />
+                <Route path="users" element={<UserManagementPage />} />
+                <Route path="/" element={<Navigate to="/settings/notifications" replace />} />
             </Routes>
         </div>
       </Group>

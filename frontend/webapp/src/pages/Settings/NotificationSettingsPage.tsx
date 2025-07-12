@@ -3,67 +3,190 @@ import { useTranslation } from 'react-i18next';
 import { Title, Paper, TextInput, Button, Table, ActionIcon, Group, Text } from '@mantine/core';
 import { IconTrash, IconPlus } from '@tabler/icons-react';
 import { useAuth } from '../../contexts/AuthContext';
-// import axios from 'axios'; // Será usado quando a API estiver pronta
+import axios, { AxiosInstance } from 'axios';
+import ErrorMessage from '../../components/Common/ErrorMessage';
+import { Skeleton, useMantineTheme, Modal } from '@mantine/core'; // Adicionar imports
+import { useDisclosure } from '@mantine/hooks';
 
-// Tipos mockados - substituir pelos tipos reais da API quando disponíveis
+// Tipos de dados da API
 interface Webhook {
-  id: string;
+  id: number;
   name: string;
   url: string;
+  provider: 'generic' | 'google_chat';
+}
+
+interface NotificationConfig {
+  emails: { id: number; address: string }[];
+  webhooks: Webhook[];
 }
 
 const NotificationSettingsPage: React.FC = () => {
   const { t } = useTranslation();
-  const auth = useAuth();
-  const [emails, setEmails] = useState<string[]>(['admin@example.com']);
-  const [newEmail, setNewEmail] = useState<string>('');
-  const [webhooks, setWebhooks] = useState<Webhook[]>([
-    { id: '1', name: 'Slack #general', url: 'https://hooks.slack.com/services/...' },
-    { id: '2', name: 'Internal Logger', url: 'https://my-internal-logger.com/hooks/...' }
-  ]);
+  const { token } = useAuth();
+  const theme = useMantineTheme();
+
+  // Estado da UI
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  // Estado dos dados
+  const [emails, setEmails] = useState<NotificationConfig['emails']>([]);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [googleChatWebhooks, setGoogleChatWebhooks] = useState<Webhook[]>([]);
 
-  // TODO: Implementar chamadas de API para buscar e salvar configurações
-  useEffect(() => {
-    // Exemplo de como a busca de dados funcionaria
-    // const fetchConfig = async () => {
-    //   const response = await apiClient.get('/notifications/config');
-    //   setEmails(response.data.emails);
-    //   setWebhooks(response.data.webhooks);
-    //   setGoogleChatWebhooks(response.data.googleChatWebhooks);
-    // };
-    // fetchConfig();
-  }, []);
+  // Estado para modais
+  const [newEmail, setNewEmail] = useState<string>('');
+  const [newWebhook, setNewWebhook] = useState<{name: string, url: string, provider: 'generic' | 'google_chat'}>({name: '', url: '', provider: 'generic'});
+  const [webhookModalOpened, { open: openWebhookModal, close: closeWebhookModal }] = useDisclosure(false);
+  const [gchatModalOpened, { open: openGchatModal, close: closeGchatModal }] = useDisclosure(false);
 
-  const handleAddEmail = () => {
-    if (newEmail && !emails.includes(newEmail)) {
-      // TODO: Chamar API para adicionar e-mail
-      setEmails([...emails, newEmail]);
-      setNewEmail('');
+  const apiClient = useMemo<AxiosInstance>(() => {
+    return axios.create({
+      baseURL: `${import.meta.env.VITE_API_BASE_URL || '/api/v1'}/notifications`,
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+  }, [token]);
+
+  const fetchConfig = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get<NotificationConfig>('/config');
+      const config = response.data;
+      setEmails(config.emails || []);
+      setWebhooks(config.webhooks.filter(wh => wh.provider === 'generic') || []);
+      setGoogleChatWebhooks(config.webhooks.filter(wh => wh.provider === 'google_chat') || []);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to fetch notification settings.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemoveEmail = (emailToRemove: string) => {
-    // TODO: Chamar API para remover e-mail
-    setEmails(emails.filter(email => email !== emailToRemove));
+  useEffect(() => {
+    fetchConfig();
+  }, [apiClient]);
+
+  const handleAddEmail = async () => {
+    const emailToAdd = newEmail.trim();
+    if (!emailToAdd || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailToAdd)) {
+        setError('Please enter a valid email address.');
+        return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+        await apiClient.post('/config/emails', { address: emailToAdd });
+        await fetchConfig(); // Re-fetch para obter a lista atualizada com IDs
+        setNewEmail('');
+    } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to add email.');
+    } finally {
+        setIsSubmitting(false);
+    }
   };
 
-  const webhookRows = webhooks.map((hook) => (
+  const handleRemoveEmail = async (emailId: number) => {
+    setIsSubmitting(true);
+    setError(null);
+    try {
+        await apiClient.delete(`/config/emails/${emailId}`);
+        setEmails(prev => prev.filter(email => email.id !== emailId));
+    } catch (err: any) {
+        setError(err.response?.data?.detail || 'Failed to remove email.');
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleAddWebhook = async () => {
+    const { name, url, provider } = newWebhook;
+    if (!name.trim() || !url.trim()) {
+        setError('Webhook name and URL are required.');
+        return;
+    }
+    setIsSubmitting(true);
+    setError(null);
+    try {
+        await apiClient.post('/config/webhooks', { name, url, provider });
+        await fetchConfig();
+        closeWebhookModal();
+        closeGchatModal();
+        setNewWebhook({name: '', url: '', provider: 'generic'});
+    } catch (err: any) {
+        setError(err.response?.data?.detail || `Failed to add ${provider} webhook.`);
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  const handleRemoveWebhook = async (webhookId: number) => {
+      setIsSubmitting(true);
+      setError(null);
+      try {
+          await apiClient.delete(`/config/webhooks/${webhookId}`);
+          await fetchConfig(); // Re-fetch para atualizar ambas as listas de webhooks
+      } catch (err: any) {
+          setError(err.response?.data?.detail || 'Failed to remove webhook.');
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
+  const renderWebhookRows = (hooks: Webhook[]) => hooks.map((hook) => (
     <Table.Tr key={hook.id}>
       <Table.Td>{hook.name}</Table.Td>
       <Table.Td>{hook.url}</Table.Td>
       <Table.Td>
-        <ActionIcon color="red">
+        <ActionIcon color="red" onClick={() => handleRemoveWebhook(hook.id)} loading={isSubmitting}>
           <IconTrash size={16} />
         </ActionIcon>
       </Table.Td>
     </Table.Tr>
   ));
 
+  const renderWebhookModal = (provider: 'generic' | 'google_chat') => {
+      const modalProps = {
+          opened: provider === 'generic' ? webhookModalOpened : gchatModalOpened,
+          onClose: provider === 'generic' ? closeWebhookModal : closeGchatModal,
+          title: t(provider === 'generic' ? 'settings.notifications.webhook.addModalTitle' : 'settings.notifications.gchat.addModalTitle', 'Add New Webhook'),
+      };
+      return (
+          <Modal {...modalProps}>
+              <TextInput
+                  label={t('settings.notifications.webhook.form.nameLabel', 'Name')}
+                  placeholder={t('settings.notifications.webhook.form.namePlaceholder', 'e.g., Slack Alerts')}
+                  value={newWebhook.name}
+                  onChange={(e) => setNewWebhook(prev => ({...prev, name: e.currentTarget.value, provider}))}
+                  required
+              />
+              <TextInput
+                  mt="md"
+                  label={t('settings.notifications.webhook.form.urlLabel', 'URL')}
+                  placeholder="https://..."
+                  value={newWebhook.url}
+                  onChange={(e) => setNewWebhook(prev => ({...prev, url: e.currentTarget.value, provider}))}
+                  required
+              />
+              <Button fullWidth mt="xl" onClick={handleAddWebhook} loading={isSubmitting}>
+                  {t('settings.notifications.webhook.form.addButton', 'Add Webhook')}
+              </Button>
+          </Modal>
+      )
+  };
+
   return (
     <Paper withBorder p="xl" radius="md">
       <Title order={2} mb="lg">{t('settings.notifications.title', 'Notification Settings')}</Title>
 
+      <ErrorMessage message={error} onClose={() => setError(null)} />
+
+      {loading ? (
+          <Skeleton height={300} />
+      ) : (
+      <>
       {/* Seção de E-mail */}
       <section>
         <Title order={4} mb="md">{t('settings.notifications.email.title', 'Email Recipients')}</Title>
@@ -73,10 +196,10 @@ const NotificationSettingsPage: React.FC = () => {
         <Table>
           <Table.Tbody>
             {emails.map(email => (
-              <Table.Tr key={email}>
-                <Table.Td>{email}</Table.Td>
+              <Table.Tr key={email.id}>
+                <Table.Td>{email.address}</Table.Td>
                 <Table.Td align="right">
-                  <ActionIcon color="red" onClick={() => handleRemoveEmail(email)}>
+                  <ActionIcon color="red" onClick={() => handleRemoveEmail(email.id)} loading={isSubmitting}>
                     <IconTrash size={16} />
                   </ActionIcon>
                 </Table.Td>
@@ -90,8 +213,9 @@ const NotificationSettingsPage: React.FC = () => {
             value={newEmail}
             onChange={(e) => setNewEmail(e.currentTarget.value)}
             style={{ flex: 1 }}
+            disabled={isSubmitting}
           />
-          <Button onClick={handleAddEmail} leftSection={<IconPlus size={16} />}>
+          <Button onClick={handleAddEmail} leftSection={<IconPlus size={16} />} loading={isSubmitting}>
             {t('settings.notifications.email.addButton', 'Add Email')}
           </Button>
         </Group>
@@ -111,9 +235,9 @@ const NotificationSettingsPage: React.FC = () => {
                     <Table.Th />
                 </Table.Tr>
             </Table.Thead>
-            <Table.Tbody>{webhookRows}</Table.Tbody>
+            <Table.Tbody>{renderWebhookRows(webhooks)}</Table.Tbody>
         </Table>
-         <Button mt="md" variant="light" leftSection={<IconPlus size={16} />}>
+         <Button mt="md" variant="light" leftSection={<IconPlus size={16} />} onClick={openWebhookModal}>
             {t('settings.notifications.webhook.addButton', 'Add Webhook')}
         </Button>
       </section>
@@ -125,15 +249,27 @@ const NotificationSettingsPage: React.FC = () => {
             {t('settings.notifications.gchat.description', 'Configure Google Chat webhooks to receive formatted alert cards in your spaces.')}
         </Text>
         {googleChatWebhooks.length > 0 ? (
-            <Text>...</Text> // Tabela similar a de webhooks aqui
+             <Table>
+                <Table.Thead>
+                    <Table.Tr>
+                        <Table.Th>{t('settings.notifications.webhook.tableNameHeader', 'Name')}</Table.Th>
+                        <Table.Th>{t('settings.notifications.webhook.tableUrlHeader', 'URL')}</Table.Th>
+                        <Table.Th />
+                    </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>{renderWebhookRows(googleChatWebhooks)}</Table.Tbody>
+            </Table>
         ) : (
             <Text size="sm" c="dimmed">{t('settings.notifications.gchat.noWebhooks', 'No Google Chat webhooks configured.')}</Text>
         )}
-         <Button mt="md" variant="light" leftSection={<IconPlus size={16} />}>
+         <Button mt="md" variant="light" leftSection={<IconPlus size={16} />} onClick={openGchatModal}>
             {t('settings.notifications.gchat.addButton', 'Add Google Chat Webhook')}
         </Button>
       </section>
-
+      </>
+      )}
+      {renderWebhookModal('generic')}
+      {renderWebhookModal('google_chat')}
     </Paper>
   );
 };

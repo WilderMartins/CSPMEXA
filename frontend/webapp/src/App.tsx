@@ -1,19 +1,20 @@
 import './App.css' // Estilos específicos do App
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next'; // Importar hook
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton, Loader, Center, NavLink as MantineNavLink } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import ReportsPage from './pages/ReportsPage';
-import InsightsPage from './pages/InsightsPage';
-import SettingsPage from './pages/SettingsPage'; // Importar SettingsPage
-import AwsDashboardPage from './pages/Dashboard/AwsDashboardPage'; // Importar a nova página
 import { useAuth } from './contexts/AuthContext';
+
+// Lazy load das páginas principais
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const ReportsPage = lazy(() => import('./pages/ReportsPage'));
+const InsightsPage = lazy(() => import('./pages/InsightsPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 const OAuthCallbackPage = () => {
   const location = useLocation();
@@ -158,15 +159,17 @@ function App() {
       </AppShell.Navbar>
 
       <AppShell.Main>
-        <Routes>
-          <Route path="/" element={!auth.isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
-          <Route path="/auth/callback" element={<OAuthCallbackPage />} />
-          <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
-          <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
-          <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
-          <Route path="/settings/*" element={auth.isAuthenticated ? <SettingsPage /> : <Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
-        </Routes>
+        <Suspense fallback={<Center style={{ height: '100%' }}><Loader /></Center>}>
+            <Routes>
+              <Route path="/" element={!auth.isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
+              <Route path="/auth/callback" element={<OAuthCallbackPage />} />
+              <Route path="/dashboard/*" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
+              <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
+              <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
+              <Route path="/settings/*" element={auth.isAuthenticated ? <SettingsPage /> : <Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
+            </Routes>
+        </Suspense>
       </AppShell.Main>
 
       <AppShell.Footer p="md" style={{textAlign: 'center'}}>
