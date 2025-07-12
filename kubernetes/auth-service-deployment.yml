@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: auth-service-config
+data:
+  TOTP_ISSUER_NAME: "CSPMEXA"
+  VAULT_ADDR: "http://vault-service:8200" # Aponta para o Service do Vault
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service-deployment
+  labels:
+    app: auth-service
+spec:
+  replicas: 2 # Podemos escalar o serviço de autenticação para alta disponibilidade
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+      - name: auth-service
+        image: <SEU_REGISTRO_DE_IMAGEM>/auth-service:latest # O usuário precisará construir e enviar a imagem
+        ports:
+        - containerPort: 8000
+        env:
+        - name: VAULT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: vault-token-secret # Um segredo que precisa ser criado com o token do Vault
+              key: token
+        - name: TOTP_ISSUER_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: auth-service-config
+              key: TOTP_ISSUER_NAME
+        - name: VAULT_ADDR
+          valueFrom:
+            configMapKeyRef:
+              name: auth-service-config
+              key: VAULT_ADDR
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service # Nome DNS interno
+spec:
+  selector:
+    app: auth-service
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000

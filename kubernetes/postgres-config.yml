@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+data:
+  db_name: "cspmexa_db"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+stringData:
+  # Estes valores devem ser alterados e gerenciados de forma segura em produção,
+  # por exemplo, usando um SealedSecret ou um segredo gerenciado pelo Vault.
+  user: "cspmexa_user"
+  password: "a_very_secure_password_for_k8s"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce # Esta PVC pode ser montada como leitura-escrita por um único nó.
+  resources:
+    requests:
+      storage: 1Gi # Solicita 1 GiB de armazenamento.

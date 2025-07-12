@@ -87,6 +87,14 @@ O guia irá orientá-lo através do processo de:
 2.  Baixar o projeto.
 3.  Executar o assistente de instalação web que configurará tudo para você.
 
+### Implantação em Produção (Kubernetes)
+
+Para ambientes de produção que exigem alta disponibilidade e escalabilidade, a implantação via Kubernetes é recomendada. Fornecemos um conjunto completo de manifestos Kubernetes para automatizar este processo.
+
+Para instruções detalhadas, consulte o guia de implantação do Kubernetes:
+
+➡️ **[Guia de Implantação em Kubernetes (kubernetes/README.md)](./kubernetes/README.md)**
+
 ### Para Desenvolvedores
 
 Se você é um desenvolvedor e deseja entender a fundo a arquitetura ou contribuir com o projeto, a documentação técnica e os `.env.example` dentro de cada serviço continuam disponíveis como referência. O ponto de entrada para a orquestração de todos os serviços é o arquivo `docker-compose.yml`.

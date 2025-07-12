@@ -1,0 +1,35 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cspmexa-ingress
+  annotations:
+    # Anotações importantes podem ser necessárias dependendo do seu Ingress Controller.
+    # Exemplo para Nginx Ingress:
+    # nginx.ingress.kubernetes.io/rewrite-target: /
+    # Exemplo para forçar redirecionamento SSL:
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Anotação para o cert-manager (se usado para certificados automáticos):
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - cspmexa.yourdomain.com
+    secretName: cspmexa-tls-secret # O segredo que contém o certificado e a chave TLS
+  rules:
+  - host: cspmexa.yourdomain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service # Direciona para o frontend
+            port:
+              name: http # ou https se o serviço do ingress controller se conectar via https
+      - path: /api/v1
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-service # Direciona para o gateway da API
+            port:
+              number: 8050

@@ -1,4 +1,8 @@
-# Guia de Instalação Simplificado do CSPMEXA
+# Guia de Instalação Simplificado do CSPMEXA (via Docker Compose)
+
+**Nota:** Este guia descreve o método de instalação mais simples, usando Docker Compose. É ideal para ambientes de desenvolvimento, testes ou implantações de pequena escala em uma única máquina. Para implantações de produção escaláveis e de alta disponibilidade, consulte o nosso **[Guia de Implantação em Kubernetes](./kubernetes/README.md)**.
+
+---
 
 Bem-vindo ao guia de instalação do CSPMEXA! Este guia foi projetado para ser o mais simples possível, permitindo que qualquer pessoa, mesmo sem conhecimento técnico profundo, possa instalar e configurar o sistema.
 
