@@ -97,8 +97,13 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
 A comunicação é predominantemente síncrona. Filas de mensagens (RabbitMQ, SQS) para desacoplamento e processamento assíncrono são consideradas para evoluções futuras, especialmente para a coleta de dados e o envio de notificações.
 
 ### Considerações de Segurança na Comunicação Interna:
-*   **Autenticação de Usuário Final:** A autenticação do usuário final (via token JWT) é realizada exclusivamente pelo `api-gateway-service`. Os microsserviços internos (Collector, Policy Engine, Notification, Auth Service para operações pós-login) confiam que as requisições originadas do API Gateway já foram autenticadas.
-*   **Rede Interna:** Os serviços de backend são projetados para operar dentro de uma rede interna confiável (ex: rede Docker, VPC em nuvem). Não há, neste MVP, autenticação serviço-a-serviço implementada entre os microsserviços internos. O acesso direto a esses serviços de fora da rede interna deve ser bloqueado por configurações de firewall/rede.
+*   **Autenticação de Usuário Final:** A autenticação do usuário final (via token JWT) é realizada exclusivamente pelo `api-gateway-service`. Os microsserviços internos (Collector, Policy Engine, Notification, Auth Service para operações pós-login) confiam que as requisições originadas do API Gateway já foram autenticadas quanto ao *usuário*.
+*   **Autenticação Serviço-a-Serviço:** Para previnir que serviços internos sejam acessados indevidamente (mesmo dentro da rede interna), uma camada de autenticação de serviço foi implementada.
+    *   Um segredo compartilhado (API Key) é usado para validar as requisições entre os serviços.
+    *   O `api-gateway-service` injeta um header `X-Internal-API-Key` em todas as chamadas que faz para os outros serviços de backend.
+    *   Cada serviço de backend (`collector-service`, `policy-engine-service`, `notification-service`, etc.) valida a presença e a correção desta chave em todos os seus endpoints.
+    *   Esta chave é configurada pela variável de ambiente `INTERNAL_API_KEY` em todos os serviços.
+*   **Rede Interna:** Os serviços de backend são projetados para operar dentro de uma rede interna confiável (ex: rede Docker, VPC em nuvem). O acesso direto a esses serviços de fora da rede interna deve ser bloqueado por configurações de firewall/rede.
 
 ### Controle de Acesso Baseado em Função (RBAC) no API Gateway:
 *   O `api-gateway-service` implementa restrições de acesso aos seus endpoints com base no papel (`role`) do usuário, contido no token JWT.

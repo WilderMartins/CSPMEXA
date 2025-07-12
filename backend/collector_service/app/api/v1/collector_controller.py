@@ -1,22 +1,20 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List, Any
+from app.core.security import verify_internal_api_key
 from app.aws import s3_collector, ec2_collector, iam_collector
 from app.schemas.s3 import S3BucketData
 from app.schemas.ec2 import Ec2InstanceData, SecurityGroup
 from app.schemas.iam import IAMUserData, IAMRoleData, IAMPolicyData
 
-# from app.core.security import get_current_active_user # Se precisarmos de autenticação para este endpoint
 import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_api_key)])
 
 
 @router.get("/s3", response_model=List[S3BucketData])
-async def collect_s3_data(
-    # current_user: Any = Depends(get_current_active_user) # Descomentar se autenticação for necessária
-):
+async def collect_s3_data():
     """
     Endpoint para coletar dados de configuração de buckets S3.
     Retorna uma lista de dados de buckets S3 ou levanta HTTPException em caso de erro global.
@@ -35,9 +33,7 @@ async def collect_s3_data(
         )
 
 @router.get("/ec2/instances", response_model=List[Ec2InstanceData])
-async def collect_ec2_instances_data(
-    # current_user: Any = Depends(get_current_active_user)
-):
+async def collect_ec2_instances_data():
     """
     Endpoint para coletar dados de instâncias EC2 de todas as regiões habilitadas.
     Erros de coleta em uma região específica podem ser indicados no campo 'error_details'
@@ -56,9 +52,7 @@ async def collect_ec2_instances_data(
         )
 
 @router.get("/ec2/security-groups", response_model=List[SecurityGroup])
-async def collect_ec2_security_groups_data(
-    # current_user: Any = Depends(get_current_active_user)
-):
+async def collect_ec2_security_groups_data():
     """
     Endpoint para coletar dados de Security Groups EC2 de todas as regiões habilitadas.
     Falhas na coleta de uma região específica são logadas, mas a coleta continua para outras regiões.
@@ -78,9 +72,7 @@ async def collect_ec2_security_groups_data(
 
 
 @router.get("/iam/users", response_model=List[IAMUserData])
-async def collect_iam_users_data(
-    # current_user: Any = Depends(get_current_active_user)
-):
+async def collect_iam_users_data():
     """
     Endpoint para coletar dados de usuários IAM.
     """
@@ -97,9 +89,7 @@ async def collect_iam_users_data(
         )
 
 @router.get("/iam/roles", response_model=List[IAMRoleData])
-async def collect_iam_roles_data(
-    # current_user: Any = Depends(get_current_active_user)
-):
+async def collect_iam_roles_data():
     """
     Endpoint para coletar dados de roles IAM.
     """
@@ -117,8 +107,7 @@ async def collect_iam_roles_data(
 
 @router.get("/iam/policies", response_model=List[IAMPolicyData])
 async def collect_iam_policies_data(
-    scope: str = Query("Local", enum=["All", "AWS", "Local"]),
-    # current_user: Any = Depends(get_current_active_user)
+    scope: str = Query("Local", enum=["All", "AWS", "Local"])
 ):
     """
     Endpoint para coletar dados de políticas IAM gerenciadas.
@@ -149,8 +138,7 @@ from fastapi.concurrency import run_in_threadpool # Para chamadas síncronas em 
 
 @router.get("/storage/buckets", response_model=List[gcp_storage.GCPStorageBucketData], name="gcp:collect_storage_buckets")
 async def collect_gcp_storage_buckets_data(
-    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente."),
-    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação se necessário
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente.")
 ):
     """Coleta dados de configuração de Google Cloud Storage buckets."""
     try:
@@ -173,8 +161,7 @@ async def collect_gcp_storage_buckets_data(
 
 @router.get(f"{GCP_ROUTER_PREFIX}/compute/instances", response_model=List[gcp_compute.GCPComputeInstanceData], name="gcp_collector:get_compute_instances")
 async def collect_gcp_compute_instances_data(
-    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente."),
-    # current_user: Any = Depends(get_current_active_user)
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente.")
 ):
     """Coleta dados de instâncias de VM do Google Compute Engine."""
     try:
@@ -193,8 +180,7 @@ async def collect_gcp_compute_instances_data(
 
 @router.get(f"{GCP_ROUTER_PREFIX}/compute/firewalls", response_model=List[gcp_compute.GCPFirewallData], name="gcp_collector:get_compute_firewalls")
 async def collect_gcp_compute_firewalls_data(
-    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente."),
-    # current_user: Any = Depends(get_current_active_user)
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente.")
 ):
     """Coleta dados de regras de Firewall VPC do Google Cloud."""
     try:
@@ -213,8 +199,7 @@ async def collect_gcp_compute_firewalls_data(
 
 @router.get(f"{GCP_ROUTER_PREFIX}/iam/project-policies", response_model=Optional[gcp_iam.GCPProjectIAMPolicyData], name="gcp_collector:get_project_iam_policy")
 async def collect_gcp_project_iam_policy_data(
-    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente."),
-    # current_user: Any = Depends(get_current_active_user)
+    project_id: Optional[str] = Query(None, description="ID do Projeto GCP. Se não fornecido, tenta obter do ambiente.")
 ):
     """Coleta a política IAM a nível de projeto do Google Cloud."""
     try:
@@ -264,8 +249,7 @@ from app.schemas import huawei_obs, huawei_ecs, huawei_iam # Schemas já importa
 @router.get("/huawei/obs/buckets", response_model=List[huawei_obs.HuaweiOBSBucketData], name="huawei:collect_obs_buckets")
 async def collect_huawei_obs_buckets_data(
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud (usado para escopo e credenciais)."),
-    region_id: str = Query(..., description="ID da Região Huawei Cloud (ex: ap-southeast-1)."),
-    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+    region_id: str = Query(..., description="ID da Região Huawei Cloud (ex: ap-southeast-1).")
 ):
     """Coleta dados de configuração de Huawei Cloud OBS buckets."""
     try:
@@ -283,8 +267,7 @@ async def collect_huawei_obs_buckets_data(
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/ecs/instances", response_model=List[huawei_ecs.HuaweiECSServerData], name="huawei_collector:get_ecs_instances")
 async def collect_huawei_ecs_instances_data(
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
-    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    # current_user: Any = Depends(get_current_active_user)
+    region_id: str = Query(..., description="ID da Região Huawei Cloud.")
 ):
     """Coleta dados de instâncias ECS (VMs) da Huawei Cloud."""
     try:
@@ -302,8 +285,7 @@ async def collect_huawei_ecs_instances_data(
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/vpc/security-groups", response_model=List[huawei_ecs.HuaweiVPCSecurityGroup], name="huawei_collector:get_vpc_sgs")
 async def collect_huawei_vpc_sgs_data(
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
-    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    # current_user: Any = Depends(get_current_active_user)
+    region_id: str = Query(..., description="ID da Região Huawei Cloud.")
 ):
     """Coleta dados de Security Groups VPC da Huawei Cloud."""
     try:
@@ -322,8 +304,7 @@ async def collect_huawei_vpc_sgs_data(
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/iam/users", response_model=List[huawei_iam.HuaweiIAMUserData], name="huawei_collector:get_iam_users")
 async def collect_huawei_iam_users_data(
     region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM (endpoint)."),
-    domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud. Se não fornecido, tenta obter do ambiente."),
-    # current_user: Any = Depends(get_current_active_user)
+    domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud. Se não fornecido, tenta obter do ambiente.")
 ):
     """Coleta dados de usuários IAM da Huawei Cloud."""
     try:
@@ -351,8 +332,7 @@ AZURE_ROUTER_PREFIX = "/collect/azure"
 
 @router.get(f"{AZURE_ROUTER_PREFIX}/virtualmachines", response_model=List[azure_compute.AzureVirtualMachineData], name="azure_collector:get_virtual_machines")
 async def collect_azure_virtual_machines_data(
-    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID)."),
-    # current_user: Any = Depends(get_current_active_user) # Adicionar autenticação
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID).")
 ):
     """Coleta dados de configuração de Azure Virtual Machines."""
     # A lógica para obter subscription_id das settings já está no azure_client_manager e nos coletores.
@@ -374,8 +354,7 @@ async def collect_azure_virtual_machines_data(
 
 @router.get(f"{AZURE_ROUTER_PREFIX}/storageaccounts", response_model=List[azure_storage.AzureStorageAccountData], name="azure_collector:get_storage_accounts")
 async def collect_azure_storage_accounts_data(
-    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID)."),
-    # current_user: Any = Depends(get_current_active_user)
+    subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure. Se não fornecido, tenta obter do ambiente (AZURE_SUBSCRIPTION_ID).")
 ):
     """Coleta dados de configuração de Azure Storage Accounts."""
     if not subscription_id and not azure_storage_collector.settings.AZURE_SUBSCRIPTION_ID:
@@ -400,8 +379,7 @@ GWS_ROUTER_PREFIX = "/collect/googleworkspace"
 @router.get(f"{GWS_ROUTER_PREFIX}/users", response_model=google_workspace_user.GoogleWorkspaceUserCollection, name="gws_collector:get_users")
 async def collect_gws_users_data(
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace (e.g., 'my_customer' ou C0xxxxxxx). Default das settings se não fornecido."),
-    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação. Default das settings se não fornecido."),
-    # current_user: Any = Depends(get_current_active_user)
+    delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação. Default das settings se não fornecido.")
 ):
     """Coleta dados de usuários do Google Workspace."""
     try:
@@ -421,8 +399,7 @@ async def collect_gws_users_data(
 @router.get(f"{GWS_ROUTER_PREFIX}/drive/shared-drives", response_model=List[google_drive_shared_drive.SharedDriveData], name="gws_collector:get_shared_drives")
 async def collect_gws_shared_drives_data(
     customer_id: Optional[str] = Query(None, description="Google Workspace Customer ID."),
-    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email."),
-    # current_user: Any = Depends(get_current_active_user)
+    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email.")
 ):
     """Coleta dados de Drives Compartilhados do Google Workspace e arquivos problematicamente compartilhados dentro deles."""
     try:
@@ -444,8 +421,7 @@ async def collect_gws_shared_drives_data(
 @router.get(f"{GWS_ROUTER_PREFIX}/drive/public-files", response_model=List[google_drive_file.DriveFileData], name="gws_collector:get_public_files")
 async def collect_gws_public_files_data(
     customer_id: Optional[str] = Query(None, description="Google Workspace Customer ID."),
-    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email."),
-    # current_user: Any = Depends(get_current_active_user)
+    delegated_admin_email: Optional[str] = Query(None, description="Delegated admin email.")
 ):
     """
     Coleta dados de arquivos públicos ou compartilhados por link no Google Drive (Escopo MVP pode ser limitado).
@@ -481,11 +457,7 @@ from app.schemas.m365 import m365_security_schemas
 M365_ROUTER_PREFIX = "/collect/m365" # Ou apenas /m365 se o prefixo /collect for adicionado no main.py
 
 @router.get(f"{M365_ROUTER_PREFIX}/users-mfa-status", response_model=m365_security_schemas.M365UserMFAStatusCollection, name="m365:collect_users_mfa_status")
-async def collect_m365_users_mfa_status_data(
-    # tenant_id: Optional[str] = Query(None, description="ID do Tenant M365. Se não fornecido, tenta obter das settings."),
-    # A autenticação via m365_client_manager já usa o tenant_id das settings.
-    # Se precisarmos suportar múltiplos tenants dinamicamente, o client_manager precisaria ser ajustado.
-):
+async def collect_m365_users_mfa_status_data():
     """Coleta dados de status de MFA de usuários do Microsoft 365."""
     try:
         # O m365_tenant_security_collector usará o m365_client_manager que é configurado com Client ID, Secret e Tenant ID das settings.
@@ -502,9 +474,7 @@ async def collect_m365_users_mfa_status_data(
 
 
 @router.get(f"{M365_ROUTER_PREFIX}/conditional-access-policies", response_model=m365_security_schemas.M365ConditionalAccessPolicyCollection, name="m365:collect_ca_policies")
-async def collect_m365_ca_policies_data(
-    # tenant_id: Optional[str] = Query(None, description="ID do Tenant M365."),
-):
+async def collect_m365_ca_policies_data():
     """Coleta dados de Políticas de Acesso Condicional do Microsoft 365 / Azure AD."""
     try:
         data = await m365_tenant_security_collector.get_m365_conditional_access_policies()

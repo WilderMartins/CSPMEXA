@@ -24,15 +24,23 @@ class HttpClient:
         is_json_data: bool = True,  # Flag para controlar se o 'data' é JSON
     ) -> httpx.Response:
         url = f"{self.base_url}{endpoint}"
+
+        # Prepare headers for internal communication
+        internal_headers = {
+            "X-Internal-API-Key": settings.INTERNAL_API_KEY
+        }
+        if headers:
+            internal_headers.update(headers)
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 if is_json_data:
                     response = await client.request(
-                        method, url, json=data, params=params, headers=headers
+                        method, url, json=data, params=params, headers=internal_headers
                     )
                 else:
                     response = await client.request(
-                        method, url, data=data, params=params, headers=headers
+                        method, url, data=data, params=params, headers=internal_headers
                     )
                 # response.raise_for_status() # Levanta exceção para 4xx/5xx, pode ser muito agressivo aqui
                 return response

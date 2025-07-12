@@ -13,10 +13,11 @@ from app.services.email_service import send_email_notification_sync
 from app.services.webhook_service import send_webhook_notification_sync
 from app.services.google_chat_service import send_google_chat_notification_sync # Adicionado
 from app.core.config import settings
+from app.core.security import verify_internal_api_key
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_api_key)])
 
 # --- Email Notification ---
 async def send_email_background(

@@ -7,8 +7,9 @@ from app.db.session import get_db
 from app.crud.crud_alert import alert_crud
 from app.schemas.alert_schema import AlertSchema, AlertCreate, AlertUpdate, AlertStatusEnum, AlertSeverityEnum
 from app.models.alert_model import AlertModel # For direct model usage if necessary
+from app.core.security import verify_internal_api_key
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_api_key)])
 
 @router.post("/", response_model=AlertSchema, status_code=201)
 def create_alert(

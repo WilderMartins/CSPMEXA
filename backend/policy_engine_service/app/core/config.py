@@ -30,6 +30,7 @@ class Settings(BaseSettings):
 
     # URL do Notification Service (para enviar notificações de alerta)
     NOTIFICATION_SERVICE_URL: Optional[str] = os.getenv("NOTIFICATION_SERVICE_URL", "http://localhost:8003/api/v1") # Default para dev local se não vier do compose
+    INTERNAL_API_KEY: str = os.getenv("INTERNAL_API_KEY", "change-this-in-production")
 
     @property
     def ASSEMBLED_DATABASE_URL(self) -> str:

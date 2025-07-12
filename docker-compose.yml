@@ -48,6 +48,7 @@ services:
       - GOOGLE_REDIRECT_URI=http://localhost:${API_GATEWAY_PORT:-8050}/api/v1/auth/google/callback
       - FRONTEND_URL_AUTH_CALLBACK=http://localhost:${FRONTEND_PORT:-3000}/auth/callback
       - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?err_internal_api_key_missing}
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
     volumes:
       - ./backend/auth_service:/app # Monta o código para hot-reloading
@@ -87,6 +88,7 @@ services:
       - M365_CLIENT_SECRET=${M365_CLIENT_SECRET}
       - M365_TENANT_ID=${M365_TENANT_ID}
       - M365_HTTP_CLIENT_TIMEOUT=${M365_HTTP_CLIENT_TIMEOUT:-30}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?err_internal_api_key_missing}
       - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
       - ./backend/collector_service:/app
@@ -115,6 +117,7 @@ services:
       - DEBUG_MODE=${DEBUG_MODE:-false}
       # URL para o notification_service, usado pelo policy_engine para enviar notificações
       - NOTIFICATION_SERVICE_URL=http://notification_service:${NOTIFICATION_SERVICE_PORT:-8003}/api/v1
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?err_internal_api_key_missing}
     volumes:
       - ./backend/policy_engine_service:/app
     ports:
@@ -152,6 +155,7 @@ services:
       - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
       - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CSPMEXA Notification}
       - DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=${DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?err_internal_api_key_missing}
     volumes:
       - ./backend/notification_service/app:/app/app # Montar código para dev com reload
     ports:
@@ -175,6 +179,7 @@ services:
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY:?err_internal_api_key_missing}
       - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
       - ./backend/api_gateway_service:/app

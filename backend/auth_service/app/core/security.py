@@ -1,5 +1,5 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status, Security
+from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from jose import JWTError, jwt
 from pydantic import BaseModel, ValidationError # Importar ValidationError
 from typing import Optional
@@ -108,3 +108,17 @@ async def get_current_active_superuser( # Nome mantido para consistência com us
             status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn't have enough privileges for this action."
         )
     return current_user
+
+# Dependency for internal service-to-service authentication
+api_key_header = APIKeyHeader(name="X-Internal-API-Key", auto_error=True)
+
+async def verify_internal_api_key(api_key: str = Security(api_key_header)):
+    """
+    Verifies that the provided API key in the X-Internal-API-Key header matches
+    the one configured in the settings.
+    """
+    if api_key != settings.INTERNAL_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing internal API Key",
+        )

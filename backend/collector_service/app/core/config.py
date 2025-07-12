@@ -60,6 +60,9 @@ class Settings(BaseSettings):
     #     "https://www.googleapis.com/auth/apps.alerts"
     # ])
 
+    # Internal API Key for service-to-service communication
+    INTERNAL_API_KEY: str = "change-this-in-production"
+
     class Config:
         case_sensitive = True
         # Pydantic v2 usaria model_config em vez de Config

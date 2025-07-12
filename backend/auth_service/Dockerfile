@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./app /app
 
 # Comando para rodar a aplicação
-EXPOSE 8000 # Expor a porta que o uvicorn (ou python app/main.py) vai usar
+# Expor a porta que o uvicorn (ou python app/main.py) vai usar
+EXPOSE 8000
 # O comando CMD será definido no docker-compose.yml para flexibilidade (ex: reload em dev)
 # Se fosse definir aqui, seria algo como:
 # CMD ["python", "/app/app/main.py"]

@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # TOTP Settings
     TOTP_ISSUER_NAME: str = "CSPMEXA"
 
+    # Internal API Key for service-to-service communication
+    INTERNAL_API_KEY: str = "change-this-in-production"
+
     class Config:
         case_sensitive = True
         # Para carregar de um arquivo .env em desenvolvimento:

@@ -119,6 +119,7 @@ O método recomendado para rodar o ambiente de desenvolvimento completo é utili
         ```
     *   Edite o arquivo `.env` e preencha **todas** as variáveis necessárias, especialmente:
         *   `JWT_SECRET_KEY`: Gere uma chave forte (ex: `openssl rand -hex 32`).
+        *   `INTERNAL_API_KEY`: Gere outra chave forte para a comunicação entre serviços.
         *   Credenciais do Google para OAuth de login (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
         *   Caminhos no **seu host** para os arquivos de credenciais JSON do GCP e Google Workspace (`GCP_CREDENTIALS_PATH_HOST`, `GWS_SA_KEY_PATH_HOST`). Crie uma pasta `secrets` na raiz do projeto e coloque os arquivos lá, ou ajuste os caminhos.
         *   Credenciais para AWS, Azure e Huawei Cloud, conforme necessário para os provedores que você deseja testar.

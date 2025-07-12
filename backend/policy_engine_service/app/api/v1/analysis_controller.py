@@ -8,11 +8,12 @@ from app.crud.crud_alert import alert_crud
 from app.engine.core_engine import policy_engine # Importa a instância do PolicyEngine
 from app.schemas.input_data_schema import AnalysisRequest
 from app.schemas.alert_schema import AlertCreate, AlertSchema
+from app.core.security import verify_internal_api_key
 # AnalysisResponse e ProviderAnalysisResult podem ser usados se a resposta for mais estruturada
 # from app.schemas.analysis_schema import AnalysisResponse, ProviderAnalysisResult
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_internal_api_key)])
 
 @router.post("/analyze", response_model=List[AlertSchema]) # Retorna uma lista de alertas persistidos
 async def analyze_resources_and_persist_alerts(
