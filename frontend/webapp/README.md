@@ -19,8 +19,9 @@ A aplicação é construída como um Single Page Application (SPA).
     *   `ts-jest` para integração do Jest com TypeScript.
     *   `@testing-library/jest-dom` para matchers customizados.
     *   `axios-mock-adapter` para mockar chamadas Axios em testes.
-*   **Recharts:** Para renderização de gráficos nos dashboards.
-*   **(Planejado/Simulado)** Uma biblioteca de componentes UI como [Mantine UI](https://mantine.dev/), Chakra UI, ou similar para padronização visual e componentes reutilizáveis. Os exemplos atuais usam simulações desses componentes.
+*   **@mantine/core & @mantine/hooks:** Biblioteca de componentes UI e hooks.
+*   **@mantine/charts:** Para renderização de gráficos.
+*   **@tabler/icons-react:** Biblioteca de ícones usada com Mantine.
 
 ## 3. Estrutura de Pastas (Principais)
 
@@ -35,22 +36,25 @@ frontend/webapp/
 ├── src/                        # Código fonte da aplicação
 │   ├── assets/                 # Imagens, fontes, etc.
 │   ├── components/             # Componentes React reutilizáveis
-│   │   └── Dashboard/          # Componentes específicos do Dashboard
-│   │       ├── ProviderAnalysisSection.tsx
-│   │   ├── ProviderAnalysisSection.tsx
-│   │       └── AlertsTable.tsx
-│   │   └── Insights/             # Componentes específicos do Dashboard de Insights
+│   │   ├── Dashboard/          # Componentes específicos do Dashboard
+│   │   │   ├── ProviderAnalysisSection.tsx
+│   │   │   ├── ProviderAnalysisSection.test.tsx
+│   │   │   ├── AlertsTable.tsx
+│   │   │   └── AlertsTable.test.tsx
+│   │   └── Insights/           # Componentes específicos para a página de Insights
 │   │       ├── CriticalAssetsDisplay.tsx
+│   │       ├── CriticalAssetsDisplay.test.tsx
 │   │       ├── AttackPathsDisplay.tsx
-│   │       └── ProactiveRecommendationsDisplay.tsx
+│   │       ├── AttackPathsDisplay.test.tsx
+│   │       ├── ProactiveRecommendationsDisplay.tsx
+│   │       └── ProactiveRecommendationsDisplay.test.tsx
 │   ├── contexts/               # Contextos React (ex: AuthContext.tsx)
 │   ├── pages/                  # Componentes de página (mapeados para rotas)
 │   │   ├── DashboardPage.tsx
 │   │   ├── LoginPage.tsx
 │   │   ├── ReportsPage.tsx
 │   │   └── InsightsPage.tsx
-│   ├── services/               # Lógica de chamada de API e manipulação de dados
-│   │   └── reportsService.ts
+│   ├── services/               # Lógica de chamada de API e manipulação de dados (ex: reportsService.ts)
 │   ├── App.tsx                 # Componente raiz da aplicação, define rotas e layout principal
 │   ├── main.tsx                # Ponto de entrada da aplicação, renderiza o App
 │   ├── i18n.ts                 # Configuração do i18next
@@ -148,10 +152,10 @@ Para detalhes sobre os endpoints de API e schemas de dados que o frontend espera
     2.  Importe e utilize no local desejado.
     3.  Se o componente tiver lógica complexa ou estado próprio, considere escrever testes para ele.
 
-## 8. Considerações Futuras e Melhorias
+## 9. Considerações Futuras e Melhorias
 
-*   **Integração completa de uma Biblioteca de Componentes UI:** Para melhorar a consistência visual, acessibilidade e velocidade de desenvolvimento.
-*   **Gerenciamento de Estado Avançado:** Se a complexidade da aplicação crescer muito, considerar bibliotecas como Zustand ou Jotai para estados globais além da autenticação.
+*   **Integração completa de uma Biblioteca de Componentes UI:** (Concluído com Mantine) - Manter foco em utilizar consistentemente os componentes Mantine.
+*   **Gerenciamento de Estado Avançado:** Se a complexidade da aplicação crescer muito, considerar bibliotecas como Zustand ou Jotai para estados globais específicos, complementando o React Context.
 *   **Otimizações de Performance:** Continuar monitorando e aplicando otimizações como code splitting, virtualização de listas longas, etc.
 *   **Cobertura de Testes:** Expandir a cobertura de testes para abranger mais cenários e componentes.
 *   **Tratamento de Erros e Notificações:** Implementar um sistema de notificações global (ex: toasts) para feedback ao usuário.

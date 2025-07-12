@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Select, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys } from '@mantine/core'; // Importar da Mantine
+import { Table, Button, Select, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack } from '@mantine/core'; // Importar da Mantine
 import { IconSelector, IconChevronDown, IconChevronUp } from '@tabler/icons-react'; // Ícones para ordenação
 
 // REMOVER SIMULAÇÕES DE COMPONENTES UI (Button, Select, Modal) - eles virão da Mantine
@@ -39,10 +39,15 @@ function Th({ children, reversed, sorted, onSort, width }: ThProps) {
 export interface Alert {
   /** Identificador numérico único do alerta. */
   id: number;
-  /** Identificador do recurso ao qual o alerta se refere. */
+  /** Identificador textual do recurso ao qual o alerta se refere (ex: nome do bucket S3, ID da instância EC2). */
+  resource_id: string;
+  /** Tipo do recurso (ex: S3Bucket, EC2Instance). */
   resource_type: string;
+  /** ID da conta do provedor de nuvem onde o recurso está localizado, se aplicável. */
   account_id?: string;
+  /** Região onde o recurso está localizado, se aplicável. */
   region?: string;
+  /** Provedor de nuvem ou serviço (ex: aws, gcp, azure, googleworkspace). */
   provider: string;
   severity: string;
   title: string;
@@ -70,6 +75,10 @@ interface AlertsTableProps {
   alerts: Alert[];
   /** O título a ser exibido acima da tabela de alertas. */
   title: string;
+  /** Função chamada quando o status de um alerta precisa ser atualizado. */
+  onUpdateStatus: (alertId: number, newStatus: string) => Promise<void>;
+  /** Booleano que indica se o usuário atual tem permissão para atualizar o status dos alertas. */
+  canUpdateStatus: boolean;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -82,9 +91,9 @@ const ITEMS_PER_PAGE = 10;
  * @component
  * @example
  * const myAlerts = [{id: 1, ...}, {id: 2, ...}];
- * return <AlertsTable alerts={myAlerts} title="Meus Alertas Atuais" />
+ * return <AlertsTable alerts={myAlerts} title="Meus Alertas Atuais" onUpdateStatus={async (id, status) => console.log(id, status)} canUpdateStatus={true} />
  */
-const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title }) => {
+const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus, canUpdateStatus }) => {
   const { t } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<SortableColumn>('last_seen_at');
@@ -144,6 +153,11 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title }) => {
 
   const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
+  /**
+   * Manipulador para cliques nos cabeçalhos de coluna ordenáveis.
+   * Define a coluna de ordenação e a direção.
+   * @param {SortableColumn} column - A coluna pela qual ordenar.
+   */
   const handleSort = (column: SortableColumn) => {
     if (sortColumn === column) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -153,6 +167,11 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title }) => {
     }
   };
 
+  /**
+   * Retorna estilos CSS para a célula de severidade com base no valor da severidade.
+   * @param {string} severity - O nível de severidade do alerta.
+   * @returns {React.CSSProperties} Um objeto de estilo para a célula.
+   */
   const getSeverityStyle = (severity: string): React.CSSProperties => {
     let color = 'var(--mantine-color-text)'; // Usa cor do tema Mantine
     let finalFontWeight: 'normal' | 'bold' = 'normal';
@@ -160,13 +179,18 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title }) => {
     switch (severity.toLowerCase()) {
       case 'critical': color = 'var(--mantine-color-red-7)'; finalFontWeight = 'bold'; break;
       case 'high': color = 'var(--mantine-color-orange-7)'; finalFontWeight = 'bold'; break;
-      case 'medium': color = 'var(--mantine-color-yellow-7)'; break; // Ajustar para melhor contraste se necessário
+      case 'medium': color = 'var(--mantine-color-yellow-7)'; break;
       case 'low': color = 'var(--mantine-color-blue-7)'; break;
       case 'informational': color = 'var(--mantine-color-gray-7)'; break;
     }
     return { color, fontWeight: finalFontWeight };
   };
 
+  /**
+   * Manipulador para cliques em uma linha da tabela.
+   * Define o alerta selecionado e abre o modal de detalhes.
+   * @param {Alert} alert - O objeto de alerta da linha clicada.
+   */
   const handleRowClick = (alert: Alert) => {
     setSelectedAlert(alert);
     setIsModalOpen(true);
@@ -267,12 +291,39 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title }) => {
         }}
       >
         {selectedAlert && (
-          <Stack gap="xs">
+          <Stack gap="sm"> {/* Aumentado o gap para 'sm' para melhor espaçamento */}
             <Text><strong>{t('alertItem.id')}:</strong> {selectedAlert.id}</Text>
             <Text><strong>{t('alertItem.title')}:</strong> {selectedAlert.title}</Text>
             <Text><strong>{t('alertItem.provider')}:</strong> {selectedAlert.provider.toUpperCase()}</Text>
-            <Text><strong>{t('alertItem.severity')}:</strong> <Text component="span" c={getSeverityStyle(selectedAlert.severity).color} fw={getSeverityStyle(selectedAlert.severity).fontWeight === 'bold' ? 700 : 400}>{selectedAlert.severity}</Text></Text>
-            <Text><strong>{t('alertItem.status')}:</strong> {selectedAlert.status}</Text>
+            <Text>
+              <strong>{t('alertItem.severity')}:</strong> <Text component="span" c={getSeverityStyle(selectedAlert.severity).color} fw={getSeverityStyle(selectedAlert.severity).fontWeight === 'bold' ? 700 : 400}>{selectedAlert.severity}</Text>
+            </Text>
+
+            {canUpdateStatus ? (
+              <Select
+                label={t('alertItem.status')}
+                value={selectedAlert.status}
+                onChange={async (newStatus) => {
+                  if (newStatus && newStatus !== selectedAlert.status) {
+                    await onUpdateStatus(selectedAlert.id, newStatus);
+                    // Atualiza o status no selectedAlert localmente para refletir a mudança imediatamente na UI do modal
+                    // A lista principal será atualizada pela função onUpdateStatus no DashboardPage
+                    setSelectedAlert(prev => prev ? { ...prev, status: newStatus } : null);
+                  }
+                }}
+                data={[
+                  { value: 'OPEN', label: t('alertStatus.OPEN', 'Open') },
+                  { value: 'ACKNOWLEDGED', label: t('alertStatus.ACKNOWLEDGED', 'Acknowledged') },
+                  { value: 'RESOLVED', label: t('alertStatus.RESOLVED', 'Resolved') },
+                  { value: 'IGNORED', label: t('alertStatus.IGNORED', 'Ignored') },
+                ]}
+                disabled={!canUpdateStatus}
+                mb="sm" // Adiciona margem inferior
+              />
+            ) : (
+              <Text><strong>{t('alertItem.status')}:</strong> {selectedAlert.status}</Text>
+            )}
+
             <Text><strong>{t('alertItem.resource')}:</strong> {selectedAlert.resource_id}</Text>
             <Text><strong>{t('alertItem.resourceType')}:</strong> {selectedAlert.resource_type}</Text>
             {selectedAlert.account_id && <Text><strong>{t('alertItem.accountId')}:</strong> {selectedAlert.account_id}</Text>}

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'; // Importar hook
 import React from 'react';
 import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton } from '@mantine/core'; // Importar AppShell e outros
+import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton, Loader, Center } from '@mantine/core'; // Importar AppShell, Loader, Center
 import { useDisclosure } from '@mantine/hooks';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -55,8 +55,11 @@ function App() {
   };
 
   if (auth.isLoading) {
-    // TODO: Usar um Loader da Mantine aqui
-    return <div className="loading-fullscreen" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>{t('loading')}</div>;
+    return (
+      <Center style={{ height: '100vh' }}>
+        <Loader size="xl" />
+      </Center>
+    );
   }
 
   const navLinkStyle = (isActive?: boolean) => ({ // Estilo para links de navegação, pode ser melhorado com NavLink do react-router
