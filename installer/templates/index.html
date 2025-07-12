@@ -76,5 +76,15 @@
             <button type="submit">Instalar e Iniciar o CSPMEXA</button>
         </form>
     </div>
+
+    <script>
+        document.querySelector('form').addEventListener('submit', function(e) {
+            const password = document.getElementById('auth_db_password').value;
+            if (password.trim() === '') {
+                alert('Por favor, insira a senha do banco de dados.');
+                e.preventDefault(); // Impede o envio do formulário
+            }
+        });
+    </script>
 </body>
 </html>
