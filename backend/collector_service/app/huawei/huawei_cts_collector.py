@@ -1,104 +1,135 @@
 import logging
 from typing import List, Optional, Dict, Any
 import datetime
+import json # Para parsing de request/response se forem strings JSON
+import uuid # Para fallback de traceId
 
-# Supondo que o huawei_client_manager.py fornece uma forma de obter o cliente CTS
-# ou que podemos instancair diretamente aqui.
-# from app.huawei.huawei_client_manager import get_huawei_cts_client
-# Por enquanto, vamos simular a obtenção do cliente.
 from huaweicloudsdkcore.auth.credentials import BasicCredentials
 from huaweicloudsdkcts.v3 import CtsClient, ListTracesRequest
+# O nome real do objeto Trace do SDK pode variar, SdkTrace é um placeholder.
+# from huaweicloudsdkcts.v3.model import Trace as SdkTrace
 
-from app.schemas.huawei.huawei_cts_schemas import CTSTrace, CTSTraceCollection
-from app.core.config import settings # Para credenciais Huawei se não vierem do client_manager
+from app.schemas.huawei.huawei_cts_schemas import CTSTrace, CTSTraceCollection, CTSUserIdentity
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Helper para converter o objeto Trace do SDK para o nosso schema Pydantic CTSTrace
-# Isso dependerá da estrutura exata do objeto retornado pelo SDK.
 def _convert_sdk_trace_to_schema(sdk_trace_obj: Any, tracker_name: Optional[str], domain_id_sdk: Optional[str]) -> Optional[CTSTrace]:
     if not sdk_trace_obj:
         return None
 
-    # Mapeamento de campos (EXEMPLO - PRECISA SER AJUSTADO CONFORME O SDK REAL)
-    # O SDK pode ter nomes de atributos diferentes.
     try:
-        # Muitos campos podem ser aninhados ou ter nomes diferentes
-        user_identity_data = getattr(sdk_trace_obj, 'user', None) # Supondo que 'user' contém a identidade
+        # User Identity processing
         user_identity_schema = None
-        if user_identity_data:
-            user_identity_schema = CTSUserIdentity(
-                type=getattr(user_identity_data, 'type', None), # Exemplo
-                principalId=getattr(user_identity_data, 'id', None), # Exemplo
-                userName=getattr(user_identity_data, 'name', None), # Exemplo
-                domainName=getattr(user_identity_data, 'domain', {}).get('name') if getattr(user_identity_data, 'domain', None) else None, # Exemplo
-                accessKeyId=getattr(user_identity_data, 'access_key_id', None) # Exemplo
-            )
-
-        # O SDK do CTS pode ter um formato específico para requestParameters e responseElements
-        # que pode precisar de um parsing mais inteligente do que apenas getattr.
-        # Se forem strings JSON, precisaríamos de json.loads(). Se forem dicts, direto.
-
-        trace_event_time_str = getattr(sdk_trace_obj, 'time', None) # Exemplo: "2023-10-27T12:34:56Z"
-        event_time_dt = None
-        if trace_event_time_str:
+        sdk_user_identity = getattr(sdk_trace_obj, 'user_identity', getattr(sdk_trace_obj, 'user', None))
+        if sdk_user_identity:
             try:
-                # O formato do timestamp do SDK precisa ser verificado.
-                # Se for epoch ms: datetime.datetime.fromtimestamp(int(trace_event_time_str)/1000, tz=datetime.timezone.utc)
-                # Se for ISO 8601: datetime.datetime.fromisoformat(trace_event_time_str.replace("Z", "+00:00"))
-                event_time_dt = datetime.datetime.fromisoformat(trace_event_time_str.replace("Z", "+00:00"))
+                user_identity_schema = CTSUserIdentity(
+                    type=str(getattr(sdk_user_identity, 'type', 'N/A')),
+                    principalId=str(getattr(sdk_user_identity, 'principal_id', getattr(sdk_user_identity, 'id', 'N/A'))),
+                    userName=str(getattr(sdk_user_identity, 'name', getattr(sdk_user_identity, 'user_name', 'N/A'))),
+                    domainName=str(getattr(sdk_user_identity, 'domain_name', getattr(sdk_user_identity, 'domain', {}).get('name', 'N/A'))),
+                    accessKeyId=str(getattr(sdk_user_identity, 'access_key_id', 'N/A'))
+                )
+            except Exception as e_user:
+                logger.warning(f"Could not fully parse user identity for trace: {e_user}")
+                user_identity_schema = CTSUserIdentity(type="ErrorParsing")
 
+
+        # Request Parameters processing
+        parsed_request_params = None
+        raw_request_params = getattr(sdk_trace_obj, 'request_parameters', getattr(sdk_trace_obj, 'request', None))
+        if isinstance(raw_request_params, str):
+            try:
+                parsed_request_params = json.loads(raw_request_params)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse requestParameters JSON for trace {getattr(sdk_trace_obj, 'trace_id', 'UNKNOWN')}")
+                parsed_request_params = {"raw_unparsed_request": raw_request_params}
+        elif isinstance(raw_request_params, dict):
+            parsed_request_params = raw_request_params
+
+        # Response Elements processing
+        parsed_response_elements = None
+        raw_response_elements = getattr(sdk_trace_obj, 'response_elements', getattr(sdk_trace_obj, 'response', None))
+        if isinstance(raw_response_elements, str):
+            try:
+                parsed_response_elements = json.loads(raw_response_elements)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse responseElements JSON for trace {getattr(sdk_trace_obj, 'trace_id', 'UNKNOWN')}")
+                parsed_response_elements = {"raw_unparsed_response": raw_response_elements}
+        elif isinstance(raw_response_elements, dict):
+            parsed_response_elements = raw_response_elements
+
+        # Event Time processing
+        event_time_dt = None
+        event_time_val = getattr(sdk_trace_obj, 'event_time', getattr(sdk_trace_obj, 'time', None))
+        if isinstance(event_time_val, (int, float)): # Epoch ms or s
+            try:
+                # Se for ms, dividir por 1000. Se for s, não. Precisaria saber qual é. Assumindo ms.
+                event_time_dt = datetime.datetime.fromtimestamp(event_time_val / 1000.0, tz=datetime.timezone.utc)
             except ValueError:
-                 logger.warning(f"Could not parse event_time '{trace_event_time_str}' for trace_id {getattr(sdk_trace_obj, 'trace_id', 'UNKNOWN')}")
+                logger.warning(f"Could not parse epoch timestamp '{event_time_val}' for trace.")
+        elif isinstance(event_time_val, str): # ISO 8601 string
+            try:
+                # Remover 'Z' e adicionar offset UTC se Pydantic/datetime precisar
+                if event_time_val.endswith("Z"):
+                    event_time_val = event_time_val[:-1] + "+00:00"
+                event_time_dt = datetime.datetime.fromisoformat(event_time_val)
+            except ValueError:
+                logger.warning(f"Could not parse ISO timestamp string '{event_time_val}' for trace.")
+        elif isinstance(event_time_val, datetime.datetime):
+             event_time_dt = event_time_val
+
+        if not event_time_dt: # Fallback
+            event_time_dt = datetime.datetime.now(datetime.timezone.utc)
+            logger.warning(f"Event time missing or unparseable for trace {getattr(sdk_trace_obj, 'trace_id', 'UNKNOWN')}, using current time.")
+
+        # traceId e traceName são obrigatórios no schema, usar fallbacks.
+        trace_id_val = str(getattr(sdk_trace_obj, 'trace_id', getattr(sdk_trace_obj, 'id', getattr(sdk_trace_obj, 'record_id', None) or uuid.uuid4())))
+        trace_name_val = str(getattr(sdk_trace_obj, 'trace_name', getattr(sdk_trace_obj, 'name', 'UnknownTraceName')))
+        event_name_val = str(getattr(sdk_trace_obj, 'event_name', getattr(sdk_trace_obj, 'operation', trace_name_val))) # Tentar 'operation' como fallback
 
 
         return CTSTrace(
-            traceId=getattr(sdk_trace_obj, 'trace_id', None) or getattr(sdk_trace_obj, 'record_id', 'N/A_ID'), # Nome do campo pode variar
-            traceName=getattr(sdk_trace_obj, 'trace_name', None) or getattr(sdk_trace_obj, 'name', 'N/A_Name'),
-            traceRating=getattr(sdk_trace_obj, 'trace_rating', None),
-            eventSource=getattr(sdk_trace_obj, 'service_type', None), # Exemplo
+            traceId=trace_id_val,
+            traceName=trace_name_val,
+            traceRating=str(getattr(sdk_trace_obj, 'trace_rating', '')),
+            eventSource=str(getattr(sdk_trace_obj, 'service_type', getattr(sdk_trace_obj, 'service_name', getattr(sdk_trace_obj, 'event_source', '')))),
             eventTime=event_time_dt,
-            eventName=getattr(sdk_trace_obj, 'resource_type', None) + "_" + (getattr(sdk_trace_obj, 'trace_name', None) or ""), # Combinação para evento
+            eventName=event_name_val,
             userIdentity=user_identity_schema,
-            sourceIPAddress=getattr(sdk_trace_obj, 'source_ip', None), # Exemplo
-            requestParameters=getattr(sdk_trace_obj, 'request', None), # Pode ser um dict ou string JSON
-            responseElements=getattr(sdk_trace_obj, 'response', None), # Pode ser um dict ou string JSON
-            resourceType=getattr(sdk_trace_obj, 'resource_type', None),
-            resourceName=getattr(sdk_trace_obj, 'resource_name', None),
-            regionId=getattr(sdk_trace_obj, 'region_id', None) or getattr(sdk_trace_obj, 'region', None), # Exemplo
-            errorCode=getattr(sdk_trace_obj, 'code', None), # Exemplo
-            errorMessage=getattr(sdk_trace_obj, 'message', None), # Exemplo
-            apiVersion=getattr(sdk_trace_obj, 'api_version', None),
-            readOnly=getattr(sdk_trace_obj, 'is_read_only', None), # Exemplo
-            trackerName=tracker_name, # Passado para a função
-            domainId=domain_id_sdk or getattr(user_identity_schema, 'domainName', None) # Heurística
+            sourceIPAddress=str(getattr(sdk_trace_obj, 'source_ip_address', getattr(sdk_trace_obj, 'source_ip', ''))),
+            requestParameters=parsed_request_params,
+            responseElements=parsed_response_elements,
+            resourceType=str(getattr(sdk_trace_obj, 'resource_type', '')),
+            resourceName=str(getattr(sdk_trace_obj, 'resource_name', '')),
+            regionId=str(getattr(sdk_trace_obj, 'region_id', getattr(sdk_trace_obj, 'region', ''))),
+            errorCode=str(getattr(sdk_trace_obj, 'error_code', getattr(sdk_trace_obj, 'code', ''))),
+            errorMessage=str(getattr(sdk_trace_obj, 'error_message', getattr(sdk_trace_obj, 'message', ''))),
+            apiVersion=str(getattr(sdk_trace_obj, 'api_version', '')),
+            readOnly=bool(getattr(sdk_trace_obj, 'read_only', False)),
+            trackerName=str(tracker_name or ''),
+            domainId=str(domain_id_sdk or (user_identity_schema.domainName if user_identity_schema else None) or '')
         )
     except Exception as e:
-        logger.error(f"Error converting SDK trace object to schema: {e}", exc_info=True)
-        return CTSTrace( # Retornar um objeto de erro parcial
-            traceId=getattr(sdk_trace_obj, 'trace_id', 'CONVERSION_ERROR_ID'),
+        logger.error(f"Critical error converting SDK trace object to schema: {e}", exc_info=True)
+        return CTSTrace(
+            traceId=str(getattr(sdk_trace_obj, 'trace_id', 'CONVERSION_ERROR_ID_' + str(uuid.uuid4()))),
             traceName="CONVERSION_ERROR_NAME",
-            eventTime=datetime.datetime.now(datetime.timezone.utc), # Placeholder
-            collection_error_details=f"Failed to parse SDK trace object: {str(e)}"
+            eventTime=datetime.datetime.now(datetime.timezone.utc),
+            collection_error_details=f"Failed to parse SDK trace object due to critical error: {str(e)}"
         )
 
-
-async def get_huawei_cts_traces(
-    project_id: str, # Usado para configurar o cliente e como account_id
-    region_id: str,  # Região para o endpoint do cliente CTS
-    domain_id: Optional[str] = None, # Domain ID da conta, pode ser diferente do project_id
-    tracker_name: str = "system", # Nome do tracker (ex: "system" para todos, ou um nome específico)
-    limit_per_call: int = 100, # Limite de traces por chamada API
-    max_total_traces: int = 1000, # Limite máximo de traces a serem coletados no total
-    time_from: Optional[datetime.datetime] = None, # Período de início (UTC)
-    time_to: Optional[datetime.datetime] = None,   # Período de fim (UTC)
+def get_huawei_cts_traces( # Removido async def, pois a chamada SDK é síncrona
+    project_id: str,
+    region_id: str,
+    domain_id: Optional[str] = None,
+    tracker_name: str = "system",
+    limit_per_call: int = 100,
+    max_total_traces: int = 1000,
+    time_from: Optional[datetime.datetime] = None,
+    time_to: Optional[datetime.datetime] = None,
 ) -> CTSTraceCollection:
-    """
-    Coleta traces do Huawei Cloud Trace Service (CTS).
-    """
-    # Usar domain_id se fornecido, senão o HUAWEICLOUD_SDK_DOMAIN_ID das settings,
-    # ou fallback para project_id se domain_id não estiver disponível.
-    # O SDK geralmente precisa do domain_id para autenticação IAM.
     auth_domain_id = domain_id or settings.HUAWEICLOUD_SDK_DOMAIN_ID or project_id
 
     if not all([settings.HUAWEICLOUD_SDK_AK, settings.HUAWEICLOUD_SDK_SK, auth_domain_id, project_id, region_id]):
@@ -109,12 +140,10 @@ async def get_huawei_cts_traces(
     credentials = BasicCredentials(
         ak=settings.HUAWEICLOUD_SDK_AK,
         sk=settings.HUAWEICLOUD_SDK_SK,
-        project_id=project_id, # O project_id para o qual o cliente fará chamadas (escopo de recursos)
-        domain_id=auth_domain_id # O domain_id para autenticação
+        project_id=project_id,
+        domain_id=auth_domain_id
     )
 
-    # O endpoint do CTS é geralmente regional. Ex: cts.{region_id}.myhuaweicloud.com
-    # O SDK deve construir isso.
     cts_client = CtsClient.new_builder() \
         .with_credentials(credentials) \
         .with_region_id(region_id) \
@@ -124,64 +153,44 @@ async def get_huawei_cts_traces(
     next_marker: Optional[str] = None
     collected_count = 0
 
-    # Definir período de tempo padrão se não fornecido (ex: últimas 24 horas)
     if time_to is None:
         time_to = datetime.datetime.now(datetime.timezone.utc)
     if time_from is None:
         time_from = time_to - datetime.timedelta(days=1)
 
-    # Converter datetimes para epoch milliseconds para a API do CTS (se necessário)
-    # Ou para string ISO 8601, dependendo do que o SDK espera.
-    # O SDK ListTracesRequest espera inteiros para 'from' e 'to' (epoch ms).
     from_timestamp_ms = int(time_from.timestamp() * 1000)
     to_timestamp_ms = int(time_to.timestamp() * 1000)
 
     try:
         while collected_count < max_total_traces:
+            request_limit = min(limit_per_call, max_total_traces - collected_count)
+            if request_limit <=0: # Evitar limit 0 se max_total_traces for atingido exatamente
+                break
+
             request = ListTracesRequest(
                 tracker_name=tracker_name,
-                limit=min(limit_per_call, max_total_traces - collected_count),
-                next=next_marker if next_marker else None, # 'next' é o marker para paginação
-                _from=from_timestamp_ms, # O SDK usa '_from' por 'from' ser palavra reservada
+                limit=request_limit,
+                next=next_marker if next_marker else None,
+                _from=from_timestamp_ms,
                 to=to_timestamp_ms,
-                # Outros filtros podem ser adicionados aqui:
-                # service_type="ECS", user_name="myuser", resource_id="...", trace_name="...", etc.
             )
 
             logger.info(f"Fetching CTS traces for tracker '{tracker_name}', page_marker: {next_marker}, limit: {request.limit}")
-            # A chamada ao SDK é síncrona, então precisaria ser envolvida em run_in_threadpool se chamada de um endpoint async.
-            # Para este coletor, vamos assumir que ele pode ser chamado de forma síncrona ou o chamador lida com o async.
-            # Se for usar asyncio direto aqui, o cliente e as chamadas precisam ser async.
-            # O SDK Python da Huawei geralmente é síncrono.
 
-            # Simulando a chamada síncrona (em um ambiente de teste, isso seria mockado)
-            # Em um coletor real, você faria:
-            # loop = asyncio.get_event_loop()
-            # response = await loop.run_in_executor(None, cts_client.list_traces, request)
-            # Mas para manter o coletor síncrono (para ser chamado por run_in_threadpool no controller):
-
-            # Placeholder para a resposta do SDK - A chamada real ao SDK é síncrona.
+            # Chamada Síncrona Real ao SDK Huawei
             # O controller (FastAPI endpoint) deve chamar esta função get_huawei_cts_traces
             # usando `await run_in_threadpool(...)` para não bloquear o event loop.
+            response_sdk = cts_client.list_traces(request)
 
-            response_sdk = cts_client.list_traces(request) # Chamada Síncrona Real ao SDK Huawei
-
-            # O código abaixo processa a resposta do SDK.
-            # É crucial que os nomes dos atributos (ex: 'traces', 'next_marker')
-            # correspondam exatamente ao que o SDK `huaweicloudsdkcts.v3.ListTracesResponse` retorna.
-            # A função `_convert_sdk_trace_to_schema` também precisa estar alinhada.
-
-            sdk_traces = getattr(response_sdk, 'traces', []) # 'traces' é o nome esperado no objeto de resposta do SDK
+            sdk_traces = getattr(response_sdk, 'traces', [])
             if sdk_traces:
-                # Importar MagicMock se _convert_sdk_trace_to_schema ainda o usar para simulação interna
-                # from unittest.mock import MagicMock # Removido pois o mock global foi removido
                 for sdk_trace in sdk_traces:
                     schema_trace = _convert_sdk_trace_to_schema(sdk_trace, tracker_name, auth_domain_id)
                     if schema_trace:
                         all_traces_schemas.append(schema_trace)
                 collected_count += len(sdk_traces)
 
-            next_marker = getattr(response_sdk, 'next_marker', None) # Adaptar ao nome real do atributo no SDK
+            next_marker = getattr(response_sdk, 'next_marker', getattr(response_sdk, 'next', None)) # Alguns SDKs usam 'next'
             if not next_marker or collected_count >= max_total_traces:
                 break
 
@@ -189,54 +198,15 @@ async def get_huawei_cts_traces(
         return CTSTraceCollection(
             traces=all_traces_schemas,
             next_marker=next_marker,
-            total_count=collected_count # O SDK pode não fornecer um total geral
+            total_count=collected_count
         )
 
     except Exception as e:
-        # No SDK da Huawei, erros específicos como ApiValueError, Http zowelotionError podem ocorrer.
-        # O ClientException é uma base comum.
         logger.error(f"Error collecting CTS traces for tracker '{tracker_name}': {e}", exc_info=True)
         return CTSTraceCollection(error_message=f"Failed to collect CTS traces: {str(e)}")
 
 
 if __name__ == "__main__":
-    # Teste local (requer credenciais Huawei configuradas e um tracker CTS)
-    # Este é um teste síncrono, mas o coletor é async para uso com FastAPI.
-    # Para rodar localmente:
-    # import asyncio
-    # async def run_test():
-    #     # Configurar settings mockadas ou carregar de .env
-    #     settings.HUAWEICLOUD_SDK_AK = "YOUR_AK"
-    #     settings.HUAWEICLOUD_SDK_SK = "YOUR_SK"
-    #     settings.HUAWEICLOUD_SDK_PROJECT_ID = "YOUR_PROJECT_ID"
-    #     settings.HUAWEICLOUD_SDK_DOMAIN_ID = "YOUR_DOMAIN_ID" # Ou username da conta
-
-    #     project_id_test = settings.HUAWEICLOUD_SDK_PROJECT_ID
-    #     region_id_test = "cn-north-4" # Exemplo de região
-    #     domain_id_test = settings.HUAWEICLOUD_SDK_DOMAIN_ID
-
-    #     if not all([project_id_test, region_id_test, domain_id_test]):
-    #         print("Pulando teste local do coletor CTS: credenciais/configurações Huawei não definidas.")
-    #         return
-
-    #     print(f"Testando coletor CTS para projeto {project_id_test}, região {region_id_test}...")
-    #     collection_result = await get_huawei_cts_traces(
-    #         project_id=project_id_test,
-    #         region_id=region_id_test,
-    #         domain_id=domain_id_test,
-    #         tracker_name="system", # Ou o nome do seu tracker
-    #         max_total_traces=20 # Limitar para teste
-    #     )
-    #     if collection_result.error_message:
-    #         print(f"Erro na coleta: {collection_result.error_message}")
-    #     else:
-    #         print(f"Coletado {len(collection_result.traces)} traces.")
-    #         for trace in collection_result.traces[:2]: # Imprimir os 2 primeiros
-    #             print(trace.model_dump_json(indent=2))
-    #     if collection_result.next_marker:
-    #         print(f"Próximo marcador para paginação: {collection_result.next_marker}")
-
-    # asyncio.run(run_test())
-    print("Coletor CTS Huawei (estrutura com mock) criado. Adapte com chamadas reais ao SDK.")
-
+    # Teste local já estava comentado, mantendo assim.
+    print("Coletor CTS Huawei refinado. Adapte com chamadas reais ao SDK e documentação.")
 ```

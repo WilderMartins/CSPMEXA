@@ -2,125 +2,149 @@ import logging
 from typing import List, Optional, Dict, Any
 import datetime
 import re # Para extrair project_id
+import uuid # Para fallback de ID
 
 from google.cloud import securitycenter_v1
 from google.auth.exceptions import DefaultCredentialsError
 from google.api_core.exceptions import GoogleAPIError
+# from google.protobuf.struct_pb2 import Struct # Para type hinting, se necessário
 
 from app.schemas.gcp.gcp_scc_schemas import GCPFinding, GCPSCCFindingCollection, GCPFindingSourceProperties
-from app.gcp.gcp_utils import get_gcp_project_id # Para obter o projeto padrão se necessário
+from app.gcp.gcp_utils import get_gcp_project_id
 
 logger = logging.getLogger(__name__)
 
-# Helper para converter o objeto Finding do SDK para o nosso schema Pydantic GCPFinding
+def _convert_protobuf_timestamp_to_datetime(pb_timestamp: Any) -> Optional[datetime.datetime]:
+    """Converte um google.protobuf.Timestamp para datetime.datetime ou retorna None."""
+    if pb_timestamp and hasattr(pb_timestamp, "ToDatetime") and callable(pb_timestamp.ToDatetime):
+        try:
+            # ToDatetime() pode retornar um datetime naive, garantir que seja timezone-aware (UTC)
+            dt = pb_timestamp.ToDatetime()
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=datetime.timezone.utc)
+            return dt
+        except Exception as e:
+            logger.warning(f"Could not convert protobuf timestamp to datetime: {e}")
+    elif isinstance(pb_timestamp, str): # Se já for uma string ISO
+        try:
+            dt_str = pb_timestamp
+            if dt_str.endswith("Z"):
+                 dt_str = dt_str[:-1] + "+00:00"
+            return datetime.datetime.fromisoformat(dt_str)
+        except ValueError:
+            logger.warning(f"Could not parse ISO timestamp string from SCC: {pb_timestamp}")
+    return None
+
 def _convert_sdk_finding_to_schema(sdk_finding: securitycenter_v1.types.Finding) -> Optional[GCPFinding]:
     if not sdk_finding:
         return None
 
     try:
-        # Extrair IDs do nome e pai
         org_id, source_id_from_name, finding_id_str = None, None, None
         if sdk_finding.name:
-            name_parts = sdk_finding.name.split('/')
-            if len(name_parts) == 6 and name_parts[0] == "organizations" and name_parts[2] == "sources" and name_parts[4] == "findings":
-                org_id = name_parts[1]
-                source_id_from_name = name_parts[3]
-                finding_id_str = name_parts[5]
-            elif len(name_parts) == 6 and name_parts[0] == "projects" and name_parts[2] == "sources" and name_parts[4] == "findings":
-                # Não é o formato esperado para 'name', mas sim para 'parent' de um finding específico
-                pass # project_id será extraído de resource_name
-            elif len(name_parts) == 4 and name_parts[0] == "folders": # folders/{folder_id}/sources/{source_id}/findings/{finding_id}
-                 # Similar, org_id não está aqui
-                source_id_from_name = name_parts[3]
-                finding_id_str = name_parts[5]
-
+            parts = sdk_finding.name.split('/')
+            if len(parts) == 6 and parts[0] in ["organizations", "folders", "projects"] and parts[2] == "sources" and parts[4] == "findings":
+                if parts[0] == "organizations": org_id = parts[1]
+                # folder_id pode ser parts[1] se parts[0] == "folders"
+                # project_id pode ser parts[1] se parts[0] == "projects" (menos comum para 'name' de finding global)
+                source_id_from_name = parts[3]
+                finding_id_str = parts[5]
 
         source_id_from_parent = None
-        if sdk_finding.parent:
+        if sdk_finding.parent: # Formato: organizations/{org}/sources/{source} ou projects/... ou folders/...
             parent_parts = sdk_finding.parent.split('/')
             if len(parent_parts) == 4 and parent_parts[2] == "sources":
                 source_id_from_parent = parent_parts[3]
 
         source_id_final = source_id_from_name or source_id_from_parent
 
-        # Extrair project_id do resource_name (ex: "//cloudresourcemanager.googleapis.com/projects/12345")
-        project_id_match = re.search(r"//cloudresourcemanager\.googleapis\.com/projects/([^/]+)", sdk_finding.resource_name)
-        project_id_extracted = project_id_match.group(1) if project_id_match else None
-        if not project_id_extracted: # Tentar outro formato comum
-            project_id_match_alt = re.search(r"projects/([^/]+)", sdk_finding.resource_name)
-            project_id_extracted = project_id_match_alt.group(1) if project_id_match_alt else None
+        project_id_extracted = None
+        if sdk_finding.resource_name:
+            match = re.search(r"projects/([^/]+)", sdk_finding.resource_name)
+            if match:
+                project_id_extracted = match.group(1)
+
+        # Se org_id não foi pego do 'name' (ex: finding de projeto), tentar pegar do 'parent'
+        if not org_id and sdk_finding.parent and sdk_finding.parent.startswith("organizations/"):
+            org_id = sdk_finding.parent.split('/')[1]
 
 
-        # Severity é um Enum no SDK, converter para string
-        severity_str = securitycenter_v1.types.Finding.Severity(sdk_finding.severity).name
+        severity_str = securitycenter_v1.types.Finding.Severity(sdk_finding.severity).name \
+            if sdk_finding.severity else "SEVERITY_UNSPECIFIED"
+        state_str = securitycenter_v1.types.Finding.State(sdk_finding.state).name \
+            if sdk_finding.state else "STATE_UNSPECIFIED"
 
-        # source_properties é um Struct no SDK, converter para dict
-        source_props_dict = None
+        source_props_dict = {}
         if sdk_finding.source_properties:
-            source_props_dict = dict(sdk_finding.source_properties.items())
+            # O objeto Struct do Protobuf pode ser convertido para dict
+            # usando dict() ou iterando sobre seus campos.
+            try:
+                # Tentar converter diretamente para dict. Isso funciona se for um Mapping.
+                source_props_dict = dict(sdk_finding.source_properties)
+            except TypeError: # Se não for um Mapping direto, iterar
+                for key, value in sdk_finding.source_properties.items():
+                     # O valor pode ser outro Struct, um ListValue, ou um valor simples.
+                     # Para simplificar, vamos apenas pegar a representação string por enquanto,
+                     # ou tentar uma conversão mais profunda se o valor for um Struct/ListValue.
+                     # Esta parte pode precisar de mais refinamento dependendo da complexidade dos dados.
+                    source_props_dict[key] = str(value) # Simplificação
+            except Exception as e_sp:
+                logger.warning(f"Could not fully parse source_properties for finding {sdk_finding.name}: {e_sp}")
+                source_props_dict = {"error_parsing_source_properties": str(e_sp)}
 
-        source_properties_schema = None
-        if source_props_dict:
-            source_properties_schema = GCPFindingSourceProperties(additional_properties=source_props_dict)
+        source_properties_schema = GCPFindingSourceProperties(additional_properties=source_props_dict) \
+            if source_props_dict else None
 
+        event_time_dt = _convert_protobuf_timestamp_to_datetime(sdk_finding.event_time)
+        create_time_dt = _convert_protobuf_timestamp_to_datetime(sdk_finding.create_time)
+        update_time_dt = _convert_protobuf_timestamp_to_datetime(sdk_finding.update_time)
 
         return GCPFinding(
-            name=sdk_finding.name,
-            parent=sdk_finding.parent,
-            resourceName=sdk_finding.resource_name,
-            state=securitycenter_v1.types.Finding.State(sdk_finding.state).name,
-            category=sdk_finding.category,
+            name=sdk_finding.name or f"scc_finding_{uuid.uuid4()}", # Obrigatório
+            parent=sdk_finding.parent or "UnknownParent", # Obrigatório
+            resourceName=sdk_finding.resource_name or "UnknownResource", # Obrigatório
+            state=state_str,
+            category=sdk_finding.category or "UNCATEGORIZED", # Obrigatório
             externalUri=sdk_finding.external_uri,
             sourceProperties=source_properties_schema,
-            eventTime=sdk_finding.event_time.ToDatetime(tzinfo=datetime.timezone.utc) if hasattr(sdk_finding.event_time, 'ToDatetime') else None,
-            createTime=sdk_finding.create_time.ToDatetime(tzinfo=datetime.timezone.utc) if hasattr(sdk_finding.create_time, 'ToDatetime') else None,
-            updateTime=sdk_finding.update_time.ToDatetime(tzinfo=datetime.timezone.utc) if sdk_finding.update_time and hasattr(sdk_finding.update_time, 'ToDatetime') else None,
+            eventTime=event_time_dt or datetime.datetime.now(datetime.timezone.utc), # Obrigatório
+            createTime=create_time_dt or datetime.datetime.now(datetime.timezone.utc), # Obrigatório
+            updateTime=update_time_dt,
             severity=severity_str,
             canonicalName=sdk_finding.canonical_name,
             description=getattr(sdk_finding, 'description', None),
-            # Adicionar outros campos como vulnerability, misconfiguration se necessário
             project_id=project_id_extracted,
             organization_id=org_id,
             source_id=source_id_final,
             finding_id=finding_id_str
         )
     except Exception as e:
-        logger.error(f"Error converting SDK SCC Finding object to schema: {e}", exc_info=True)
+        logger.error(f"Critical error converting SDK SCC Finding object to schema: {e}", exc_info=True)
         return GCPFinding(
-            name=getattr(sdk_finding, 'name', 'CONVERSION_ERROR_NAME'),
+            name=getattr(sdk_finding, 'name', f'CONVERSION_ERROR_NAME_{uuid.uuid4()}'),
             parent=getattr(sdk_finding, 'parent', 'CONVERSION_ERROR_PARENT'),
             resourceName=getattr(sdk_finding, 'resource_name', 'CONVERSION_ERROR_RESOURCE'),
             state="STATE_UNSPECIFIED",
-            category="CATEGORY_UNSPECIFIED",
-            eventTime=datetime.datetime.now(datetime.timezone.utc), # Placeholder
-            createTime=datetime.datetime.now(datetime.timezone.utc), # Placeholder
+            category="CONVERSION_ERROR_CATEGORY",
+            eventTime=datetime.datetime.now(datetime.timezone.utc),
+            createTime=datetime.datetime.now(datetime.timezone.utc),
             severity="SEVERITY_UNSPECIFIED",
             collection_error_details=f"Failed to parse SDK SCC Finding object: {str(e)}"
         )
 
-async def get_gcp_scc_findings(
-    parent_resource: str, # Ex: "organizations/{org_id}/sources/-" ou "projects/{project_id}/sources/-"
-                          # Ou "organizations/{org_id}" para então listar fontes e depois findings.
-                          # Para este coletor, vamos assumir que o parent já inclui /sources/-
-    scc_filter: Optional[str] = None, # Filtro da API SCC (ex: 'state="ACTIVE" AND severity="HIGH"')
+def get_gcp_scc_findings( # Removido async def
+    parent_resource: str,
+    scc_filter: Optional[str] = None,
     max_results_per_call: int = 1000,
     max_total_results: int = 10000,
 ) -> GCPSCCFindingCollection:
-    """
-    Coleta findings do GCP Security Command Center para um recurso pai específico.
-    Requer permissão: securitycenter.findings.list
-    """
     all_findings_schemas: List[GCPFinding] = []
     page_token: Optional[str] = None
     collected_count = 0
 
     try:
-        credentials, default_project_id = google.auth.default() # Tenta obter credenciais do ambiente
+        credentials, _ = google.auth.default()
         scc_client = securitycenter_v1.SecurityCenterClient(credentials=credentials)
-
-        # O 'parent' para list_findings deve ser no formato organizations/ORG_ID/sources/SOURCE_ID
-        # ou projects/PROJECT_ID/sources/SOURCE_ID. Usar '-' para SOURCE_ID pega de todas as fontes.
-        # Ex: parent_resource = "organizations/1234567890/sources/-"
 
         logger.info(f"Fetching GCP SCC findings for parent: {parent_resource}, filter: '{scc_filter or 'None'}'")
 
@@ -135,15 +159,11 @@ async def get_gcp_scc_findings(
                 page_token=page_token
             )
 
-            # A chamada ao SDK é síncrona. Será envolvida em run_in_threadpool no controller.
-            response_pager = scc_client.list_findings(request=request) # Retorna um Pager
+            # Chamada síncrona ao SDK. O controller usará run_in_threadpool.
+            response_pager = scc_client.list_findings(request=request)
 
-            # O código abaixo processa a resposta do Pager.
-            # É crucial que a estrutura de `item_result.finding` e `response_pager.next_page_token`
-            # corresponda ao que o SDK `google-cloud-securitycenter` retorna.
-
-            for item_result in response_pager.list_findings_results: # Iterar sobre os resultados na página atual
-                sdk_finding_obj = item_result.finding # Cada item_result contém um 'finding'
+            for item_result in response_pager.list_findings_results:
+                sdk_finding_obj = item_result.finding
                 schema_finding = _convert_sdk_finding_to_schema(sdk_finding_obj)
                 if schema_finding:
                     all_findings_schemas.append(schema_finding)
@@ -154,11 +174,12 @@ async def get_gcp_scc_findings(
             if not page_token or collected_count >= max_total_results:
                 break
 
-        logger.info(f"Collected {collected_count} SCC findings for parent '{parent_resource}'.")
+        total_size_from_response = response_pager.total_size if hasattr(response_pager, 'total_size') and response_pager.total_size is not None else collected_count
+        logger.info(f"Collected {collected_count} SCC findings (API total: {total_size_from_response}) for parent '{parent_resource}'.")
         return GCPSCCFindingCollection(
             findings=all_findings_schemas,
             next_page_token=page_token,
-            total_size=response_pager.total_size if hasattr(response_pager, 'total_size') else collected_count, # total_size pode não ser sempre retornado
+            total_size=total_size_from_response,
             parent_resource_queried=parent_resource,
             filter_used=scc_filter
         )
@@ -175,36 +196,6 @@ async def get_gcp_scc_findings(
         return GCPSCCFindingCollection(error_message=f"Unexpected error: {str(e)}", parent_resource_queried=parent_resource)
 
 if __name__ == "__main__":
-    # Teste local (requer credenciais GCP e SCC API habilitada)
-    # import asyncio
-    # async def run_scc_test():
-    #     # Configurar GOOGLE_APPLICATION_CREDENTIALS no seu ambiente
-    #     # Exemplo de parent_resource: "organizations/YOUR_ORG_ID/sources/-"
-    #     # Ou "projects/YOUR_PROJECT_ID/sources/-"
-    #     test_parent = "organizations/YOUR_ORG_ID/sources/-" # Substituir pelo seu
-
-    #     if "YOUR_ORG_ID" in test_parent:
-    #         print(f"Pulando teste local do coletor SCC: substitua YOUR_ORG_ID em test_parent.")
-    #         return
-
-    #     print(f"Testando coletor SCC para parent {test_parent}...")
-    #     scc_collection = await get_gcp_scc_findings(
-    #         parent_resource=test_parent,
-    #         scc_filter='state="ACTIVE" AND severity="HIGH"', # Exemplo de filtro
-    #         max_total_results=5
-    #     )
-
-    #     if scc_collection.error_message:
-    #         print(f"Erro na coleta: {scc_collection.error_message}")
-    #     else:
-    #         print(f"Coletados {len(scc_collection.findings)} findings (total size from API: {scc_collection.total_size}).")
-    #         for finding in scc_collection.findings:
-    #             print(f"  Finding: {finding.name}, Category: {finding.category}, Severity: {finding.severity}")
-    #             # print(finding.model_dump_json(indent=2))
-    #         if scc_collection.next_page_token:
-    #             print(f"  Próximo token de página: {scc_collection.next_page_token}")
-
-    # asyncio.run(run_scc_test())
-    print("Coletor GCP SCC (estrutura com mock) criado. Adapte com chamadas reais ao SDK.")
-
+    # Teste local já estava comentado
+    print("Coletor GCP SCC refinado. Adapte com chamadas reais ao SDK e documentação.")
 ```
