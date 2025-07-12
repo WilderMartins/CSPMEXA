@@ -16,13 +16,24 @@ RUN npm run build
 
 # Fase 2: Servir a aplicação com Nginx
 FROM nginx:stable-alpine
+
+# Instala openssl, gera certificados autoassinados e depois remove openssl
+RUN apk add --no-cache openssl && \
+    mkdir -p /etc/ssl/private && \
+    mkdir -p /etc/ssl/certs && \
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/nginx-selfsigned.key \
+    -out /etc/ssl/certs/nginx-selfsigned.crt \
+    -subj "/C=BR/ST=SaoPaulo/L=SaoPaulo/O=CSPMEXA/OU=Development/CN=localhost" && \
+    apk del openssl
+
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copia a configuração customizada do Nginx.
-# Esta configuração é crucial para:
-# 1. Lidar com client-side routing do React Router (`try_files`).
-# 2. Fazer proxy reverso de chamadas /api/v1/* para o api_gateway_service.
+# Copia a configuração customizada do Nginx que agora inclui SSL e proxy reverso.
 COPY nginx.default.conf /etc/nginx/conf.d/default.conf
 
+# Expõe as portas HTTP e HTTPS
 EXPOSE 80
+EXPOSE 443
+
 CMD ["nginx", "-g", "daemon off;"]

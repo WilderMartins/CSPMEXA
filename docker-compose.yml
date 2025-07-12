@@ -53,8 +53,7 @@ services:
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
     volumes:
       - ./backend/auth_service:/app # Monta o código para hot-reloading
-    ports:
-      - "${AUTH_SERVICE_PORT:-8000}:8000"
+    # As portas não são mais expostas ao host, a comunicação é interna na rede Docker
     networks:
       - cspmexa_net
     depends_on:
@@ -95,13 +94,8 @@ services:
       - ./backend/collector_service:/app
       # Montar arquivos de credenciais do host para o container.
       # O usuário deve criar uma pasta 'secrets' na raiz e colocar os arquivos lá,
-      # ou ajustar os caminhos abaixo e no .env raiz.
       - ${GCP_CREDENTIALS_PATH_HOST:-./secrets/gcp-credentials.json}:/app/secrets/gcp-credentials.json:ro
       - ${GWS_SA_KEY_PATH_HOST:-./secrets/gws-sa-key.json}:/app/secrets/gws-sa-key.json:ro
-      # Para credenciais AWS, pode-se montar ~/.aws ou usar variáveis de ambiente.
-      # - ~/.aws:/root/.aws:ro
-    ports:
-      - "${COLLECTOR_SERVICE_PORT:-8001}:8001"
     networks:
       - cspmexa_net
 
@@ -114,24 +108,18 @@ services:
     restart: unless-stopped
     command: python /app/app/main.py
     environment:
-      # Aponta para o mesmo DB do auth_service para alertas (ALERT_DATABASE_URL é usado internamente se DATABASE_URL não estiver setado)
+      # Aponta para o mesmo DB do auth_service para alertas
       - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       # URL para o notification_service, usado pelo policy_engine para enviar notificações
-      - NOTIFICATION_SERVICE_URL=http://notification_service:${NOTIFICATION_SERVICE_PORT:-8003}/api/v1
+      - NOTIFICATION_SERVICE_URL=http://notification_service:8003/api/v1
     volumes:
       - ./backend/policy_engine_service:/app
-    ports:
-      - "${POLICY_ENGINE_SERVICE_PORT:-8002}:8002"
     networks:
       - cspmexa_net
     depends_on:
       postgres_auth_db:
         condition: service_healthy
-      # Adicionada dependência para garantir que notification_service esteja disponível, se necessário na inicialização.
-      # Se a chamada for totalmente desacoplada (ex: via message queue no futuro), isso pode não ser estritamente necessário.
-      # notification_service:
-      #   condition: service_started # Ou service_healthy se tiver healthcheck
 
   notification_service:
     profiles: ["app"]
@@ -140,13 +128,13 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-notification-service
     restart: unless-stopped
-    command: python /app/app/main.py # main.py lida com reload via DEBUG_MODE ou RELOAD_UVICORN
+    command: python /app/app/main.py
     environment:
       - PROJECT_NAME=NotificationService
       - API_V1_STR=/api/v1
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - RELOAD_UVICORN=${DEBUG_MODE:-false} # Usar DEBUG_MODE para consistência com outros serviços
-      - PORT=${NOTIFICATION_SERVICE_PORT:-8003} # O Dockerfile usa PORT
+      - RELOAD_UVICORN=${DEBUG_MODE:-false}
+      - PORT=8003 # Porta interna do container
       # SMTP settings from root .env file
       - SMTP_HOST=${SMTP_HOST}
       - SMTP_PORT=${SMTP_PORT:-587}
@@ -158,12 +146,9 @@ services:
       - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CSPMEXA Notification}
       - DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=${DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}
     volumes:
-      - ./backend/notification_service/app:/app/app # Montar código para dev com reload
-    ports:
-      - "${NOTIFICATION_SERVICE_PORT:-8003}:8003" # Expor a porta
+      - ./backend/notification_service/app:/app/app
     networks:
       - cspmexa_net
-    # depends_on: # Sem dependências de banco de dados para iniciar
 
   api_gateway_service:
     profiles: ["app"]
@@ -177,37 +162,37 @@ services:
       - AUTH_SERVICE_URL=http://auth_service:8000/api/v1
       - COLLECTOR_SERVICE_URL=http://collector_service:8001/api/v1
       - POLICY_ENGINE_SERVICE_URL=http://policy_engine_service:8002/api/v1
-      - NOTIFICATION_SERVICE_URL=http://notification_service:${NOTIFICATION_SERVICE_PORT:-8003}/api/v1 # Adicionado
+      - NOTIFICATION_SERVICE_URL=http://notification_service:8003/api/v1
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing_for_gateway}
       - JWT_ALGORITHM=${JWT_ALGORITHM:-HS256}
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60}
       - DEBUG_MODE=${DEBUG_MODE:-false}
     volumes:
       - ./backend/api_gateway_service:/app
-    ports:
-      - "${API_GATEWAY_PORT:-8050}:8050"
+    # A porta do API Gateway não é mais exposta diretamente. O acesso é via Nginx no frontend.
     networks:
       - cspmexa_net
     depends_on:
       - auth_service
       - collector_service
       - policy_engine_service
-      - notification_service # Adicionado
+      - notification_service
 
-  # --- Frontend WebApp ---
+  # --- Frontend WebApp (com Reverse Proxy Nginx) ---
   frontend_webapp:
     profiles: ["app"]
     build:
       context: ./frontend/webapp
-      dockerfile: Dockerfile # Usa o Nginx do Dockerfile para servir o build de produção
-      args: # Argumentos de build para passar a URL da API para o build do Vite
-        VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT:-8050}/api/v1
-        # Ou, se o Nginx for fazer proxy, VITE_API_BASE_URL pode ser relativo: /api/v1
-        # VITE_API_BASE_URL: /api/v1 # Se Nginx for configurado para proxy /api
+      dockerfile: Dockerfile
+      args:
+        # A URL da API agora é um caminho relativo, pois o Nginx serve ambos.
+        VITE_API_BASE_URL: /api/v1
     container_name: cspmexa-frontend-webapp
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-3000}:80" # Nginx no Dockerfile do frontend escuta na porta 80
+      # Expõe as portas padrão de HTTP e HTTPS.
+      - "80:80"
+      - "443:443"
     networks:
       - cspmexa_net
     depends_on:
