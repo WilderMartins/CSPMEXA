@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Title, Paper, Text, Group, Select, Button as MantineButton, SimpleGrid, Box, Alert as MantineAlert } from '@mantine/core';
+import { Title, Paper, Text, Group, Select, Button as MantineButton, SimpleGrid, Box, Skeleton } from '@mantine/core';
 import { BarChart, PieChart } from '@mantine/charts';
-import { IconAlertCircle } from '@tabler/icons-react';
+// IconAlertCircle não é mais necessário diretamente aqui se ErrorMessage o encapsula
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import AlertsTable, { Alert as AlertType } from '../components/Dashboard/AlertsTable';
-
-// Tipos para os dados dos gráficos
-interface ChartDataItem {
-  name: string;
-  value: number;
-  color?: string;
-}
+import ErrorMessage from '../components/Common/ErrorMessage';
+import { calculateSeverityData, calculateProviderData, ChartDataItem } from '../utils/reportUtils'; // Importar funções utilitárias
 
 /**
  * `ReportsPage` é um componente de página que exibe vários relatórios de segurança
@@ -88,46 +83,10 @@ const ReportsPage: React.FC = () => {
   }, [allAlerts, timeRange]);
 
   // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
-  const severityData = useMemo<ChartDataItem[]>(() => {
-    const counts: Record<string, number> = {};
-    filteredAlertsByTime.forEach(alert => {
-      counts[alert.severity] = (counts[alert.severity] || 0) + 1;
-    });
-    // Adicionar cores padrão para severidades conhecidas
-    return Object.entries(counts).map(([name, value]) => {
-        let color;
-        switch(name.toLowerCase()) {
-            case 'critical': color = 'var(--mantine-color-red-6)'; break;
-            case 'high': color = 'var(--mantine-color-orange-6)'; break;
-            case 'medium': color = 'var(--mantine-color-yellow-5)'; break;
-            case 'low': color = 'var(--mantine-color-blue-5)'; break;
-            case 'informational': color = 'var(--mantine-color-gray-5)'; break;
-            default: color = 'var(--mantine-color-teal-5)'; // Cor genérica
-        }
-        return { name, value, color };
-    });
-  }, [filteredAlertsByTime]);
+  const severityData = useMemo<ChartDataItem[]>(() => calculateSeverityData(filteredAlertsByTime), [filteredAlertsByTime]);
 
   // TODO: Esta agregação deve ser movida para o backend quando a API for otimizada.
-  const providerData = useMemo<ChartDataItem[]>(() => {
-    const counts: Record<string, number> = {};
-    filteredAlertsByTime.forEach(alert => {
-      counts[alert.provider.toUpperCase()] = (counts[alert.provider.toUpperCase()] || 0) + 1;
-    });
-     // Adicionar cores padrão para provedores conhecidos
-    return Object.entries(counts).map(([name, value]) => {
-        let color;
-        switch(name.toLowerCase()) {
-            case 'aws': color = 'var(--mantine-color-orange-7)'; break;
-            case 'gcp': color = 'var(--mantine-color-blue-7)'; break;
-            case 'azure': color = 'var(--mantine-color-indigo-7)'; break;
-            case 'huawei': color = 'var(--mantine-color-red-7)'; break;
-            case 'googleworkspace': color = 'var(--mantine-color-green-7)'; break;
-            default: color = 'var(--mantine-color-cyan-7)';
-        }
-        return { name, value, color };
-    });
-  }, [filteredAlertsByTime]);
+  const providerData = useMemo<ChartDataItem[]>(() => calculateProviderData(filteredAlertsByTime), [filteredAlertsByTime]);
 
   const openAlertsForTable = useMemo(() => {
     return filteredAlertsByTime.filter(alert => alert.status === 'OPEN');
@@ -163,18 +122,27 @@ const ReportsPage: React.FC = () => {
         </Group>
       </Paper>
 
-      {loading && <Text mt="md">{t('reportsPage.loadingData', 'Carregando dados dos relatórios...')}</Text>}
-      {error && (
-        <MantineAlert
-            icon={<IconAlertCircle size="1rem" />}
-            title={t('reportsPage.errorTitle', 'Erro ao Carregar Relatórios')}
-            color="red"
-            withCloseButton
-            onClose={() => setError(null)}
-            mt="md"
-        >
-            {error}
-        </MantineAlert>
+      <ErrorMessage message={error} onClose={() => setError(null)} title={t('reportsPage.errorTitle', 'Report Error')} />
+
+      {loading && !error && (
+        <>
+          <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" mt="xl">
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Skeleton height={30} width="60%" mx="auto" mb="md" /> {/* Title Skeleton */}
+              <Skeleton height={300} /> {/* Chart Skeleton */}
+            </Paper>
+            <Paper withBorder p="md" shadow="sm" radius="md">
+              <Skeleton height={30} width="60%" mx="auto" mb="md" /> {/* Title Skeleton */}
+              <Skeleton height={300} /> {/* Chart Skeleton */}
+            </Paper>
+          </SimpleGrid>
+          <Paper withBorder p="md" shadow="sm" radius="md" mt="xl">
+            <Skeleton height={30} width="40%" mb="md" /> {/* Title Skeleton */}
+            <Skeleton height={25} mt="md" /> {/* Table Row Skeleton */}
+            <Skeleton height={25} mt="xs" />
+            <Skeleton height={25} mt="xs" />
+          </Paper>
+        </>
       )}
 
       {!loading && !error && (

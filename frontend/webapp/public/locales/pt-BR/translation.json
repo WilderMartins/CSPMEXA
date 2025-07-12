@@ -158,5 +158,8 @@
     "error": "Erro OAuth: {{error}}",
     "errorProcessing": "Erro ao processar o login. Por favor, tente novamente.",
     "invalidCallback": "Estado de callback inválido."
+  },
+  "common": {
+    "errorTitle": "Ocorreu um Erro"
   }
 }

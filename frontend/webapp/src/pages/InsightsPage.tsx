@@ -1,16 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Title, Paper, Text, Group, Button as MantineButton, SimpleGrid, Box, Alert as MantineAlert, List, ThemeIcon } from '@mantine/core';
+import { Title, Paper, Text, Group, Button as MantineButton, SimpleGrid, Box, List, ThemeIcon, Skeleton } from '@mantine/core';
 // import { BarChart } from '@mantine/charts'; // BarChart pode ser usado no futuro
-import { IconAlertCircle, IconListCheck, IconTargetArrow, IconRefresh } from '@tabler/icons-react';
+import { IconListCheck, IconTargetArrow, IconRefresh } from '@tabler/icons-react';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
 import { Alert as AlertType } from '../components/Dashboard/AlertsTable';
-
-interface InsightDataItem {
-  name: string;
-  count: number;
-}
+import ErrorMessage from '../components/Common/ErrorMessage';
+import { calculateTopViolatedPolicies, calculateTopVulnerableResources, InsightDataItem } from '../utils/insightUtils';
 
 /**
  * `InsightsPage` é um componente de página que exibe insights de segurança
@@ -63,31 +60,10 @@ const InsightsPage: React.FC = () => {
   }, [auth.isAuthenticated]);
 
   // TODO: Esta agregação para 'Top Políticas Violadas' deve ser movida para o backend quando a API for otimizada.
-  const topViolatedPolicies = useMemo<InsightDataItem[]>(() => {
-    if (!allAlerts.length) return [];
-    const policyCounts: Record<string, number> = {};
-    allAlerts.forEach(alert => {
-      policyCounts[alert.policy_id] = (policyCounts[alert.policy_id] || 0) + 1;
-    });
-    return Object.entries(policyCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5); // Top 5
-  }, [allAlerts]);
+  const topViolatedPolicies = useMemo<InsightDataItem[]>(() => calculateTopViolatedPolicies(allAlerts, 5), [allAlerts]);
 
   // TODO: Esta agregação para 'Top Recursos Vulneráveis' deve ser movida para o backend quando a API for otimizada.
-  const topVulnerableResources = useMemo<InsightDataItem[]>(() => {
-    if (!allAlerts.length) return [];
-    const resourceCounts: Record<string, number> = {};
-    allAlerts.forEach(alert => {
-      const resourceKey = `${alert.resource_type}: ${alert.resource_id}`;
-      resourceCounts[resourceKey] = (resourceCounts[resourceKey] || 0) + 1;
-    });
-    return Object.entries(resourceCounts)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5); // Top 5
-  }, [allAlerts]);
+  const topVulnerableResources = useMemo<InsightDataItem[]>(() => calculateTopVulnerableResources(allAlerts, 5), [allAlerts]);
 
   return (
     <div className="insights-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -104,18 +80,27 @@ const InsightsPage: React.FC = () => {
         </Text>
       </Paper>
 
-      {loading && <Text mt="md" ta="center">{t('insightsPage.loadingData', 'Carregando insights...')}</Text>}
-      {error && (
-        <MantineAlert
-            icon={<IconAlertCircle size="1rem" />}
-            title={t('insightsPage.errorTitle', 'Erro ao Carregar Insights')}
-            color="red"
-            withCloseButton
-            onClose={() => setError(null)}
-            mt="md"
-        >
-            {error}
-        </MantineAlert>
+      <ErrorMessage message={error} onClose={() => setError(null)} title={t('insightsPage.errorTitle', 'Insight Error')} />
+
+      {loading && !error && (
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="xl" mt="xl">
+            <Paper withBorder p="xl" shadow="sm" radius="md">
+                <Skeleton height={30} width="70%" mx="auto" mb="lg" />
+                <Skeleton height={20} mt="md" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+            </Paper>
+            <Paper withBorder p="xl" shadow="sm" radius="md">
+                <Skeleton height={30} width="70%" mx="auto" mb="lg" />
+                <Skeleton height={20} mt="md" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+                <Skeleton height={20} mt="xs" />
+            </Paper>
+        </SimpleGrid>
       )}
 
       {!loading && !error && allAlerts.length === 0 && (

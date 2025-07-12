@@ -158,5 +158,8 @@
     "error": "OAuth Error: {{error}}",
     "errorProcessing": "Error processing login. Please try again.",
     "invalidCallback": "Invalid callback state."
+  },
+  "common": {
+    "errorTitle": "An Error Occurred"
   }
 }

@@ -3,9 +3,10 @@ import axios from 'axios';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import ProviderAnalysisSection from '../components/Dashboard/ProviderAnalysisSection';
-import AlertsTable, { Alert as AlertType } from '../components/Dashboard/AlertsTable'; // Renomeado Alert para AlertType
-import { Tabs, Button as MantineButton, Title, Paper, Text, Alert as MantineAlert } from '@mantine/core'; // Adicionado MantineAlert
-import { IconAlertCircle } from '@tabler/icons-react'; // Ícone para o MantineAlert
+import AlertsTable, { Alert as AlertType } from '../components/Dashboard/AlertsTable';
+import ErrorMessage from '../components/Common/ErrorMessage'; // Importar ErrorMessage
+import { Tabs, Button as MantineButton, Title, Paper, Text, Skeleton, Box } from '@mantine/core';
+// MantineAlert e IconAlertCircle não são mais necessários diretamente aqui se ErrorMessage os encapsula
 
 const DashboardPage: React.FC = () => {
   const { t } = useTranslation();
@@ -377,31 +378,33 @@ const DashboardPage: React.FC = () => {
       </Tabs>
 
       {/* Exibição de Loading e Erro */}
-      {isLoading && !alerts.length && <Text mt="md">{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</Text>}
-      {error && (
-        <MantineAlert
-          icon={<IconAlertCircle size="1rem" />}
-          title={t('dashboardPage.errorTitle', 'Erro')}
-          color="red"
-          withCloseButton
-          onClose={() => setError(null)}
-          mt="md"
-        >
-          {error}
-        </MantineAlert>
+      <ErrorMessage message={error} onClose={() => setError(null)} title={t('dashboardPage.errorTitle', 'Analysis Error')} />
+
+      {isLoading && !error && (
+        <Box mt="xl">
+          <Skeleton height={40} mb="md" width="25%" /> {/* Título da Tabela */}
+          <Skeleton height={30} mb="sm" width="70%" /> {/* Filtros */}
+          <Skeleton height={25} mt="md" />
+          <Skeleton height={25} mt="xs" />
+          <Skeleton height={25} mt="xs" />
+          <Skeleton height={25} mt="xs" />
+          <Skeleton height={25} mt="xs" />
+          <Skeleton height={30} mt="md" width="20%" style={{ marginLeft: 'auto' }}/> {/* Paginação */}
+        </Box>
       )}
 
-      {/* Tabela de Alertas integrada com as novas funcionalidades */}
-      <AlertsTable
-        alerts={alerts as AlertType[]}
-        onUpdateStatus={handleUpdateAlertStatus} // Prop para a função de update
-        canUpdateStatus={hasPermission('TechnicalLead')} // Prop para verificar permissão
-        title={ [cite: 121]
-          currentDisplayMode === 'all_alerts'
-            ? t('dashboardPage.allPersistedAlerts') [cite: 121]
-            : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType || t('dashboardPage.unknownAnalysis') }) [cite: 121]
-        }
-      />
+      {!isLoading && !error && (
+        <AlertsTable
+          alerts={alerts as AlertType[]}
+          onUpdateStatus={handleUpdateAlertStatus} // Prop para a função de update
+          canUpdateStatus={hasPermission('TechnicalLead')} // Prop para verificar permissão
+          title={
+            currentDisplayMode === 'all_alerts'
+              ? t('dashboardPage.allPersistedAlerts')
+              : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType || t('dashboardPage.unknownAnalysis') })
+          }
+        />
+      )}
     </div>
   );
 };
