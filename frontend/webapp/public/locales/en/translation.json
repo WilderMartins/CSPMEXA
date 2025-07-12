@@ -65,16 +65,97 @@
     "resourceType": "Resource Type:",
     "severity": "Severity:",
     "title": "Title:",
-    "description": "Description:"
+    "description": "Description:",
+    "accountId": "Account ID:",
+    "region": "Region:",
+    "policyId": "Policy ID:",
+    "firstSeen": "First Seen:",
+    "lastSeen": "Last Seen:",
+    "details": "Details:"
+  },
+  "alertFilters": {
+    "severity": "Severity",
+    "provider": "Provider",
+    "status": "Status",
+    "allSeverities": "All Severities",
+    "allProviders": "All Providers",
+    "allStatuses": "All Statuses"
+  },
+  "alertsTable": {
+    "clickToViewDetails": "Click row to view details",
+    "noMatchingAlerts": "No alerts match the current filters."
+  },
+  "alertDetails": {
+    "title": "Alert Details"
   },
   "header": {
     "title": "CSPMEXA",
     "navLogin": "Login",
     "navDashboard": "Dashboard",
+    "navReports": "Reports",
+    "navInsights": "Insights",
     "btnLogout": "Logout"
   },
   "footer": {
     "copyright": "© {{year}} CSPMEXA. All rights reserved."
+  },
+  "reportsPage": {
+    "title": "Reports & Indicators",
+    "securityScoreTrendTitle": "Security Score Trend",
+    "alertsBySeverityTitle": "Alerts by Severity",
+    "complianceOverviewTitle": "Compliance Overview",
+    "topRisksTitle": "Top Risks",
+    "dataDisclaimer": "Note: Data displayed is sample data. Integration with backend required for actual metrics.",
+    "compliancePlaceholder": "Compliance status visualization will be here.",
+    "topRisksPlaceholder": "Top risks list or chart will be here.",
+    "loadingData": "Loading data...",
+    "noDataAvailable": "No data available for this report.",
+    "errorFetchingTrend": "Error fetching security score trend data.",
+    "errorFetchingSeverity": "Error fetching alerts by severity data.",
+    "errorFetchingCompliance": "Error fetching compliance overview data.",
+    "errorFetchingTopRisks": "Error fetching top risks data.",
+    "securityScoreAxisLabel": "Security Score",
+    "alertsAxisLabel": "# of Alerts",
+    "overallScoreLegend": "Overall Score",
+    "criticalAlertsLegend": "Critical Alerts",
+    "highAlertsLegend": "High Alerts",
+    "alertCountLegend": "Count",
+    "filtersTitle": "Filters",
+    "filterLabelPeriod": "Period",
+    "filterLabelProvider": "Provider",
+    "filterOptions": {
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "allProviders": "All Providers",
+      "selectPeriod": "Select period",
+      "selectProvider": "Select provider"
+    }
+  },
+  "insightsPage": {
+    "title": "Security Insights",
+    "criticalAssetsTitle": "Critical Assets at Risk",
+    "attackPathsTitle": "Potential Attack Paths (Simplified)",
+    "proactiveRecommendationsTitle": "Proactive Recommendations",
+    "placeholder": "Insight data and visualizations will be displayed here once backend endpoints are available.",
+    "dataDisclaimer": "Note: Backend integration required for actual insights.",
+    "loadingCriticalAssets": "Loading critical assets...",
+    "errorCriticalAssets": "Error loading critical assets:",
+    "noCriticalAssets": "No critical assets identified at the moment.",
+    "assetId": "Asset ID:",
+    "riskScore": "Risk Score:",
+    "relatedAlerts": "Related Alerts:",
+    "loadingAttackPaths": "Loading potential attack paths...",
+    "errorAttackPaths": "Error loading attack paths:",
+    "noAttackPaths": "No potential attack paths identified at the moment.",
+    "attackPathId": "Path ID:",
+    "attackPathDescription": "Description:",
+    "pathSegments": "Segments:",
+    "loadingRecommendations": "Loading proactive recommendations...",
+    "errorRecommendations": "Error loading recommendations:",
+    "noRecommendations": "No proactive recommendations available at the moment.",
+    "recommendationCategory": "Category:",
+    "recommendationSeverity": "Severity:"
   },
   "oauthCallback": {
     "processing": "Processing login...",

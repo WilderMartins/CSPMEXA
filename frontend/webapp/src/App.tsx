@@ -1,24 +1,22 @@
 import './App.css' // Estilos específicos do App
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next'; // Importar hook
+import React from 'react';
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton } from '@mantine/core'; // Importar AppShell e outros
+import { useDisclosure } from '@mantine/hooks';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
-// OAuthCallbackPage está definido dentro deste arquivo por enquanto
-// import { useAuth } from './contexts/AuthContext' // Será criado
-
-// Componentes placeholder para as páginas - REMOVIDOS
-// const LoginPagePlaceholder = () => <div>LoginPage Placeholder <br/> <a href="/api/v1/auth/google/login">Login com Google (Gateway)</a> </div>;
-// const DashboardPagePlaceholder = () => <div>DashboardPage Placeholder</div>;
-
-// Placeholder para o hook useAuth
-const useAuthPlaceholder = () => {
-  const token = localStorage.getItem('authToken');
-  return { token, isAuthenticated: !!token };
-};
+import ReportsPage from './pages/ReportsPage';
+import InsightsPage from './pages/InsightsPage';
+import { useAuth } from './contexts/AuthContext';
 
 const OAuthCallbackPage = () => {
   const location = useLocation();
-  const { t } = useTranslation(); // Hook de tradução
+  const { t } = useTranslation();
+  const auth = useAuth(); // Usar o contexto de autenticação
+  const navigate = useNavigate(); // Para redirecionamento programático
 
   React.useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -26,65 +24,125 @@ const OAuthCallbackPage = () => {
     const error = params.get('error');
 
     if (token) {
-      localStorage.setItem('authToken', token);
-      window.location.href = '/dashboard';
+      auth.handleOAuthCallback(token)
+        .then(() => {
+          navigate('/dashboard', { replace: true });
+        })
+        .catch(err => {
+          console.error("Error during OAuth callback handling:", err);
+          navigate('/?error=' + encodeURIComponent(t('oauthCallback.errorProcessing')), { replace: true });
+        });
     } else if (error) {
       console.error("OAuth Error:", error);
-      // Usar t() para a mensagem de erro, embora esta página seja breve
-      window.location.href = '/?error=' + encodeURIComponent(t('oauthCallback.error', { error }));
+      navigate('/?error=' + encodeURIComponent(t('oauthCallback.error', { error })), { replace: true });
     } else {
       console.warn("OAuth callback sem token ou erro.");
-      window.location.href = '/?error=' + encodeURIComponent(t('oauthCallback.invalidCallback'));
+      navigate('/?error=' + encodeURIComponent(t('oauthCallback.invalidCallback')), { replace: true });
     }
-  }, [location, t]);
+  }, [location, auth, t, navigate]);
 
   return <div>{t('oauthCallback.processing')}</div>;
 };
 
 
 function App() {
-  const { isAuthenticated } = useAuthPlaceholder();
-  const { t, i18n } = useTranslation(); // Hook de tradução
+  const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
+  const auth = useAuth();
+  const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
   };
 
+  if (auth.isLoading) {
+    // TODO: Usar um Loader da Mantine aqui
+    return <div className="loading-fullscreen" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh'}}>{t('loading')}</div>;
+  }
+
+  const navLinkStyle = (isActive?: boolean) => ({ // Estilo para links de navegação, pode ser melhorado com NavLink do react-router
+    padding: '8px 12px',
+    borderRadius: '4px',
+    textDecoration: 'none',
+    color: isActive ? 'var(--mantine-color-blue-filled)' : 'var(--mantine-color-text)',
+    fontWeight: isActive ? 700 : 500,
+    '&:hover': {
+      backgroundColor: 'var(--mantine-color-gray-1)',
+    },
+  });
+
+
   return (
-    <div className="app-container">
-      <header className="app-header">
-        <h1>{t('header.title')}</h1>
-        <nav>
-          {!isAuthenticated && <Link to="/">{t('header.navLogin')}</Link>}
-          {isAuthenticated && <Link to="/dashboard">{t('header.navDashboard')}</Link>}
-          {isAuthenticated && <button onClick={() => {
-            localStorage.removeItem('authToken');
-            window.location.href = '/';
-          }}>{t('header.btnLogout')}</button>}
-        </nav>
-        <div className="language-selector" style={{ color: "white", marginLeft: "20px" }}>
-          <button onClick={() => changeLanguage('en')} disabled={i18n.language === 'en'}>EN</button>
-          <button onClick={() => changeLanguage('pt-BR')} disabled={i18n.language === 'pt-BR'}>PT-BR</button>
-        </div>
-      </header>
-      <main className="app-main">
+    <AppShell
+      header={{ height: 60 }}
+      navbar={{ width: 250, breakpoint: 'sm', collapsed: { mobile: !opened, desktop: true } }} // Navbar será usado se quisermos links laterais no futuro
+      padding="md"
+    >
+      <AppShell.Header>
+        <Group h="100%" px="md" justify="space-between">
+          {/* Burger para Navbar mobile - pode ser removido se não houver Navbar lateral */}
+          {/* <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" /> */}
+
+          <Text size="xl" fw={700}>{t('header.title')}</Text>
+
+          <Group>
+            <nav>
+              <Group gap="sm">
+                {!auth.isAuthenticated && (
+                  <Anchor component={Link} to="/" style={navLinkStyle()}>
+                    {t('header.navLogin')}
+                  </Anchor>
+                )}
+                {auth.isAuthenticated && (
+                  <>
+                    <Anchor component={Link} to="/dashboard" style={navLinkStyle()}>
+                      {t('header.navDashboard')}
+                    </Anchor>
+                    <Anchor component={Link} to="/reports" style={navLinkStyle()}>
+                      {t('header.navReports')}
+                    </Anchor>
+                    <Anchor component={Link} to="/insights" style={navLinkStyle()}>
+                      {t('header.navInsights', 'Insights')}
+                    </Anchor>
+                  </>
+                )}
+              </Group>
+            </nav>
+
+            {auth.isAuthenticated && (
+              <MantineButton variant="light" onClick={() => auth.logout()}>
+                {t('header.btnLogout')}
+              </MantineButton>
+            )}
+
+            <Group gap="xs" ml="lg">
+              <MantineButton variant={i18n.language === 'en' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('en')}>EN</MantineButton>
+              <MantineButton variant={i18n.language === 'pt-BR' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('pt-BR')}>PT-BR</MantineButton>
+            </Group>
+          </Group>
+        </Group>
+      </AppShell.Header>
+
+      {/* AppShell.Navbar - pode ser adicionado aqui se necessário no futuro */}
+      {/* <AppShell.Navbar p="md">Navbar</AppShell.Navbar> */}
+
+      <AppShell.Main>
         <Routes>
-          <Route path="/" element={!isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
+          <Route path="/" element={!auth.isAuthenticated ? <LoginPage /> : <Navigate to="/dashboard" replace />} />
           <Route path="/auth/callback" element={<OAuthCallbackPage />} />
-
-          <Route
-            path="/dashboard"
-            element={isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />}
-          />
-
-          <Route path="*" element={<Navigate to={isAuthenticated ? "/dashboard" : "/"} replace />} />
+          <Route path="/dashboard" element={auth.isAuthenticated ? <DashboardPage /> : <Navigate to="/" replace />} />
+          <Route path="/reports" element={auth.isAuthenticated ? <ReportsPage /> : <Navigate to="/" replace />} />
+          <Route path="/insights" element={auth.isAuthenticated ? <InsightsPage /> : <Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
         </Routes>
-      </main>
-      <footer className="app-footer">
-        <p>{t('footer.copyright', { year: new Date().getFullYear() })}</p>
-      </footer>
-    </div>
-  )
+      </AppShell.Main>
+
+      <AppShell.Footer p="md" style={{textAlign: 'center'}}>
+        <Text size="sm" c="dimmed">
+          {t('footer.copyright', { year: new Date().getFullYear() })}
+        </Text>
+      </AppShell.Footer>
+    </AppShell>
+  );
 }
 
-export default App
+export default App;

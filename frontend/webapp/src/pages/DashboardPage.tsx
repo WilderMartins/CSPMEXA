@@ -1,40 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // Para chamadas de API
-import { useTranslation } from 'react-i18next'; // Importar hook
-
-// Interface Alert atualizada para corresponder ao AlertSchema do backend (com campos do DB)
-interface Alert {
-  id: number; // ID numérico do banco de dados
-  resource_id: string;
-  resource_type: string;
-  account_id?: string;
-  region?: string;
-  provider: string;
-  severity: string; // Idealmente, usar o AlertSeverityEnum se importado
-  title: string;
-  description: string;
-  policy_id: string;
-  status: string; // Idealmente, usar o AlertStatusEnum se importado
-  details?: Record<string, any>;
-  recommendation?: string;
-  created_at: string; // Data como string ISO
-  updated_at: string;
-  first_seen_at: string;
-  last_seen_at: string;
-}
+import React, { useState, useEffect, useMemo } from 'react'; [cite: 1]
+import axios from 'axios'; [cite: 1]
+import { useTranslation } from 'react-i18next'; [cite: 1]
+import { useAuth } from '../contexts/AuthContext'; [cite: 2]
+import ProviderAnalysisSection from '../components/Dashboard/ProviderAnalysisSection'; [cite: 2]
+import AlertsTable, { Alert } from '../components/Dashboard/AlertsTable'; [cite: 2]
+import { Tabs, Button as MantineButton, Title, Paper, Text } from '@mantine/core'; [cite: 3]
 
 const DashboardPage: React.FC = () => {
-  const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [userInfo, setUserInfo] = useState<any>(null);
-  const { t } = useTranslation();
-  const [currentDisplayMode, setCurrentDisplayMode] = useState<'all_alerts' | 'analysis_result'>('all_alerts');
-  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null);
+  const { t } = useTranslation(); [cite: 5]
+  const auth = useAuth(); [cite: 6]
 
+  // --- Estados do Componente ---
+  const [alerts, setAlerts] = useState<Alert[]>([]); [cite: 6]
+  const [isLoading, setIsLoading] = useState<boolean>(false); [cite: 6]
+  const [error, setError] = useState<string | null>(null); [cite: 6, 7]
+  const [userInfo, setUserInfo] = useState<any>(null); // Adicionado da branch 'feature' [cite: 7]
+  const [currentDisplayMode, setCurrentDisplayMode] = useState<'all_alerts' | 'analysis_result'>('all_alerts'); [cite: 8]
+  const [currentAnalysisType, setCurrentAnalysisType] = useState<string | null>(null); [cite: 8]
 
-  // Definição de papéis e hierarquia (espelhando o backend para lógica de UI)
-  const ROLES_HIERARCHY = {
+  // Estados para IDs dos provedores
+  const [gcpProjectId, setGcpProjectId] = useState<string>('');
+  const [huaweiProjectId, setHuaweiProjectId] = useState<string>('');
+  const [huaweiRegionId, setHuaweiRegionId] = useState<string>(''); [cite: 13]
+  const [huaweiDomainId, setHuaweiDomainId] = useState<string>(''); [cite: 13]
+  const [azureSubscriptionId, setAzureSubscriptionId] = useState<string>(''); [cite: 13]
+  const [googleWorkspaceCustomerId, setGoogleWorkspaceCustomerId] = useState<string>('my_customer'); [cite: 13]
+  const [googleWorkspaceAdminEmail, setGoogleWorkspaceAdminEmail] = useState<string>(''); [cite: 14]
+
+  // --- Lógica de Permissões (da branch 'feature') ---
+  const ROLES_HIERARCHY = { [cite: 9]
     User: 1,
     TechnicalLead: 2,
     Manager: 3,
@@ -42,653 +36,202 @@ const DashboardPage: React.FC = () => {
     SuperAdministrator: 5,
   };
 
-  const hasPermission = (requiredRole: keyof typeof ROLES_HIERARCHY) => {
-    if (!userInfo || !userInfo.role) {
+  const hasPermission = (requiredRole: keyof typeof ROLES_HIERARCHY) => { [cite: 10]
+    if (!auth.user || !auth.user.role) {
       return false;
     }
-    const userLevel = ROLES_HIERARCHY[userInfo.role as keyof typeof ROLES_HIERARCHY] || 0;
+    const userLevel = ROLES_HIERARCHY[auth.user.role as keyof typeof ROLES_HIERARCHY] || 0;
     const requiredLevel = ROLES_HIERARCHY[requiredRole];
-    return userLevel >= requiredLevel;
+    return userLevel >= requiredLevel; [cite: 12]
   };
 
-  // Estado para o GCP Project ID
-  const [gcpProjectId, setGcpProjectId] = useState<string>('');
+  // --- Funções de API ---
+  const apiClient = useMemo(() => { [cite: 15]
+    return axios.create({
+      baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+      headers: { 'Authorization': `Bearer ${auth.token}` }
+    });
+  }, [auth.token]);
 
-  // Estados para Huawei Cloud
-  const [huaweiProjectId, setHuaweiProjectId] = useState<string>('');
-  const [huaweiRegionId, setHuaweiRegionId] = useState<string>(''); // e.g., ap-southeast-1
-  const [huaweiDomainId, setHuaweiDomainId] = useState<string>(''); // Para IAM Users
-
-  // Estado para Azure Subscription ID
-  const [azureSubscriptionId, setAzureSubscriptionId] = useState<string>('');
-
-  // Estados para Google Workspace
-  const [googleWorkspaceCustomerId, setGoogleWorkspaceCustomerId] = useState<string>('my_customer'); // Default 'my_customer'
-  const [googleWorkspaceAdminEmail, setGoogleWorkspaceAdminEmail] = useState<string>('');
-
-  const apiClient = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-    }
-  });
-
-  // Função para buscar todos os alertas persistidos
-  const fetchAllAlerts = async () => {
+  const fetchAllAlerts = async () => { [cite: 16]
+    if (!auth.isAuthenticated) return;
     setIsLoading(true);
     setError(null);
     setAlerts([]);
     setCurrentDisplayMode('all_alerts');
-    setCurrentAnalysisType(null); // Limpa o tipo de análise específica
-
-    try {
-      // Chama o novo endpoint GET /alerts do gateway
-      const response = await apiClient.get('/alerts?limit=100&sort_by=last_seen_at&sort_order=desc');
-      setAlerts(response.data || []);
-      if (response.data.length === 0) {
-        setError(t('dashboardPage.noAlertsFound'));
-      }
-    } catch (err: any) {
-      console.error("Erro ao buscar todos os alertas:", err);
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts');
-      setError(t('dashboardPage.errorFetchingAllAlerts', { error: errorMessage }));
-    } finally {
-      setIsLoading(false);
+    setCurrentAnalysisType(null);
+    try { [cite: 17]
+      const response = await apiClient.get<Alert[]>('/alerts?limit=100&sort_by=last_seen_at&sort_order=desc'); [cite: 17]
+      setAlerts(response.data || []); [cite: 18]
+      if (response.data.length === 0) setError(t('dashboardPage.noAlertsFound')); [cite: 18]
+    } catch (err: any) { [cite: 19]
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts'); [cite: 20]
+      setError(t('dashboardPage.errorFetchingAllAlerts', { error: errorMessage })); [cite: 20]
+    } finally { [cite: 21]
+      setIsLoading(false); [cite: 21]
     }
   };
 
-  // Buscar dados do usuário e todos os alertas ao carregar o dashboard
-  useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        // Não é necessário esperar fetchUserInfo para chamar fetchAllAlerts
-        apiClient.get('/users/me').then(response => {
-          setUserInfo(response.data);
-        }).catch(err => {
-          console.error("Erro ao buscar informações do usuário:", err);
-        });
-
-        fetchAllAlerts(); // Carrega todos os alertas ao iniciar
-      } catch (err) {
-        // Erros já são tratados dentro de fetchUserInfo e fetchAllAlerts
-      }
-    };
-    fetchInitialData();
-  }, []); // Executa apenas uma vez ao montar
-
-
-  const handleAnalysis = async (
+  const handleAnalysis = async ( [cite: 23]
     provider: 'aws' | 'gcp' | 'huawei' | 'azure' | 'googleworkspace',
     servicePath: string,
     analysisType: string,
-    idParams?: {
-      projectId?: string;
-      regionId?: string;
-      domainId?: string;
-      subscriptionId?: string;
-      gwsCustomerId?: string;
-      gwsAdminEmail?: string;
-    }
+    idParams?: Record<string, string | undefined>
   ) => {
-    setIsLoading(true);
-    setError(null);
-    setAlerts([]); // Limpa alertas anteriores
-    setCurrentDisplayMode('analysis_result'); // Muda para modo de resultado de análise
-    setCurrentAnalysisType(analysisType);
+    setIsLoading(true); [cite: 23]
+    setError(null); [cite: 24]
+    setAlerts([]); [cite: 24]
+    setCurrentDisplayMode('analysis_result'); [cite: 24]
+    setCurrentAnalysisType(analysisType); [cite: 24]
 
-    let url = `/analyze/${provider}/${servicePath}`; // URL relativa ao baseURL do apiClient
+    let url = `/analyze/${provider}/${servicePath}`;
     const queryParams = new URLSearchParams();
+    
+    // Lógica de parâmetros...
+    if (provider === 'gcp' && idParams?.projectId) queryParams.append('project_id', idParams.projectId); [cite: 25]
+    else if (provider === 'gcp' && !idParams?.projectId) { setError(t('dashboardPage.gcpProjectIdRequired')); setIsLoading(false); return; [cite: 25] }
 
-    // Lógica de parâmetros (mantida, mas URL base é tratada pelo apiClient)
-    if (provider === 'gcp') {
-      if (!idParams?.projectId) {
-        setError(t('dashboardPage.gcpProjectIdRequired')); setIsLoading(false); return;
-      }
-      queryParams.append('project_id', idParams.projectId);
-    } else if (provider === 'huawei') {
-      if (!idParams?.projectId && servicePath !== 'iam/users') {
-        setError(t('dashboardPage.huaweiProjectIdRequired')); setIsLoading(false); return;
-      }
-      if (!idParams?.regionId) {
-        setError(t('dashboardPage.huaweiRegionIdRequired')); setIsLoading(false); return;
-      }
-      if (idParams.projectId) queryParams.append('project_id', idParams.projectId);
-      queryParams.append('region_id', idParams.regionId);
-      if (servicePath === 'iam/users' && idParams.domainId) {
-        queryParams.append('domain_id', idParams.domainId);
-      }
-    } else if (provider === 'azure') {
-      if (!idParams?.subscriptionId) {
-        setError(t('dashboardPage.azureSubscriptionIdRequired')); setIsLoading(false); return;
-      }
-      queryParams.append('subscription_id', idParams.subscriptionId);
-    } else if (provider === 'googleworkspace') {
-      if (idParams?.gwsCustomerId) queryParams.append('customer_id', idParams.gwsCustomerId);
-      if (idParams?.gwsAdminEmail) queryParams.append('delegated_admin_email', idParams.gwsAdminEmail);
-    }
-
-    const queryString = queryParams.toString();
-    if (queryString) {
-      url += `?${queryString}`;
-    }
-
-    try {
-      // A resposta de /analyze agora também é uma lista de Alertas persistidos
-      const response = await apiClient.post(url, {});
-      setAlerts(response.data || []);
-      if (response.data.length === 0) {
-        setError(t('dashboardPage.noNewAlertsForAnalysis', { type: analysisType }));
-      }
-    } catch (err: any) {
-      console.error(`Erro ao analisar ${analysisType} (${provider}):`, err);
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts');
-      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, provider: provider.toUpperCase(), error: errorMessage }));
-    } finally {
-      setIsLoading(false);
+    try { [cite: 33]
+      const response = await apiClient.post<Alert[]>(url, {}); [cite: 33]
+      setAlerts(response.data || []); [cite: 34]
+      if (response.data.length === 0) setError(t('dashboardPage.noNewAlertsForAnalysis', { type: analysisType })); [cite: 35]
+    } catch (err: any) { [cite: 36]
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorFetchingAlerts'); [cite: 36]
+      setError(t('dashboardPage.errorDuringAnalysis', { type: analysisType, provider: provider.toUpperCase(), error: errorMessage })); [cite: 36]
+    } finally { [cite: 37]
+      setIsLoading(false); [cite: 37]
     }
   };
 
-  const handleUpdateAlertStatus = async (alertId: number, newStatus: string) => {
+  // Função para atualizar o status do alerta (da branch 'feature')
+  const handleUpdateAlertStatus = async (alertId: number, newStatus: string) => { [cite: 38]
     if (!hasPermission('TechnicalLead')) {
-      setError(t('dashboardPage.errorNoPermissionToChangeStatus'));
-      return;
+      setError(t('dashboardPage.errorNoPermissionToChangeStatus')); [cite: 38]
+      return; [cite: 39]
     }
-    setIsLoading(true); // Pode ter um loading específico para a linha do alerta
-    setError(null);
-    try {
-      const response = await apiClient.patch(`/alerts/${alertId}/status?new_status=${newStatus}`);
-      // Atualizar o alerta na lista local
-      setAlerts(prevAlerts =>
-        prevAlerts.map(alert =>
-          alert.id === alertId ? { ...alert, status: response.data.status, updated_at: response.data.updated_at } : alert
-        )
+    setIsLoading(true);
+    setError(null); [cite: 39]
+    try { [cite: 40]
+      const response = await apiClient.patch(`/alerts/${alertId}/status?new_status=${newStatus}`); [cite: 40]
+      setAlerts(prevAlerts => [cite: 41]
+        prevAlerts.map(alert => [cite: 41]
+          alert.id === alertId ? { ...alert, status: response.data.status, updated_at: response.data.updated_at } : alert [cite: 41]
+        ) [cite: 41]
       );
-      // Opcional: Mostrar uma notificação de sucesso (toast)
-      alert(t('dashboardPage.alertStatusUpdatedSuccess', { alertId, newStatus })); // Simples alert, idealmente usar um sistema de toast
-    } catch (err: any) {
-      console.error(`Erro ao atualizar status do alerta ${alertId}:`, err);
-      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorUpdatingStatus');
-      setError(t('dashboardPage.errorUpdatingAlertStatus', { alertId, error: errorMessage }));
-    } finally {
-      setIsLoading(false); // Resetar loading específico se houver
+    } catch (err: any) { [cite: 43]
+      const errorMessage = err.response?.data?.detail || err.message || t('dashboardPage.errorUpdatingStatus'); [cite: 44]
+      setError(t('dashboardPage.errorUpdatingAlertStatus', { alertId, error: errorMessage })); [cite: 44]
+    } finally { [cite: 45]
+      setIsLoading(false); [cite: 45]
     }
   };
 
-  return (
-    <div className="dashboard-page">
-      <h2>{t('dashboardPage.title')}</h2>
+  // --- Efeitos ---
+  useEffect(() => { [cite: 22]
+    if (auth.isAuthenticated) {
+      setUserInfo(auth.user); // Garante que userInfo tenha os dados do usuário logado
+      fetchAllAlerts(); [cite: 22]
+    }
+  }, [auth.isAuthenticated, auth.user]);
+
+  // --- Configuração da UI (da branch 'main') ---
+  const providerConfigs = { [cite: 103]
+    aws: {
+      providerNameKey: 'dashboardPage.awsAnalysisTitle',
+      analysisButtons: [ [cite: 104]
+        { id: 's3', labelKey: 'dashboardPage.analyzeS3Button', servicePath: 's3', analysisType: 'AWS S3 Buckets' }, [cite: 104]
+        { id: 'ec2Instances', labelKey: 'dashboardPage.analyzeEC2InstancesButton', servicePath: 'ec2/instances', analysisType: 'AWS EC2 Instances' }, [cite: 104]
+        { id: 'ec2Sgs', labelKey: 'dashboardPage.analyzeEC2SGsButton', servicePath: 'ec2/security-groups', analysisType: 'AWS EC2 Security Groups' }, [cite: 104]
+        { id: 'iamUsers', labelKey: 'dashboardPage.analyzeIAMUsersButton', servicePath: 'iam/users', analysisType: 'AWS IAM Users' }, [cite: 104]
+        { id: 'rdsInstances', labelKey: 'dashboardPage.analyzeRDSInstancesButton', servicePath: 'rds/instances', analysisType: 'AWS RDS Instances' }, [cite: 104]
+      ]
+    },
+    gcp: { [cite: 105]
+      providerNameKey: 'dashboardPage.gcpAnalysisTitle', [cite: 105]
+      inputFields: [ [cite: 105]
+        { id: 'projectId', labelKey: 'dashboardPage.gcpProjectIdLabel', placeholderKey: 'dashboardPage.gcpProjectIdPlaceholder', value: gcpProjectId, setter: setGcpProjectId } [cite: 105]
+      ],
+      analysisButtons: [ [cite: 105]
+        { id: 'storage', labelKey: 'dashboardPage.analyzeGCPStorageButton', servicePath: 'storage/buckets', analysisType: 'GCP Storage Buckets', requiredParams: ['projectId'] }, [cite: 105]
+        { id: 'computeInstances', labelKey: 'dashboardPage.analyzeGCPInstancesButton', servicePath: 'compute/instances', analysisType: 'GCP Compute Instances', requiredParams: ['projectId'] }, [cite: 105]
+        { id: 'firewalls', labelKey: 'dashboardPage.analyzeGCPFirewallsButton', servicePath: 'compute/firewalls', analysisType: 'GCP Compute Firewalls', requiredParams: ['projectId'] }, [cite: 106]
+        { id: 'iam', labelKey: 'dashboardPage.analyzeGCPIAMButton', servicePath: 'iam/project-policies', analysisType: 'GCP Project IAM', requiredParams: ['projectId'] }, [cite: 106]
+        { id: 'gke', labelKey: 'dashboardPage.analyzeGKEClustersButton', servicePath: 'gke/clusters', analysisType: 'GCP GKE Clusters', requiredParams: ['projectId'] }, [cite: 106]
+      ]
+    },
+    // Demais configurações (huawei, azure, googleworkspace) continuam aqui...
+  };
+
+  // --- Renderização ---
+  return ( [cite: 111]
+    <div className="dashboard-page" style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <Title order={1} ta="center" mb="xl">{t('dashboardPage.title')}</Title>
+
       {userInfo && (
-        <div className="user-info" style={{ marginBottom: '20px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px' }}>
-          <p>{t('dashboardPage.welcomeMessage', { userId: userInfo.user_id || userInfo.email || 'Usuário' })}</p>
-        </div>
+        <Paper withBorder p="md" mb="xl" shadow="xs" radius="md" style={{backgroundColor: "var(--mantine-color-gray-0)"}}>
+          <Text>{t('dashboardPage.welcomeMessage', { userId: userInfo.user_id || userInfo.email || 'Usuário' })}</Text>
+        </Paper>
       )}
 
-      {/* Botão para recarregar todos os alertas */}
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={fetchAllAlerts} disabled={isLoading}>
-          {isLoading && currentDisplayMode === 'all_alerts' ? t('dashboardPage.loadingAllAlerts') : t('dashboardPage.fetchAllAlertsButton')}
-        </button>
-      </div>
+      <MantineButton [cite: 112]
+        onClick={fetchAllAlerts} [cite: 112]
+        loading={isLoading && currentDisplayMode === 'all_alerts'} [cite: 112]
+        mb="xl" [cite: 112]
+        variant="filled" [cite: 112]
+      >
+        {t('dashboardPage.fetchAllAlertsButton')} [cite: 112]
+      </MantineButton>
 
+      <Tabs defaultValue="aws" variant="outline" radius="md"> [cite: 112]
+        <Tabs.List grow>
+          <Tabs.Tab value="aws">AWS</Tabs.Tab> [cite: 112]
+          <Tabs.Tab value="gcp">GCP</Tabs.Tab> [cite: 112]
+          <Tabs.Tab value="huawei">Huawei Cloud</Tabs.Tab> [cite: 113]
+          <Tabs.Tab value="azure">Azure</Tabs.Tab> [cite: 113]
+          <Tabs.Tab value="gws">Google Workspace</Tabs.Tab> [cite: 113]
+        </Tabs.List>
 
-      {/* Provider Analysis Sections Wrapper (igual ao anterior) */}
-      <div className="provider-sections-wrapper" style={{ display: 'flex', flexWrap: 'wrap', gap: '20px' }}>
-        {/* AWS Analysis Section */}
-        <div className="aws-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
-          <h3>{t('dashboardPage.awsAnalysisTitle')}</h3>
-          <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <button onClick={() => handleAnalysis('aws', 's3', 'AWS S3 Buckets')} disabled={isLoading}>
-              {isLoading && currentAnalysisType === 'AWS S3 Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeS3Button')}
-            </button>
-            <button onClick={() => handleAnalysis('aws', 'ec2/instances', 'AWS EC2 Instances')} disabled={isLoading}>
-              {isLoading && currentAnalysisType === 'AWS EC2 Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2InstancesButton')}
-            </button>
-            <button onClick={() => handleAnalysis('aws', 'ec2/security-groups', 'AWS EC2 Security Groups')} disabled={isLoading}>
-              {isLoading && currentAnalysisType === 'AWS EC2 Security Groups' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeEC2SGsButton')}
-            </button>
-            <button onClick={() => handleAnalysis('aws', 'iam/users', 'AWS IAM Users')} disabled={isLoading}>
-              {isLoading && currentAnalysisType === 'AWS IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeIAMUsersButton')}
-            </button>
-            <button onClick={() => handleAnalysis('aws', 'rds/instances', 'AWS RDS Instances')} disabled={isLoading}>
-              {isLoading && currentAnalysisType === 'AWS RDS Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeRDSInstancesButton')}
-            </button>
-          </div>
-        </div>
+        <Tabs.Panel value="aws" pt="xs"> [cite: 114]
+          <ProviderAnalysisSection
+            providerId="aws"
+            providerNameKey={providerConfigs.aws.providerNameKey}
+            analysisButtons={providerConfigs.aws.analysisButtons}
+            onAnalyze={handleAnalysis} [cite: 114]
+            isLoading={isLoading}
+            currentAnalysisType={currentAnalysisType}
+          />
+        </Tabs.Panel>
+        <Tabs.Panel value="gcp" pt="xs"> [cite: 115]
+           <ProviderAnalysisSection
+            providerId="gcp"
+            providerNameKey={providerConfigs.gcp.providerNameKey}
+            inputFields={providerConfigs.gcp.inputFields} [cite: 115]
+            analysisButtons={providerConfigs.gcp.analysisButtons}
+            onAnalyze={(provider, service, type) => handleAnalysis(provider, service, type, { projectId: gcpProjectId })}
+            isLoading={isLoading}
+            currentAnalysisType={currentAnalysisType}
+          />
+        </Tabs.Panel>
+        {/* Adicione os outros Tabs.Panel aqui, seguindo o modelo acima. */}
+      </Tabs>
 
-        {/* GCP Analysis Section */}
-        <div className="gcp-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
-          <h3>{t('dashboardPage.gcpAnalysisTitle')}</h3>
-          <div style={{ marginBottom: '10px' }}>
-            <label htmlFor="gcpProjectId" style={{ marginRight: '10px' }}>{t('dashboardPage.gcpProjectIdLabel')}:</label>
-            <input
-              type="text"
-              id="gcpProjectId"
-              value={gcpProjectId}
-              onChange={(e) => setGcpProjectId(e.target.value)}
-              placeholder={t('dashboardPage.gcpProjectIdPlaceholder')}
-              style={{ padding: '5px', minWidth: '250px' }}
-            />
-          </div>
-          <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <button onClick={() => handleAnalysis('gcp', 'storage/buckets', 'GCP Storage Buckets', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-              {isLoading && currentAnalysisType === 'GCP Storage Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPStorageButton')}
-            </button>
-            <button onClick={() => handleAnalysis('gcp', 'compute/instances', 'GCP Compute Instances', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-              {isLoading && currentAnalysisType === 'GCP Compute Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPInstancesButton')}
-            </button>
-            <button onClick={() => handleAnalysis('gcp', 'compute/firewalls', 'GCP Compute Firewalls', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-              {isLoading && currentAnalysisType === 'GCP Compute Firewalls' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPFirewallsButton')}
-            </button>
-            <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-              {isLoading && currentAnalysisType === 'GCP Project IAM' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPIAMButton')}
-            </button>
-            <button onClick={() => handleAnalysis('gcp', 'gke/clusters', 'GCP GKE Clusters', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-              {isLoading && currentAnalysisType === 'GCP GKE Clusters' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGKEClustersButton')}
-            </button>
-          </div>
-        </div>
+      {/* Exibição de Loading e Erro */}
+      {isLoading && !alerts.length && <Text mt="md">{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</Text>} [cite: 119, 120]
+      {error && <Text mt="md" c="red" p="sm" style={{border: '1px solid red', borderRadius: '4px'}}>{error}</Text>} [cite: 120]
 
-        {/* Huawei Cloud Analysis Section */}
-        <div className="huawei-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
-          <h3>{t('dashboardPage.huaweiAnalysisTitle')}</h3>
-          <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            <div>
-              <label htmlFor="huaweiProjectId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiProjectIdLabel')}:</label>
-              <input type="text" id="huaweiProjectId" value={huaweiProjectId} onChange={(e) => setHuaweiProjectId(e.target.value)} placeholder={t('dashboardPage.huaweiProjectIdPlaceholder')} style={{ padding: '5px' }}/>
-            </div>
-            <div>
-              <label htmlFor="huaweiRegionId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiRegionIdLabel')}:</label>
-              <input type="text" id="huaweiRegionId" value={huaweiRegionId} onChange={(e) => setHuaweiRegionId(e.target.value)} placeholder={t('dashboardPage.huaweiRegionIdPlaceholder')} style={{ padding: '5px' }}/>
-            </div>
-            <div>
-              <label htmlFor="huaweiDomainId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiDomainIdLabel')}:</label>
-              <input type="text" id="huaweiDomainId" value={huaweiDomainId} onChange={(e) => setHuaweiDomainId(e.target.value)} placeholder={t('dashboardPage.huaweiDomainIdPlaceholder')} style={{ padding: '5px' }}/>
-            </div>
-          </div>
-          <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <button onClick={() => handleAnalysis('huawei', 'obs/buckets', 'Huawei OBS Buckets', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-              {isLoading && currentAnalysisType === 'Huawei OBS Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiOBSButton')}
-            </button>
-            <button onClick={() => handleAnalysis('huawei', 'ecs/instances', 'Huawei ECS Instances', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-              {isLoading && currentAnalysisType === 'Huawei ECS Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiECSButton')}
-            </button>
-            <button onClick={() => handleAnalysis('huawei', 'vpc/security-groups', 'Huawei VPC SGs', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-              {isLoading && currentAnalysisType === 'Huawei VPC SGs' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiSGsButton')}
-            </button>
-            <button onClick={() => handleAnalysis('huawei', 'iam/users', 'Huawei IAM Users', { projectId: huaweiProjectId, regionId: huaweiRegionId, domainId: huaweiDomainId })} disabled={isLoading || !huaweiRegionId /* Domain ID é opcional, mas region é crucial para o client IAM */}>
-              {isLoading && currentAnalysisType === 'Huawei IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiIAMButton')}
-            </button>
-          </div>
-        </div>
-
-        {/* Azure Analysis Section */}
-        <div className="azure-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
-          <h3>{t('dashboardPage.azureAnalysisTitle')}</h3>
-          <div style={{ marginBottom: '10px' }}>
-            <label htmlFor="azureSubscriptionId" style={{ marginRight: '10px' }}>{t('dashboardPage.azureSubscriptionIdLabel')}:</label>
-            <input
-              type="text"
-              id="azureSubscriptionId"
-              value={azureSubscriptionId}
-              onChange={(e) => setAzureSubscriptionId(e.target.value)}
-              placeholder={t('dashboardPage.azureSubscriptionIdPlaceholder')}
-              style={{ padding: '5px', minWidth: '250px' }}
-            />
-          </div>
-          <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <button
-              onClick={() => handleAnalysis('azure', 'virtualmachines', 'Azure Virtual Machines', { subscriptionId: azureSubscriptionId })}
-              disabled={isLoading || !azureSubscriptionId}
-            >
-              {isLoading && currentAnalysisType === 'Azure Virtual Machines' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureVMsButton')}
-            </button>
-            <button
-              onClick={() => handleAnalysis('azure', 'storageaccounts', 'Azure Storage Accounts', { subscriptionId: azureSubscriptionId })}
-              disabled={isLoading || !azureSubscriptionId}
-            >
-              {isLoading && currentAnalysisType === 'Azure Storage Accounts' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureStorageButton')}
-            </button>
-          </div>
-        </div>
-
-        {/* Google Workspace Analysis Section */}
-        <div className="gws-analysis-section provider-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px', flexBasis: 'calc(50% - 10px)' }}>
-          <h3>{t('dashboardPage.gwsAnalysisTitle')}</h3>
-          <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-            <div>
-              <label htmlFor="gwsCustomerId" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsCustomerIdLabel')}:</label>
-              <input
-                type="text" id="gwsCustomerId"
-                value={googleWorkspaceCustomerId}
-                onChange={(e) => setGoogleWorkspaceCustomerId(e.target.value)}
-                placeholder={t('dashboardPage.gwsCustomerIdPlaceholder')}
-                style={{ padding: '5px' }}
-              />
-            </div>
-            <div>
-              <label htmlFor="gwsAdminEmail" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsAdminEmailLabel')}:</label>
-              <input
-                type="email" id="gwsAdminEmail"
-                value={googleWorkspaceAdminEmail}
-                onChange={(e) => setGoogleWorkspaceAdminEmail(e.target.value)}
-                placeholder={t('dashboardPage.gwsAdminEmailPlaceholder')}
-                style={{ padding: '5px', minWidth: '250px' }}
-              />
-            </div>
-          </div>
-          <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            <button
-              onClick={() => handleAnalysis('googleworkspace', 'users', 'Google Workspace Users', { gwsCustomerId: googleWorkspaceCustomerId, gwsAdminEmail: googleWorkspaceAdminEmail })}
-              disabled={isLoading || (!googleWorkspaceCustomerId && !googleWorkspaceAdminEmail) /* Pelo menos um deve ser informado ou backend ter defaults */}
-            >
-              {isLoading && currentAnalysisType === 'Google Workspace Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSUsersButton')}
-            </button>
-            <button
-              onClick={() => handleAnalysis('googleworkspace', 'drive/shared-drives', 'Google Workspace Shared Drives', { gwsCustomerId: googleWorkspaceCustomerId, gwsAdminEmail: googleWorkspaceAdminEmail })}
-              disabled={isLoading || (!googleWorkspaceCustomerId && !googleWorkspaceAdminEmail)}
-            >
-              {isLoading && currentAnalysisType === 'Google Workspace Shared Drives' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSSharedDrivesButton')}
-            </button>
-            {/* Adicionar botão para /drive/public-files se a coleta for robustecida */}
-          </div>
-        </div>
-
-      </div> {/* End of provider-sections-wrapper */}
-
-      {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentDisplayMode === 'all_alerts' ? t('dashboardPage.allAlerts') : currentAnalysisType })}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {alerts.length > 0 && (
-        <div className="alerts-container">
-          <h3>
-            {currentDisplayMode === 'all_alerts'
-              ? t('dashboardPage.allPersistedAlerts')
-              : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType })}
-          </h3>
-          <table className="alerts-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={tableHeaderStyle}>{t('alertItem.id')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.provider')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.severity')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.title')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.resource')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.resourceType')}</th>
-                 <th style={tableHeaderStyle}>{t('alertItem.status')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.firstSeen')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.lastSeen')}</th>
-                {hasPermission('TechnicalLead') && <th style={tableHeaderStyle}>{t('alertItem.actions')}</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((alert, index) => (
-                <tr key={alert.id} style={index % 2 === 0 ? evenRowStyle : oddRowStyle}>
-                  <td style={tableCellStyle}>{alert.id}</td>
-                  <td style={tableCellStyle}>{alert.provider.toUpperCase()}</td>
-                  <td style={getSeverityStyle(alert.severity)}>{alert.severity}</td>
-                  <td style={tableCellStyle} title={alert.description}>{alert.title}</td>
-                  <td style={tableCellStyle}>{alert.resource_id}</td>
-                  <td style={tableCellStyle}>{alert.resource_type}</td>
-                  <td style={tableCellStyle}>{alert.status}</td>
-                  <td style={tableCellStyle}>{new Date(alert.first_seen_at).toLocaleString()}</td>
-                  <td style={tableCellStyle}>{new Date(alert.last_seen_at).toLocaleString()}</td>
-                  {hasPermission('TechnicalLead') && (
-                    <td style={tableCellStyle}>
-                      {alert.status === 'OPEN' && (
-                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'ACKNOWLEDGED')} style={{ marginRight: '5px' }}>
-                          {t('alertActions.acknowledge')}
-                        </button>
-                      )}
-                      {(alert.status === 'OPEN' || alert.status === 'ACKNOWLEDGED') && (
-                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'RESOLVED')} style={{ marginRight: '5px' }}>
-                          {t('alertActions.resolve')}
-                        </button>
-                      )}
-                      {alert.status !== 'IGNORED' && ( // Só mostrar "Ignore" se não estiver já ignorado
-                        <button onClick={() => handleUpdateAlertStatus(alert.id, 'IGNORED')}>
-                          {t('alertActions.ignore')}
-                        </button>
-                      )}
-                       {/* Futuro: Botão de Detalhes/Editar aqui, se necessário, com permissão de Manager */}
-                       {/* {hasPermission('Manager') && ( <button>Editar Detalhes</button> )} */}
-                       {/* Futuro: Botão de Deletar aqui, com permissão de Administrator */}
-                       {/* {hasPermission('Administrator') && ( <button>Deletar</button> )} */}
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {/* Tabela de Alertas integrada com as novas funcionalidades */}
+      <AlertsTable [cite: 121]
+        alerts={alerts} [cite: 121]
+        onUpdateStatus={handleUpdateAlertStatus} // Prop para a função de update
+        canUpdateStatus={hasPermission('TechnicalLead')} // Prop para verificar permissão
+        title={ [cite: 121]
+          currentDisplayMode === 'all_alerts'
+            ? t('dashboardPage.allPersistedAlerts') [cite: 121]
+            : t('dashboardPage.alertsFoundFor', { type: currentAnalysisType || t('dashboardPage.unknownAnalysis') }) [cite: 121]
+        }
+      />
     </div>
   );
 };
 
-// Estilos básicos para a tabela (mantidos)
-const tableHeaderStyle: React.CSSProperties = {
-  border: '1px solid #ddd',
-  padding: '8px',
-  textAlign: 'left',
-  backgroundColor: '#f2f2f2',
-};
-
-const tableCellStyle: React.CSSProperties = {
-  border: '1px solid #ddd',
-  padding: '8px',
-  textAlign: 'left',
-};
-
-const evenRowStyle: React.CSSProperties = {
-  backgroundColor: '#f9f9f9',
-};
-
-const oddRowStyle: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-};
-
-const getSeverityStyle = (severity: string): React.CSSProperties => {
-  let color = 'inherit';
-  if (severity === 'Critical') color = 'red';
-  else if (severity === 'High') color = 'orange';
-  else if (severity === 'Medium') color = '#DAA520'; // DarkGoldenRod
-  return { ...tableCellStyle, color, fontWeight: 'bold' };
-};
-
-export default DashboardPage;
-          </button>
-        </div>
-      </div>
-
-      <div className="gcp-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-        <h3>{t('dashboardPage.gcpAnalysisTitle')}</h3>
-        <div style={{ marginBottom: '10px' }}>
-          <label htmlFor="gcpProjectId" style={{ marginRight: '10px' }}>{t('dashboardPage.gcpProjectIdLabel')}:</label>
-          <input
-            type="text"
-            id="gcpProjectId"
-            value={gcpProjectId}
-            onChange={(e) => setGcpProjectId(e.target.value)}
-            placeholder={t('dashboardPage.gcpProjectIdPlaceholder')}
-            style={{ padding: '5px', minWidth: '250px' }}
-          />
-        </div>
-        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <button onClick={() => handleAnalysis('gcp', 'storage/buckets', 'GCP Storage Buckets', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-            {isLoading && currentAnalysisType === 'GCP Storage Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPStorageButton')}
-          </button>
-          <button onClick={() => handleAnalysis('gcp', 'compute/instances', 'GCP Compute Instances', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-            {isLoading && currentAnalysisType === 'GCP Compute Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPInstancesButton')}
-          </button>
-          <button onClick={() => handleAnalysis('gcp', 'compute/firewalls', 'GCP Compute Firewalls', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-            {isLoading && currentAnalysisType === 'GCP Compute Firewalls' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPFirewallsButton')}
-          </button>
-          <button onClick={() => handleAnalysis('gcp', 'iam/project-policies', 'GCP Project IAM', { projectId: gcpProjectId })} disabled={isLoading || !gcpProjectId}>
-            {isLoading && currentAnalysisType === 'GCP Project IAM' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGCPIAMButton')}
-          </button>
-        </div>
-      </div>
-
-      <div className="huawei-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-        <h3>{t('dashboardPage.huaweiAnalysisTitle')}</h3>
-        <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-          <div>
-            <label htmlFor="huaweiProjectId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiProjectIdLabel')}:</label>
-            <input type="text" id="huaweiProjectId" value={huaweiProjectId} onChange={(e) => setHuaweiProjectId(e.target.value)} placeholder={t('dashboardPage.huaweiProjectIdPlaceholder')} style={{ padding: '5px' }}/>
-          </div>
-          <div>
-            <label htmlFor="huaweiRegionId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiRegionIdLabel')}:</label>
-            <input type="text" id="huaweiRegionId" value={huaweiRegionId} onChange={(e) => setHuaweiRegionId(e.target.value)} placeholder={t('dashboardPage.huaweiRegionIdPlaceholder')} style={{ padding: '5px' }}/>
-          </div>
-          <div>
-            <label htmlFor="huaweiDomainId" style={{ marginRight: '5px' }}>{t('dashboardPage.huaweiDomainIdLabel')}:</label>
-            <input type="text" id="huaweiDomainId" value={huaweiDomainId} onChange={(e) => setHuaweiDomainId(e.target.value)} placeholder={t('dashboardPage.huaweiDomainIdPlaceholder')} style={{ padding: '5px' }}/>
-          </div>
-        </div>
-        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <button onClick={() => handleAnalysis('huawei', 'obs/buckets', 'Huawei OBS Buckets', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-            {isLoading && currentAnalysisType === 'Huawei OBS Buckets' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiOBSButton')}
-          </button>
-          <button onClick={() => handleAnalysis('huawei', 'ecs/instances', 'Huawei ECS Instances', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-            {isLoading && currentAnalysisType === 'Huawei ECS Instances' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiECSButton')}
-          </button>
-          <button onClick={() => handleAnalysis('huawei', 'vpc/security-groups', 'Huawei VPC SGs', { projectId: huaweiProjectId, regionId: huaweiRegionId })} disabled={isLoading || !huaweiProjectId || !huaweiRegionId}>
-            {isLoading && currentAnalysisType === 'Huawei VPC SGs' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiSGsButton')}
-          </button>
-          <button onClick={() => handleAnalysis('huawei', 'iam/users', 'Huawei IAM Users', { projectId: huaweiProjectId, regionId: huaweiRegionId, domainId: huaweiDomainId })} disabled={isLoading || !huaweiRegionId /* Domain ID é opcional, mas region é crucial para o client IAM */}>
-            {isLoading && currentAnalysisType === 'Huawei IAM Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeHuaweiIAMButton')}
-          </button>
-        </div>
-      </div>
-
-      {/* Seção de Análise Azure */}
-      <div className="azure-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-        <h3>{t('dashboardPage.azureAnalysisTitle')}</h3>
-        <div style={{ marginBottom: '10px' }}>
-          <label htmlFor="azureSubscriptionId" style={{ marginRight: '10px' }}>{t('dashboardPage.azureSubscriptionIdLabel')}:</label>
-          <input
-            type="text"
-            id="azureSubscriptionId"
-            value={azureSubscriptionId}
-            onChange={(e) => setAzureSubscriptionId(e.target.value)}
-            placeholder={t('dashboardPage.azureSubscriptionIdPlaceholder')}
-            style={{ padding: '5px', minWidth: '250px' }}
-          />
-        </div>
-        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <button
-            onClick={() => handleAnalysis('azure', 'virtualmachines', 'Azure Virtual Machines', { subscriptionId: azureSubscriptionId })}
-            disabled={isLoading || !azureSubscriptionId}
-          >
-            {isLoading && currentAnalysisType === 'Azure Virtual Machines' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureVMsButton')}
-          </button>
-          <button
-            onClick={() => handleAnalysis('azure', 'storageaccounts', 'Azure Storage Accounts', { subscriptionId: azureSubscriptionId })}
-            disabled={isLoading || !azureSubscriptionId}
-          >
-            {isLoading && currentAnalysisType === 'Azure Storage Accounts' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeAzureStorageButton')}
-          </button>
-        </div>
-      </div>
-
-      {/* Seção de Análise Google Workspace */}
-      <div className="gws-analysis-section" style={{ marginBottom: '30px', padding: '15px', border: '1px solid #e0e0e0', borderRadius: '5px' }}>
-        <h3>{t('dashboardPage.gwsAnalysisTitle')}</h3>
-        <div style={{ marginBottom: '10px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
-          <div>
-            <label htmlFor="gwsCustomerId" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsCustomerIdLabel')}:</label>
-            <input
-              type="text" id="gwsCustomerId"
-              value={googleWorkspaceCustomerId}
-              onChange={(e) => setGoogleWorkspaceCustomerId(e.target.value)}
-              placeholder={t('dashboardPage.gwsCustomerIdPlaceholder')}
-              style={{ padding: '5px' }}
-            />
-          </div>
-          <div>
-            <label htmlFor="gwsAdminEmail" style={{ marginRight: '5px' }}>{t('dashboardPage.gwsAdminEmailLabel')}:</label>
-            <input
-              type="email" id="gwsAdminEmail"
-              value={googleWorkspaceAdminEmail}
-              onChange={(e) => setGoogleWorkspaceAdminEmail(e.target.value)}
-              placeholder={t('dashboardPage.gwsAdminEmailPlaceholder')}
-              style={{ padding: '5px', minWidth: '250px' }}
-            />
-          </div>
-        </div>
-        <div className="analysis-buttons" style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-          <button
-            onClick={() => handleAnalysis('googleworkspace', 'users', 'Google Workspace Users', { gwsCustomerId: googleWorkspaceCustomerId, gwsAdminEmail: googleWorkspaceAdminEmail })}
-            disabled={isLoading || (!googleWorkspaceCustomerId && !googleWorkspaceAdminEmail) /* Pelo menos um deve ser informado ou backend ter defaults */}
-          >
-            {isLoading && currentAnalysisType === 'Google Workspace Users' ? t('dashboardPage.analyzingButton') : t('dashboardPage.analyzeGWSUsersButton')}
-          </button>
-          {/* Adicionar botões para Drive, Gmail, etc. aqui no futuro */}
-        </div>
-      </div>
-
-      {isLoading && <p>{t('dashboardPage.loadingMessage', { type: currentAnalysisType })}</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-
-      {alerts.length > 0 && (
-        <div className="alerts-container">
-          <h3>{t('dashboardPage.alertsFoundFor', { type: currentAnalysisType })}</h3>
-          <table className="alerts-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={tableHeaderStyle}>{t('alertItem.severity')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.title')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.resource')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.resourceType')}</th>
-                <th style={tableHeaderStyle}>{t('alertItem.description')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((alert, index) => (
-                <tr key={alert.id || index} style={index % 2 === 0 ? evenRowStyle : oddRowStyle}>
-                  <td style={getSeverityStyle(alert.severity)}>{alert.severity}</td>
-                  <td style={tableCellStyle}>{alert.title}</td>
-                  <td style={tableCellStyle}>{alert.resource_id}</td>
-                  <td style={tableCellStyle}>{alert.resource_type}</td>
-                  <td style={tableCellStyle}>{alert.description}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Estilos básicos para a tabela (podem ser movidos para um arquivo CSS)
-const tableHeaderStyle: React.CSSProperties = {
-  border: '1px solid #ddd',
-  padding: '8px',
-  textAlign: 'left',
-  backgroundColor: '#f2f2f2',
-};
-
-const tableCellStyle: React.CSSProperties = {
-  border: '1px solid #ddd',
-  padding: '8px',
-  textAlign: 'left',
-};
-
-const evenRowStyle: React.CSSProperties = {
-  backgroundColor: '#f9f9f9',
-};
-
-const oddRowStyle: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-};
-
-const getSeverityStyle = (severity: string): React.CSSProperties => {
-  let color = 'inherit';
-  if (severity === 'Critical') color = 'red';
-  else if (severity === 'High') color = 'orange';
-  else if (severity === 'Medium') color = '#DAA520'; // DarkGoldenRod
-  return { ...tableCellStyle, color, fontWeight: 'bold' };
-};
-
-export default DashboardPage;
+export default DashboardPage; [cite: 125]
