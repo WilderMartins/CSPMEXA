@@ -25,6 +25,8 @@ huaweicloudsdkiam # IAM Service
 huaweicloudsdkobs # Object Storage Service (OBS)
 huaweicloudsdkecs # Elastic Cloud Server (ECS)
 huaweicloudsdkvpc # Virtual Private Cloud (VPC)
+huaweicloudsdkcts # Cloud Trace Service (adicionado anteriormente, mas bom garantir)
+huaweicloudsdkcsg # Cloud Security Guard (CSG) - NOVO
 
 # Azure SDK
 azure-identity~=1.15.0

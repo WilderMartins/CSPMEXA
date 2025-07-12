@@ -587,6 +587,10 @@ from app.schemas.gcp import gcp_cai_schemas
 from app.gcp import gcp_cloud_audit_logs_collector
 from app.schemas.gcp import gcp_cloud_audit_log_schemas
 
+# Adicionar imports para o novo coletor Huawei CSG e seus schemas
+from app.huawei import huawei_csg_collector
+from app.schemas.huawei import huawei_csg_schemas
+
 
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/cts/traces", response_model=huawei_cts_schemas.CTSTraceCollection, name="huawei:collect_cts_traces")
 async def collect_huawei_cts_traces_data(
@@ -715,4 +719,34 @@ async def list_gcp_cloud_audit_logs_data(
         raise http_exc
     except Exception as e:
         logger.exception(f"Unexpected error in list_gcp_cloud_audit_logs_data endpoint for projects '{project_ids}'")
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get(f"{HUAWEI_ROUTER_PREFIX}/csg/risks", response_model=huawei_csg_schemas.CSGRiskCollection, name="huawei:list_csg_risks")
+async def list_huawei_csg_risks_data(
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud para escopo de recursos."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud para o endpoint do cliente CSG."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio da conta Huawei Cloud para autenticação IAM."),
+    max_total_results: int = Query(1000, ge=10, le=10000, description="Número máximo de riscos a serem retornados."),
+    # Adicionar mais Query Params para filtros específicos do CSG se necessário
+):
+    """Lista riscos de segurança do Huawei Cloud Security Guard (CSG)."""
+    try:
+        # A função get_huawei_csg_risks é síncrona. Usar run_in_threadpool.
+        data = await run_in_threadpool(
+            huawei_csg_collector.get_huawei_csg_risks,
+            project_id=project_id,
+            region_id=region_id,
+            domain_id=domain_id,
+            max_total_results=max_total_results
+        )
+        if data.error_message and not data.risks: # Erro global sem nenhum dado parcial
+            if "credentials" in data.error_message.lower() or "configured" in data.error_message.lower():
+                 raise HTTPException(status_code=400, detail=data.error_message) # Erro de config/permissão
+            raise HTTPException(status_code=500, detail=data.error_message)
+        return data
+    except HTTPException as http_exc:
+        logger.error(f"HTTPException during Huawei CSG Risks list for project '{project_id}', region '{region_id}': {http_exc.detail}")
+        raise http_exc
+    except Exception as e:
+        logger.exception(f"Unexpected error in list_huawei_csg_risks_data endpoint for project '{project_id}', region '{region_id}'")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")

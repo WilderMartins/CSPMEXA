@@ -14,8 +14,11 @@ from app.schemas import (
     collector_azure_schemas,
     collector_google_workspace_schemas,
     collector_m365_schemas,
-    collector_huawei_cts_schemas, # Adicionado Huawei CTS
-    collector_gws_audit_log_schemas, # Adicionado GWS Audit Logs
+    collector_huawei_cts_schemas,
+    collector_gws_audit_log_schemas,
+    collector_gcp_cai_schemas, # Adicionado GCP CAI
+    collector_gcp_cloud_audit_log_schemas, # Adicionado GCP Audit
+    collector_huawei_csg_schemas, # Adicionado Huawei CSG
     policy_engine_alert_schema
 )
 import logging
@@ -1282,6 +1285,127 @@ async def analyze_m365_ca_policies_orchestrated(
 # Também precisaremos importar collector_m365_schemas no início do data_router.py
 # from app.schemas import collector_m365_schemas
 
+# --- Endpoint de Análise GCP Cloud Asset Inventory (Orquestração) ---
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/cai/assets", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_cai_assets")
+async def analyze_gcp_cai_assets_orchestrated(
+    request: Request,
+    scope: str = Query(..., description="Escopo da consulta CAI (ex: 'projects/PROJECT_ID')."),
+    asset_types: Optional[List[str]] = Query(None, description="Lista de tipos de ativos a serem coletados."),
+    content_type: str = Query("RESOURCE", description="Tipo de conteúdo a ser retornado (RESOURCE, IAM_POLICY)."),
+    max_total_results: int = Query(1000, description="Número máximo de ativos a coletar."),
+    current_user: TokenData = Depends(require_user),
+):
+    """Orquestra a coleta de ativos do GCP CAI e sua análise."""
+    # 1. Coletar Ativos do CAI
+    collected_data: collector_gcp_cai_schemas.GCPAssetCollection
+    try:
+        collector_full_path = "/collect/gcp/cai/assets"
+        collector_params = {
+            "scope": scope,
+            "content_type": content_type,
+            "max_total_results": max_total_results,
+        }
+        if asset_types:
+            collector_params["asset_types"] = asset_types
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params)
+        if collector_response.status_code != 200:
+            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service (GCP CAI): {collector_response.text}")
+        collected_data = collector_gcp_cai_schemas.GCPAssetCollection(**collector_response.json())
+
+        if not collected_data.assets and collected_data.error_message:
+             raise HTTPException(status_code=500, detail=f"Collector Service (GCP CAI) error: {collected_data.error_message}")
+        if not collected_data.assets:
+            return []
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to collect GCP CAI data: {str(e)}")
+
+    # 2. Enviar para Policy Engine
+    account_id_for_engine = scope.split('/')[-1] if '/' in scope else scope # Extrai ID do projeto/org/folder
+
+    analysis_payload = {
+        "provider": "gcp",
+        "service": "gcp_cloud_asset_inventory",
+        "data": collected_data.model_dump(),
+        "account_id": account_id_for_engine
+    }
+
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload)
+        if engine_response.status_code != 200:
+            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine (GCP CAI analysis): {engine_response.text}")
+        alerts = engine_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze GCP CAI data: {str(e)}")
+    return alerts
+
+# --- Endpoint de Análise GCP Cloud Audit Logs (Orquestração) ---
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/auditlogs", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_audit_logs")
+async def analyze_gcp_audit_logs_orchestrated(
+    request: Request,
+    project_ids: List[str] = Query(..., description="Lista de IDs de Projeto GCP para consulta."),
+    log_filter: Optional[str] = Query(None),
+    max_total_results: int = Query(1000),
+    current_user: TokenData = Depends(require_user),
+):
+    """Orquestra a coleta de GCP Cloud Audit Logs e sua análise."""
+    # 1. Coletar Logs
+    collected_data: collector_gcp_cloud_audit_log_schemas.GCPCloudAuditLogCollection
+    try:
+        collector_full_path = "/collect/gcp/auditlogs"
+        collector_params = {
+            "project_ids": project_ids, # O endpoint do coletor espera 'project_ids'
+            "max_total_results": max_total_results,
+        }
+        if log_filter: collector_params["log_filter"] = log_filter
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params)
+        if collector_response.status_code != 200:
+            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service (GCP AuditLogs): {collector_response.text}")
+        collected_data = collector_gcp_cloud_audit_log_schemas.GCPCloudAuditLogCollection(**collector_response.json())
+
+        if not collected_data.entries and collected_data.error_message:
+             raise HTTPException(status_code=500, detail=f"Collector Service (GCP AuditLogs) error: {collected_data.error_message}")
+        if not collected_data.entries:
+            return []
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to collect GCP AuditLogs data: {str(e)}")
+
+    # 2. Enviar para Policy Engine
+    # Usar o primeiro project_id como account_id principal para o payload de análise,
+    # ou concatená-los se o policy engine puder lidar.
+    # O policy engine já recebe a lista de projects_queried dentro do objeto de coleção.
+    primary_account_id = project_ids[0] if project_ids else None
+
+    analysis_payload = {
+        "provider": "gcp",
+        "service": "gcp_cloud_audit_logs",
+        "data": collected_data.model_dump(),
+        "account_id": primary_account_id
+    }
+
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload)
+        if engine_response.status_code != 200:
+            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine (GCP AuditLogs analysis): {engine_response.text}")
+        alerts = engine_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze GCP AuditLogs data: {str(e)}")
+    return alerts
+
+
 # --- Endpoint de Análise Huawei CTS (Orquestração) ---
 @router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/cts/traces", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_cts_traces")
 async def analyze_huawei_cts_traces_orchestrated(
@@ -1353,6 +1477,65 @@ async def analyze_huawei_cts_traces_orchestrated(
     # Para o frontend, pode ser útil retornar os próprios logs coletados se não houver alertas.
     # Mas o response_model é List[AlertSchema].
     # Por agora, retornamos os alertas (que podem ser vazios).
+    return alerts
+
+# --- Endpoint de Análise Huawei CSG (Orquestração) ---
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/csg/risks", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_csg_risks")
+async def analyze_huawei_csg_risks_orchestrated(
+    request: Request,
+    project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
+    region_id: str = Query(..., description="ID da Região Huawei Cloud."),
+    domain_id: Optional[str] = Query(None, description="ID do Domínio Huawei Cloud (opcional)."),
+    max_total_results: int = Query(1000, description="Número máximo de riscos a coletar."),
+    current_user: TokenData = Depends(require_user),
+):
+    """Orquestra a coleta de riscos do Huawei CSG e sua análise."""
+    # 1. Coletar Riscos CSG
+    collected_data: collector_huawei_csg_schemas.CSGRiskCollection
+    try:
+        collector_full_path = "/collect/huawei/csg/risks"
+        collector_params = {
+            "project_id": project_id,
+            "region_id": region_id,
+            "max_total_results": max_total_results,
+        }
+        if domain_id: collector_params["domain_id"] = domain_id
+
+        collector_response = await collector_service_client.get(collector_full_path, params=collector_params)
+        if collector_response.status_code != 200:
+            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service (Huawei CSG): {collector_response.text}")
+        collected_data = collector_huawei_csg_schemas.CSGRiskCollection(**collector_response.json())
+
+        if not collected_data.risks and collected_data.error_message:
+             raise HTTPException(status_code=500, detail=f"Collector Service (Huawei CSG) error: {collected_data.error_message}")
+        if not collected_data.risks:
+            return []
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to collect Huawei CSG data: {str(e)}")
+
+    # 2. Enviar para Policy Engine
+    # Account ID para CSG pode ser project_id ou domain_id dependendo do contexto da política.
+    # Usaremos project_id como o account_id principal para o payload de análise.
+    analysis_payload = {
+        "provider": "huawei",
+        "service": "huawei_csg_risks",
+        "data": collected_data.model_dump(),
+        "account_id": project_id
+    }
+
+    alerts: List[policy_engine_alert_schema.Alert]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload)
+        if engine_response.status_code != 200:
+            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine (Huawei CSG analysis): {engine_response.text}")
+        alerts = engine_response.json()
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze Huawei CSG data: {str(e)}")
     return alerts
 
 
