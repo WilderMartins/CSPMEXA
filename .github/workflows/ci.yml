@@ -59,17 +59,10 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest httpx pytest-asyncio
+        run: pip install -r requirements-dev.txt
       - name: Run Pytest for Auth Service
-        # Adicionar um teste dummy se não houver nenhum para o job não falhar
-        run: |
-          if [ ! -d "tests" ] && [ ! -d "app/tests" ]; then
-            mkdir -p tests
-            echo -e "import pytest\n\ndef test_auth_placeholder():\n  assert True" > tests/test_placeholder.py
-          fi
-          pytest tests || pytest app/tests # Tenta rodar em tests/ ou app/tests/
+        # Os testes estão no diretório tests/. `pytest` irá descobri-los automaticamente.
+        run: pytest tests
 
   test-collector-service:
     name: Test Collector Service (Python)
@@ -84,9 +77,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx boto3 # boto3 pode ser necessário para mocks/tipos
+        run: pip install -r requirements-dev.txt
       - name: Run Pytest for Collector Service
         run: pytest tests # Nossos testes estão em backend/collector_service/tests/
 
@@ -103,9 +94,7 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx
+        run: pip install -r requirements-dev.txt
       - name: Run Pytest for Policy Engine Service
         run: pytest tests # Nossos testes estão em backend/policy_engine_service/tests/
 
@@ -122,15 +111,13 @@ jobs:
         with:
           python-version: '3.9'
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest pytest-asyncio httpx fastapi # fastapi para TestClient
+        run: pip install -r requirements-dev.txt
       - name: Run Pytest for API Gateway Service
         run: pytest tests # Nossos testes de integração estão em backend/api_gateway_service/tests/
 
   # --- Testes de Frontend ---
   test-frontend:
-    name: Test Frontend (React/TS)
+    name: Test Frontend (React/TS with Jest)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -146,18 +133,8 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
       - name: Run frontend tests
-        # O Vite configura o Vitest. `npm test` deve rodá-los.
-        # Precisamos criar um arquivo de teste de exemplo.
-        # E adicionar o script "test": "vitest" ao package.json se não existir.
-        run: |
-          echo "Frontend tests to be implemented. Creating dummy test file for now."
-          mkdir -p src/__tests__
-          echo -e "import { describe, it, expect } from 'vitest';\ndescribe('example', () => { it('should pass', () => { expect(true).toBe(true); }); });" > src/__tests__/example.test.tsx
-          if ! grep -q "\"test\":" package.json; then \
-            npm pkg set scripts.test="vitest"; \
-          fi
-          npm install --save-dev vitest @vitejs/plugin-react jsdom # jsdom para ambiente de teste do vitest
-          npm test -- --run # --run para não ficar em watch mode
+        # O projeto está configurado com Jest. O comando `npm test` executa os testes.
+        run: npm test
 
   build-frontend:
     name: Build Frontend
