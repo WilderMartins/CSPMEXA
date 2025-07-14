@@ -229,4 +229,3 @@ def test_parse_addresses_empty(ecs_collector):
 # request = ListServersDetailsRequest()
 # # Set other parameters on request if needed, e.g., limit, offset, name filter
 # ecs_collector.ecs_client.list_servers_details(request)
-```

@@ -1,22 +1,21 @@
 import pytest
 import datetime
-from app.engine.aws_iam_policies import (
+from policy_engine_service.app.engine.aws_iam_policies import (
     evaluate_iam_user_policies,
     evaluate_iam_role_policies, # Adicionar quando as políticas de role forem testadas
-    check_user_mfa_disabled, # Função de política individual
     check_unused_access_keys,
     check_root_user_active_access_key,
     check_user_has_inline_policies,
     check_user_access_key_needs_rotation,
     check_role_has_inline_policies # Adicionar quando for testar
 )
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     IAMUserDataInput,
     IAMUserAccessKeyMetadataInput,
     IAMUserPolicyInput,
     IAMRoleDataInput # Adicionar quando for testar
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 ACCOUNT_ID_AWS = "123456789012"
 
@@ -192,5 +191,3 @@ def test_evaluate_iam_role_policies(role_with_inline_policy, role_without_inline
     alerts_data = evaluate_iam_role_policies(roles, ACCOUNT_ID_AWS)
     assert len(alerts_data) == 1
     assert alerts_data[0]["policy_id"] == "IAM_Role_Has_Inline_Policies"
-
-```

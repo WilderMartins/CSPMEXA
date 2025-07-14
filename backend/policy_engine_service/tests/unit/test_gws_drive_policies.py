@@ -2,21 +2,19 @@ import pytest
 from datetime import datetime, timezone
 import uuid
 
-from app.engine.google_workspace_drive_policies import (
+from policy_engine_service.app.engine.google_workspace_drive_policies import (
     GWSFilePubliclySharedPolicy,
     GWSFileSharedViaLinkPolicy,
     GWSSharedDriveAllowsExternalMembersPolicy,
     GWSSharedDriveAllowsNonMembersAccessToFilesPolicy,
     evaluate_google_workspace_drive_policies
 )
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     GoogleWorkspaceSharedDriveDataInput,
     GoogleWorkspaceDriveFileDataInput,
-    GoogleDriveRestrictionsInput,
-    # GoogleDrivePermissionInput, # Usado dentro de DriveFileDataInput
-    # GoogleDriveFileOwnerInput   # Usado dentro de DriveFileDataInput
+    GoogleDriveRestrictionsInput
 )
-from app.schemas.alert_schema import Alert
+from policy_engine_service.app.schemas.alert_schema import Alert
 
 CUSTOMER_ID = "gws_customer_123"
 

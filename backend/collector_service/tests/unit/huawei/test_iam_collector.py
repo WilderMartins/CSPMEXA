@@ -219,4 +219,3 @@ def test_get_user_mfa_status_handles_not_found(iam_collector):
 # request = KeystoneListUsersRequest(domain_id=settings.HUAWEI_CLOUD_DOMAIN_ID)
 # request = ListPermanentAccessKeysRequest(user_id=user.id)
 # request = ShowUserLoginProtectRequest(user_id=user.id)
-```

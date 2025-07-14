@@ -2,7 +2,7 @@ import pytest
 import datetime
 import uuid # Para mockar a geração de ID de alerta, se necessário, ou apenas verificar formato
 
-from app.engine.aws_ec2_policies import (
+from policy_engine_service.app.engine.aws_ec2_policies import (
     evaluate_ec2_instance_policies,
     evaluate_ec2_sg_policies,
     EC2SGPublicIngressAllPortsPolicy,
@@ -14,13 +14,13 @@ from app.engine.aws_ec2_policies import (
     REQUIRED_TAGS, # Importar a lista de tags para o teste
     DISAPPROVED_AMIS # Importar a lista de AMIs para o teste
 )
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     EC2InstanceDataInput,
     EC2SecurityGroupDataInput,
     EC2IpPermission,
     EC2InstanceState
 )
-from app.schemas.alert_schema import Alert, AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import Alert, AlertSeverityEnum
 
 ACCOUNT_ID_AWS = "123456789012"
 REGION_AWS = "us-east-1"
@@ -212,5 +212,3 @@ def test_evaluate_ec2_sg_policies(sg_public_all_ports_ipv4, sg_public_ssh_ipv6, 
     policy_ids_found = [a.policy_id for a in alerts_objects]
     assert "EC2_SG_Public_Ingress_All_Ports" in policy_ids_found
     assert "EC2_SG_Public_Ingress_SSH" in policy_ids_found
-
-```

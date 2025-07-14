@@ -1,12 +1,12 @@
 import pytest
 import datetime
-from app.engine.gcp_scc_processing import process_gcp_scc_findings
-from app.schemas.gcp.gcp_scc_input_schemas import (
+from policy_engine_service.app.engine.gcp_scc_processing import process_gcp_scc_findings
+from policy_engine_service.app.schemas.gcp.gcp_scc_input_schemas import (
     GCPSCCFindingCollectionInput,
     GCPFindingInput,
     GCPFindingSourcePropertiesInput
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 GCP_PARENT_RESOURCE = "organizations/1234567890" # Exemplo
 
@@ -130,5 +130,3 @@ def test_process_gcp_scc_findings_empty_list():
 def test_process_gcp_scc_findings_no_collection_input():
     alerts = process_gcp_scc_findings(None, GCP_PARENT_RESOURCE)
     assert len(alerts) == 0
-
-```

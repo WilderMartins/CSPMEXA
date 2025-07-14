@@ -47,4 +47,3 @@ class M365ConditionalAccessPolicyCollectionInput(BaseModel):
 # Nota: No futuro, se os schemas do coletor e do motor de políticas divergirem mais,
 # pode ser útil ter funções de mapeamento explícitas no API Gateway ou no Policy Engine.
 # Por enquanto, manter os nomes dos campos alinhados (usando alias onde necessário) é suficiente.
-```

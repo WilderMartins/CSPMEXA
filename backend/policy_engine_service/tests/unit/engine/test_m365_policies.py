@@ -1,12 +1,12 @@
 import pytest
-from app.engine.m365_policies import evaluate_m365_policies, check_m365_user_mfa_disabled, check_m365_ca_policy_disabled
-from app.schemas.m365.m365_input_schemas import (
+from policy_engine_service.app.engine.m365_policies import evaluate_m365_policies, check_m365_user_mfa_disabled, check_m365_ca_policy_disabled
+from policy_engine_service.app.schemas.m365.m365_input_schemas import (
     M365UserMFADetailInput,
     M365UserMFAStatusCollectionInput,
     M365ConditionalAccessPolicyDetailInput,
     M365ConditionalAccessPolicyCollectionInput
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 TENANT_ID_TEST = "test-tenant-123"
 
@@ -153,4 +153,3 @@ def test_evaluate_m365_policies_no_data():
     ca_empty_collection = M365ConditionalAccessPolicyCollectionInput(policies=[])
     alerts = evaluate_m365_policies(mfa_data=mfa_empty_collection, ca_policy_data=ca_empty_collection, tenant_id=TENANT_ID_TEST)
     assert len(alerts) == 0
-```

@@ -2,18 +2,22 @@ import pytest
 from unittest.mock import patch, MagicMock
 import datetime
 import httpx # Para mockar respostas HTTP
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="backend/notification_service/.env.test")
 
 from notification_service.app.services.webhook_service import send_webhook_notification_sync
 from notification_service.app.schemas.notification_schema import AlertDataPayload
 
 @pytest.fixture
 def mock_webhook_settings(monkeypatch):
-    mock_settings_obj = MagicMock()
-    mock_settings_obj.WEBHOOK_DEFAULT_URL = "http://default.webhook.test/hook"
-    # Adicionar outras settings relacionadas a webhook se forem usadas no futuro
-    # mock_settings_obj.WEBHOOK_TIMEOUT_SECONDS = 15
-    monkeypatch.setattr("notification_service.app.services.webhook_service.settings", mock_settings_obj)
-    return mock_settings_obj
+    with patch('app.core.config.get_settings') as mock_get_settings:
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.WEBHOOK_DEFAULT_URL = "http://default.webhook.test/hook"
+        # Adicionar outras settings relacionadas a webhook se forem usadas no futuro
+        # mock_settings_obj.WEBHOOK_TIMEOUT_SECONDS = 15
+        mock_get_settings.return_value = mock_settings_obj
+        yield mock_settings_obj
 
 @pytest.fixture
 def sample_alert_payload_for_webhook(): # Similar ao de email, mas pode ser customizado se necessário

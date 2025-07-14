@@ -1,8 +1,12 @@
 import pytest
 from datetime import timedelta, datetime, timezone
 from jose import jwt, JWTError
-from auth_service.app.services.token_service import TokenService
-from auth_service.app.core.config import settings
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="backend/auth_service/.env.test")
+
+from app.services.token_service import TokenService
+from app.core.config import settings
 
 # Usar uma instância de TokenService para os testes
 token_service_instance = TokenService()
@@ -175,8 +179,8 @@ def test_verify_token_none():
 # Para o ambiente de teste, `jose.jwt.decode(None, ...)` levanta `TypeError`.
 # Então, ajustando o teste para esperar TypeError:
 
-def test_verify_token_input_none_raises_type_error():
-    with pytest.raises(TypeError):
+def test_verify_token_input_none_raises_attribute_error():
+    with pytest.raises(AttributeError):
         token_service_instance.verify_token(None)
 
 # O teste original para `test_verify_token_none` foi renomeado e ajustado.

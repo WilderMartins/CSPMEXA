@@ -185,4 +185,3 @@ def get_gws_audit_logs( # Removido async def, pois a chamada SDK é síncrona
 if __name__ == "__main__":
     # Teste local já estava comentado
     print("Coletor GWS Audit Logs refinado. Adapte com chamadas reais ao SDK.")
-```

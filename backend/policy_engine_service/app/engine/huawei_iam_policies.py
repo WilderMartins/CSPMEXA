@@ -161,10 +161,3 @@ def evaluate_huawei_iam_user_policies(
 
     logger.info(f"Avaliação de Usuários Huawei IAM concluída para {account_id or 'N/A'}. {len(all_alerts)} alertas gerados.")
     return all_alerts
-
-```
-Ajustes durante a implementação:
-*   A política `HuaweiIAMUserInactiveAccessKeyPolicy` foi adaptada. Como a API `ListPermanentAccessKeys` da Huawei não retorna `last_used_time` diretamente, a política focará em chaves com status "Inactive". A parte de "não usada por X dias" para chaves ativas fica como um TODO dependente de encontrar uma API que forneça essa informação (talvez Cloud Trace Service - CTS).
-*   A identificação de usuário root/admin para ajustar a severidade do MFA desabilitado é complexa na Huawei sem um marcador claro e foi simplificada para usar a severidade padrão "High", com um comentário sobre ajuste futuro.
-
-Este arquivo agora contém a lógica inicial para políticas de usuários IAM da Huawei.

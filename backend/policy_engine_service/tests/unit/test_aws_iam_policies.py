@@ -2,15 +2,17 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 
-from app.schemas.input_data_schema import (
-    IAMUserDataInput, IAMUserAccessKeyMetadataInput, IAMUserMFADeviceInput
+from policy_engine_service.app.schemas.input_data_schema import (
+    IAMUserDataInput, IAMUserAccessKeyMetadataInput, IAMUserMFADeviceInput, IAMRoleDataInput, IAMUserPolicyInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.aws_iam_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.aws_iam_policies import (
     evaluate_iam_user_policies,
     IAMUserMFADisabledPolicy,
     IAMUserUnusedAccessKeysPolicy,
-    IAMRootUserActiveAccessKeyPolicy
+    IAMRootUserActiveAccessKeyPolicy,
+    evaluate_iam_role_policies,
+    check_role_has_inline_policies
 )
 
 # --- Fixtures de Dados de Teste para IAM ---

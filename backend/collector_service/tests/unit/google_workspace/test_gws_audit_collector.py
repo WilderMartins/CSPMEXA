@@ -117,4 +117,3 @@ def test_get_gws_audit_logs_client_init_failure(mock_get_service_fail, mock_gws_
     result = get_gws_audit_logs(application_name="token")
     assert result.error_message is not None
     assert "Failed to get Google Workspace service client" in result.error_message
-```

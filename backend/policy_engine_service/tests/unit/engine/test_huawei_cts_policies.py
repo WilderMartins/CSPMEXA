@@ -1,8 +1,8 @@
 import pytest
 import datetime
-from app.engine.huawei_cts_policies import evaluate_huawei_cts_policies
-from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput, CTSTraceInput, CTSUserIdentityInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.engine.huawei_cts_policies import evaluate_huawei_cts_policies
+from policy_engine_service.app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput, CTSTraceInput, CTSUserIdentityInput
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 ACCOUNT_ID_HUAWEI = "huawei_project_123"
 
@@ -87,5 +87,3 @@ def test_evaluate_huawei_cts_trace_parsing_error():
     assert alert["policy_id"] == "CTS_TraceParsing_Error"
     assert alert["severity"] == AlertSeverityEnum.INFORMATIONAL
     assert "Failed to parse this specific trace object" in alert["description"]
-
-```

@@ -1,8 +1,8 @@
 import pytest
 import datetime
-from app.engine.gcp_cai_policies import evaluate_gcp_cai_policies, REQUIRED_LABELS_BY_ASSET_TYPE
-from app.schemas.gcp.gcp_cai_input_schemas import GCPAssetCollectionInput, GCPAssetInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.engine.gcp_cai_policies import evaluate_gcp_cai_policies, REQUIRED_LABELS_BY_ASSET_TYPE
+from policy_engine_service.app.schemas.gcp.gcp_cai_input_schemas import GCPAssetCollectionInput, GCPAssetInput
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 GCP_ACCOUNT_ID = "projects/test-project-cai" # Escopo da consulta
 
@@ -106,5 +106,3 @@ def test_gcp_cai_asset_parsing_error():
     assert alert["policy_id"] == "GCP_CAI_AssetParsing_Error"
     assert alert["severity"] == AlertSeverityEnum.INFORMATIONAL
     assert "Failed to parse this asset" in alert["description"]
-
-```

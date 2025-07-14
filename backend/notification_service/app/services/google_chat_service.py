@@ -166,5 +166,3 @@ if __name__ == "__main__":
         else:
             print(f"Failed to send test Google Chat message.")
             print("Check logs and settings (GOOGLE_CHAT_WEBHOOK_URL).")
-
-```

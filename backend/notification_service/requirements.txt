@@ -1,8 +1,8 @@
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
-emails # For sending emails
-httpx # For async HTTP requests (if this service needs to call others, or for testing)
-boto3 # For AWS SES integration
-hvac # Cliente Python para o Vault
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+emails==0.6
+httpx==0.25.2
+boto3==1.33.1
+hvac==1.2.1

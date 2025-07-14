@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.gcp.gcp_cai_input_schemas import GCPAssetCollectionInput, GCPAssetInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.gcp.gcp_cai_input_schemas import GCPAssetCollectionInput, GCPAssetInput
+from ..schemas.alert_schema import AlertSeverityEnum
 
 # Lista de labels obrigatórias e os tipos de ativos aos quais se aplicam.
 # Pode ser expandido e tornado configurável.
@@ -93,5 +93,3 @@ def evaluate_gcp_cai_policies(
         # Adicionar mais políticas baseadas em CAI aqui
 
     return alerts_data
-
-```

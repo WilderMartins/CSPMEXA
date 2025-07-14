@@ -72,6 +72,3 @@ def get_workspace_service(
 
 # Para garantir que o módulo Optional seja importado se não estiver já em uso global
 from typing import Optional, List
-```
-
-E criar os diretórios e arquivos `__init__.py` necessários.

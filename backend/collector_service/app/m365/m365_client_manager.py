@@ -149,5 +149,3 @@ if __name__ == "__main__":
             # asyncio.run(main_test())
         else:
             print("Failed to obtain M365 access token. Check credentials and MSAL App Registration permissions.")
-
-```

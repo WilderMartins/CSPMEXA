@@ -3,17 +3,21 @@ from unittest.mock import patch, MagicMock
 import datetime
 import httpx # Para mockar respostas HTTP
 import json
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="backend/notification_service/.env.test")
 
 from notification_service.app.services.google_chat_service import send_google_chat_notification_sync, format_alert_for_google_chat
 from notification_service.app.schemas.notification_schema import AlertDataPayload
 
 @pytest.fixture
 def mock_gchat_settings(monkeypatch):
-    mock_settings_obj = MagicMock()
-    mock_settings_obj.GOOGLE_CHAT_WEBHOOK_URL = "http://default.gchat.test/hook"
-    # Outras settings se o serviço as usar
-    monkeypatch.setattr("notification_service.app.services.google_chat_service.settings", mock_settings_obj)
-    return mock_settings_obj
+    with patch('app.core.config.get_settings') as mock_get_settings:
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.GOOGLE_CHAT_WEBHOOK_URL = "http://default.gchat.test/hook"
+        # Outras settings se o serviço as usar
+        mock_get_settings.return_value = mock_settings_obj
+        yield mock_settings_obj
 
 @pytest.fixture
 def sample_alert_payload_for_gchat():

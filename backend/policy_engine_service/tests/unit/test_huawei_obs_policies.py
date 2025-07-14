@@ -2,13 +2,13 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     HuaweiOBSBucketDataInput, HuaweiOBSBucketPolicyInput, HuaweiOBSBucketPolicyStatementInput,
     HuaweiOBSBucketACLInput, HuaweiOBSGrantInput, HuaweiOBSGranteeInput, HuaweiOBSOwnerInput,
     HuaweiOBSBucketVersioningInput, HuaweiOBSBucketLoggingInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.huawei_obs_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert, AlertSeverityEnum, AlertStatusEnum
+from policy_engine_service.app.engine.huawei_obs_policies import (
     evaluate_huawei_obs_policies,
     HuaweiOBSBucketPublicAccessPolicy,
     HuaweiOBSBucketVersioningDisabledPolicy,
@@ -66,6 +66,9 @@ def test_huawei_obs_bucket_public_access_policy_via_policy(secure_huawei_obs_buc
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Public_Access"
     assert "Policy: " in alert.description
+    assert alert.severity == AlertSeverityEnum.CRITICAL
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 def test_huawei_obs_bucket_public_access_policy_via_acl(secure_huawei_obs_bucket_input: HuaweiOBSBucketDataInput):
     policy_checker = HuaweiOBSBucketPublicAccessPolicy()
@@ -81,6 +84,9 @@ def test_huawei_obs_bucket_public_access_policy_via_acl(secure_huawei_obs_bucket
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Public_Access"
     assert "ACL: " in alert.description
+    assert alert.severity == AlertSeverityEnum.CRITICAL
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 
 def test_huawei_obs_bucket_versioning_disabled_no_violation(secure_huawei_obs_bucket_input: HuaweiOBSBucketDataInput):
@@ -95,6 +101,9 @@ def test_huawei_obs_bucket_versioning_disabled_with_violation_suspended(secure_h
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Versioning_Disabled"
     assert "Status atual: Suspended" in alert.description
+    assert alert.severity == AlertSeverityEnum.MEDIUM
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 def test_huawei_obs_bucket_versioning_disabled_with_violation_none(secure_huawei_obs_bucket_input: HuaweiOBSBucketDataInput):
     policy = HuaweiOBSBucketVersioningDisabledPolicy()
@@ -103,6 +112,9 @@ def test_huawei_obs_bucket_versioning_disabled_with_violation_none(secure_huawei
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Versioning_Disabled"
     assert "Status atual: Não Configurado" in alert.description
+    assert alert.severity == AlertSeverityEnum.MEDIUM
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 
 def test_huawei_obs_bucket_logging_disabled_no_violation(secure_huawei_obs_bucket_input: HuaweiOBSBucketDataInput):
@@ -116,6 +128,9 @@ def test_huawei_obs_bucket_logging_disabled_with_violation(secure_huawei_obs_buc
     alert = policy.check(secure_huawei_obs_bucket_input, "test-project-id")
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Logging_Disabled"
+    assert alert.severity == AlertSeverityEnum.MEDIUM
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 def test_huawei_obs_bucket_logging_disabled_logging_none(secure_huawei_obs_bucket_input: HuaweiOBSBucketDataInput):
     policy = HuaweiOBSBucketLoggingDisabledPolicy()
@@ -123,7 +138,10 @@ def test_huawei_obs_bucket_logging_disabled_logging_none(secure_huawei_obs_bucke
     alert = policy.check(secure_huawei_obs_bucket_input, "test-project-id")
     assert alert is not None
     assert alert.policy_id == "HUAWEI_OBS_Bucket_Logging_Disabled"
-    assert "logging_status\": \"Não Configurado\"" in str(alert.details)
+    assert "'logging_status': 'Não Configurado'" in str(alert.details)
+    assert alert.severity == AlertSeverityEnum.MEDIUM
+    assert alert.status == AlertStatusEnum.OPEN
+    assert alert.id is not None
 
 # --- Testes para evaluate_huawei_obs_policies ---
 
@@ -168,11 +186,3 @@ def test_evaluate_huawei_obs_policies_skips_bucket_with_error(secure_huawei_obs_
     )
     alerts = evaluate_huawei_obs_policies([bucket_with_error, secure_huawei_obs_bucket_input], "test-project-id")
     assert len(alerts) == 0
-```
-
-Ajustes feitos durante a escrita dos testes em `huawei_obs_policies.py`:
-*   Na política `HuaweiOBSBucketPublicAccessPolicy`, a lógica de `check` foi atualizada para combinar as informações de `is_public_by_policy` e `is_public_by_acl`. Se qualquer um for verdadeiro, um único alerta de acesso público é gerado, com os detalhes combinados. Isso simplifica a política para uma verificação geral de "acesso público", em vez de ter políticas separadas para ACL e Política de Bucket que poderiam gerar alertas redundantes para o mesmo problema subjacente.
-*   O `account_id` passado para `policy.check` é usado no alerta.
-*   Os testes para `evaluate_huawei_obs_policies` foram ajustados para refletir que a política de acesso público agora é unificada.
-
-Este arquivo agora contém testes para as políticas de OBS implementadas.

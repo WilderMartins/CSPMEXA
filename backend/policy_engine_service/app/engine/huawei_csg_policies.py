@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.huawei.huawei_csg_input_schemas import CSGRiskCollectionInput, CSGRiskItemInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.huawei.huawei_csg_input_schemas import CSGRiskCollectionInput, CSGRiskItemInput
+from ..schemas.alert_schema import AlertSeverityEnum
 
 # Mapeamento de severidade do Huawei CSG para AlertSeverityEnum
 # Os valores exatos ("Critical", "High", etc.) precisam ser confirmados com a API do CSG.
@@ -97,5 +97,3 @@ def evaluate_huawei_csg_policies(
         })
 
     return alerts_data
-
-```

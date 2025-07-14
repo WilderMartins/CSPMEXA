@@ -128,5 +128,3 @@ async def test_get_m365_client_manager_failure(monkeypatch):
 
     ca_result = await get_m365_conditional_access_policies()
     assert "Failed to get authenticated Graph API client" in ca_result.error_message
-
-```

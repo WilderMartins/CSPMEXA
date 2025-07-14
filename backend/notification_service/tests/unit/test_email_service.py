@@ -1,6 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="backend/notification_service/.env.test")
 
 from notification_service.app.services.email_service import send_email_notification_sync
 from notification_service.app.schemas.notification_schema import AlertDataPayload
@@ -9,20 +12,19 @@ from botocore.exceptions import ClientError, NoCredentialsError
 # Mock das settings globais usadas pelo email_service.py, agora para SES
 @pytest.fixture
 def mock_ses_email_settings(monkeypatch):
-    mock_settings_obj = MagicMock()
-    mock_settings_obj.AWS_REGION = "us-east-1"
-    mock_settings_obj.EMAILS_FROM_EMAIL = "sender@ses-verified.com"
-    mock_settings_obj.EMAILS_FROM_NAME = "CSPMEXA SES Test"
-    # Opcionais, podem ser None ou não existir no objeto settings
-    mock_settings_obj.SES_FROM_EMAIL_ARN = None
-    mock_settings_obj.SES_CONFIGURATION_SET_NAME = None
-    # DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL não é usado diretamente por send_email_notification_sync
-    # mas é bom ter para consistência se o config real o tiver.
-    mock_settings_obj.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL = "default_ses_recipient@test.com"
-
-
-    monkeypatch.setattr("notification_service.app.services.email_service.settings", mock_settings_obj)
-    return mock_settings_obj
+    with patch('app.core.config.get_settings') as mock_get_settings:
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.AWS_REGION = "us-east-1"
+        mock_settings_obj.EMAILS_FROM_EMAIL = "sender@ses-verified.com"
+        mock_settings_obj.EMAILS_FROM_NAME = "CSPMEXA SES Test"
+        # Opcionais, podem ser None ou não existir no objeto settings
+        mock_settings_obj.SES_FROM_EMAIL_ARN = None
+        mock_settings_obj.SES_CONFIGURATION_SET_NAME = None
+        # DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL não é usado diretamente por send_email_notification_sync
+        # mas é bom ter para consistência se o config real o tiver.
+        mock_settings_obj.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL = "default_ses_recipient@test.com"
+        mock_get_settings.return_value = mock_settings_obj
+        yield mock_settings_obj
 
 @pytest.fixture
 def sample_alert_data_payload(): # Mantido como estava

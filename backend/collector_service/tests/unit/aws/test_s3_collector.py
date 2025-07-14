@@ -250,7 +250,3 @@ def test_get_s3_data_pab_not_configured(mock_boto_client):
     assert bucket_data.public_access_block is not None
     assert bucket_data.public_access_block.block_public_acls is False
     assert bucket_data.error_details is None
-
-```
-
-Vou fazer o mesmo para `test_ec2_collector.py` e `test_iam_collector.py`.

@@ -184,4 +184,3 @@ if __name__ == "__main__":
         else:
             print(f"Failed to send test email to {settings.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}.")
             print("Check logs and .env configuration.")
-```

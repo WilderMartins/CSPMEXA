@@ -1,12 +1,12 @@
 import pytest
 import datetime
-from app.engine.huawei_csg_policies import evaluate_huawei_csg_policies
-from app.schemas.huawei.huawei_csg_input_schemas import (
+from policy_engine_service.app.engine.huawei_csg_policies import evaluate_huawei_csg_policies
+from policy_engine_service.app.schemas.huawei.huawei_csg_input_schemas import (
     CSGRiskCollectionInput,
     CSGRiskItemInput,
     CSGRiskResourceInfoInput
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 ACCOUNT_ID_HUAWEI_CSG = "huawei_project_csg_test"
 
@@ -115,4 +115,3 @@ def test_evaluate_huawei_csg_risk_item_parsing_error():
     assert alert["policy_id"] == "CSG_RiskItemParsing_Error"
     assert alert["severity"] == AlertSeverityEnum.INFORMATIONAL
     assert "Failed to parse this specific CSG risk" in alert["description"]
-```

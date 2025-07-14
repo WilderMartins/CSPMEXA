@@ -1,8 +1,8 @@
 import pytest
 import datetime
-from app.engine.gcp_cloud_audit_policies import evaluate_gcp_cloud_audit_log_policies, CRITICAL_GCP_IAM_METHODS, CRITICAL_GCP_COMPUTE_METHODS
-from app.schemas.gcp.gcp_cloud_audit_input_schemas import GCPCloudAuditLogCollectionInput, GCPLogEntryInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.engine.gcp_cloud_audit_policies import evaluate_gcp_cloud_audit_log_policies, CRITICAL_GCP_IAM_METHODS, CRITICAL_GCP_COMPUTE_METHODS
+from policy_engine_service.app.schemas.gcp.gcp_cloud_audit_input_schemas import GCPCloudAuditLogCollectionInput, GCPLogEntryInput
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 GCP_PROJECT_ID = "gcp-project-audit-test"
 
@@ -117,5 +117,3 @@ def test_gcp_audit_log_entry_parsing_error():
     assert alert["policy_id"] == "GCP_AuditLog_EntryParsing_Error"
     assert alert["severity"] == AlertSeverityEnum.INFORMATIONAL
     assert "Failed to parse this log entry" in alert["description"]
-
-```
