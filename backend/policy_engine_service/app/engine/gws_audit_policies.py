@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput, GWSAuditLogItemInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.google_workspace.gws_audit_input_schemas import GWSAuditLogCollectionInput, GWSAuditLogItemInput
+from ..schemas.alert_schema import AlertSeverityEnum
 
 # Eventos de auditoria do Google Workspace a serem monitorados
 # Os nomes exatos dos eventos ("eventName") e applicationName precisam ser verificados na documentação do Google.
@@ -140,4 +140,3 @@ def evaluate_gws_audit_log_policies(
             # Ex: if app_name == "drive" and event.name == "download_compromised_content": ...
 
     return alerts_data
-```

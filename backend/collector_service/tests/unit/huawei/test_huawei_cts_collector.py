@@ -121,4 +121,3 @@ def test_get_huawei_cts_traces_missing_config(monkeypatch):
     )
     assert result.error_message is not None
     assert "Huawei Cloud credentials" in result.error_message
-```

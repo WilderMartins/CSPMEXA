@@ -2,11 +2,11 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.schemas.input_data_schema import (
-    GCPProjectIAMPolicyDataInput, GCPIAMPolicyInput, GCPIAMBindingInput
+from policy_engine_service.app.schemas.input_data_schema import (
+    GCPProjectIAMPolicyDataInput, GCPIAMBindingInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.gcp_iam_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.gcp_iam_policies import (
     evaluate_gcp_project_iam_policies,
     GCPProjectIAMExternalPrimitiveRolesPolicy
 )
@@ -128,10 +128,3 @@ def test_evaluate_gcp_project_iam_policies_skips_on_collection_error():
     )
     alerts = evaluate_gcp_project_iam_policies(error_policy_data, "error-project-789")
     assert len(alerts) == 0 # Pulado devido ao error_details
-```
-
-Ajustes durante a escrita dos testes:
-*   Na política `GCPProjectIAMExternalPrimitiveRolesPolicy`, a lógica de severidade foi ajustada para retornar "Critical" se 'roles/owner' ou 'roles/editor' estiverem envolvidos com membros externos, e "High" se for apenas 'roles/viewer'. Isso reflete melhor o risco.
-*   Os testes dependem do campo `has_external_members_with_primitive_roles` e `external_primitive_role_details` serem corretamente preenchidos pelo `gcp_iam_collector.py`. A lógica da política no `policy-engine-service` confia nessa informação pré-processada.
-
-Este arquivo agora contém testes para a política IAM de projeto implementada.

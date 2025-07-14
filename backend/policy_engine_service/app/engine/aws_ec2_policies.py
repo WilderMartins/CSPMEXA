@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
-from app.schemas.input_data_schema import EC2InstanceDataInput, EC2SecurityGroupDataInput, EC2IpPermission
-from app.schemas.alert_schema import Alert
+from ..schemas.input_data_schema import EC2InstanceDataInput, EC2SecurityGroupDataInput, EC2IpPermission
+from ..schemas.alert_schema import Alert, AlertSeverityEnum
 import logging
 import uuid
 

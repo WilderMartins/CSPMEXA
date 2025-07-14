@@ -135,4 +135,3 @@ async def test_get_gcp_scc_findings_no_credentials(monkeypatch):
 
     assert result.error_message is not None
     assert "GCP default credentials not found" in result.error_message
-```

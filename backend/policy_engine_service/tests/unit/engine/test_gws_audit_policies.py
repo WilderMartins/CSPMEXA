@@ -1,14 +1,14 @@
 import pytest
 import datetime
-from app.engine.gws_audit_policies import evaluate_gws_audit_log_policies
-from app.schemas.google_workspace.gws_audit_input_schemas import (
+from policy_engine_service.app.engine.gws_audit_policies import evaluate_gws_audit_log_policies
+from policy_engine_service.app.schemas.google_workspace.gws_audit_input_schemas import (
     GWSAuditLogCollectionInput,
     GWSAuditLogItemInput,
     GWSAuditLogEventInput,
     GWSAuditLogActorInput,
     GWSAuditLogEventParameterInput
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from policy_engine_service.app.schemas.alert_schema import AlertSeverityEnum
 
 CUSTOMER_ID_GWS = "C012345test"
 
@@ -126,5 +126,3 @@ def test_gws_audit_log_item_parsing_error():
     assert alert["policy_id"] == "GWS_AuditLog_ItemParsing_Error"
     assert alert["severity"] == AlertSeverityEnum.INFORMATIONAL
     assert "Failed to parse this specific log item" in alert["description"]
-
-```

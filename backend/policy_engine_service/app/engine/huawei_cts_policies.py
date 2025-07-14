@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput, CTSTraceInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.huawei.huawei_cts_input_schemas import CTSTraceCollectionInput, CTSTraceInput
+from ..schemas.alert_schema import AlertSeverityEnum
 
 # Lista de eventNames considerados críticos. Esta lista pode ser expandida.
 # Os nomes exatos dos eventos precisam ser verificados na documentação do CTS da Huawei.
@@ -127,4 +127,3 @@ def evaluate_huawei_cts_policies(
             })
 
     return alerts_data
-```

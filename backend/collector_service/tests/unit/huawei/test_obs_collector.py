@@ -310,4 +310,3 @@ def test_obs_bucket_data_public_determination(obs_collector):
 # The Pydantic model should handle parsing this.
 # If SDK returns string: OBSBucketData model's creation_date field type hint is datetime,
 # Pydantic will attempt to parse it.
-```

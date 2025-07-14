@@ -1,10 +1,11 @@
 import pytest
 from unittest.mock import MagicMock, patch
+from dotenv import load_dotenv
 
-from auth_service.app.services.user_service import UserService
-from auth_service.app.models.user_model import User
+load_dotenv(dotenv_path="backend/auth_service/.env.test")
 
-from auth_service.app.models.user_model import User, UserRole # Importar UserRole
+from app.services.user_service import UserService
+from app.models.user_model import User, UserRole
 
 # Instância do serviço a ser testado
 user_service_instance = UserService()

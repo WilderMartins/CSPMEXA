@@ -2,17 +2,21 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     GCPComputeInstanceDataInput, GCPComputeServiceAccountInput,
     GCPFirewallDataInput, GCPFirewallAllowedRuleInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.gcp_compute_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.gcp_compute_policies import (
     evaluate_gcp_compute_instance_policies,
     evaluate_gcp_firewall_policies,
     GCPComputeInstancePublicIPPolicy,
     GCPComputeInstanceDefaultServiceAccountFullAccessPolicy,
     GCPFirewallPublicIngressAnyPortPolicy
+)
+from policy_engine_service.app.schemas.input_data_schema import (
+    GCPComputeInstanceDataInput, GCPComputeServiceAccountInput,
+    GCPFirewallDataInput, GCPFirewallAllowedRuleInput
 )
 
 # --- Fixtures de Dados de Teste para GCP Compute ---
@@ -171,11 +175,3 @@ def test_evaluate_gcp_firewall_policies_one_vulnerable():
     assert alerts[0].policy_id == "GCP_Firewall_Public_Ingress_Any_Port"
 
 # Adicionar testes para políticas de firewall de portas específicas quando forem implementadas.
-```
-
-Ajustes feitos durante a escrita dos testes em `gcp_compute_policies.py`:
-*   Na política `GCPFirewallPublicIngressAnyPortPolicy`, a verificação de `rule.ports` foi ajustada: `not rule.ports` agora também indica "todas as portas" para o protocolo dado, além de `ip_protocol.lower() == "all"`.
-*   O `project_id` foi adicionado ao `GCPComputeInstanceDataInput` e `GCPFirewallDataInput` e usado nos detalhes do alerta para consistência.
-*   As URLs de `zone` e `machine_type` no `GCPComputeInstanceDataInput` são agora usadas como estão (URLs completas), e os campos `extracted_zone` e `extracted_machine_type` (que seriam preenchidos pelo coletor) são usados para os alertas. Isso corresponde melhor ao que o coletor provavelmente fará.
-
-Este arquivo agora contém uma boa base de testes para as políticas de Compute Engine.

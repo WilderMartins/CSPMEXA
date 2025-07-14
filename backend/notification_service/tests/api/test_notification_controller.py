@@ -2,28 +2,27 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 import datetime
+from dotenv import load_dotenv
+
+load_dotenv(dotenv_path="backend/notification_service/.env.test")
 
 # Importar o app FastAPI do notification_service para o TestClient
 from notification_service.app.main import app
-from notification_service.app.schemas.notification_schema import AlertDataPayload, EmailNotificationRequest
+from notification_service.app.schemas.notification_schema import AlertDataPayload, NotificationPayload, NotificationStatus
+from unittest.mock import patch
 
 client = TestClient(app)
 
 # Mock das settings globais
 @pytest.fixture(autouse=True) # Aplicar automaticamente a todas as funcs de teste neste módulo
 def mock_controller_settings(monkeypatch):
-    mock_settings_obj = MagicMock()
-    mock_settings_obj.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL = "default_recipient@test.com"
-    mock_settings_obj.WEBHOOK_DEFAULT_URL = "http://default.webhook.test/controller-hook"
-    mock_settings_obj.GOOGLE_CHAT_WEBHOOK_URL = "http://default.gchat.test/controller-hook" # Adicionado
-    # API_V1_STR é usado no main.py para prefixar o router, o TestClient lida com isso.
-
-    # Monkeypatch as settings nos módulos relevantes
-    monkeypatch.setattr("notification_service.app.api.v1.notification_controller.settings", mock_settings_obj)
-    monkeypatch.setattr("notification_service.app.services.email_service.settings", mock_settings_obj)
-    monkeypatch.setattr("notification_service.app.services.webhook_service.settings", mock_settings_obj)
-    monkeypatch.setattr("notification_service.app.services.google_chat_service.settings", mock_settings_obj) # Adicionado
-    return mock_settings_obj
+    with patch('app.core.config.get_settings') as mock_get_settings:
+        mock_settings_obj = MagicMock()
+        mock_settings_obj.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL = "default_recipient@test.com"
+        mock_settings_obj.WEBHOOK_DEFAULT_URL = "http://default.webhook.test/controller-hook"
+        mock_settings_obj.GOOGLE_CHAT_WEBHOOK_URL = "http://default.gchat.test/controller-hook" # Adicionado
+        mock_get_settings.return_value = mock_settings_obj
+        yield mock_settings_obj
 
 @pytest.fixture
 def sample_alert_payload_dict():

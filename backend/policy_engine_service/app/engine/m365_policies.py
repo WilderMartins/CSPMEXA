@@ -1,9 +1,10 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.m365.m365_input_schemas import (
+from ..schemas.m365.m365_input_schemas import (
     M365UserMFAStatusCollectionInput,
-    M365ConditionalAccessPolicyCollectionInput
+    M365ConditionalAccessPolicyCollectionInput,
+    M365ConditionalAccessPolicyDetailInput,
 )
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.alert_schema import AlertSeverityEnum
 
 def evaluate_m365_policies(
     mfa_data: Optional[M365UserMFAStatusCollectionInput],
@@ -78,6 +79,7 @@ def evaluate_m365_policies(
 
     return alerts_data
 
+from ..schemas.m365.m365_input_schemas import M365UserMFADetailInput
 def check_m365_user_mfa_disabled(
     user_mfa: M365UserMFADetailInput,
     tenant_id: Optional[str]
@@ -185,5 +187,3 @@ def check_m365_ca_policy_disabled(
             "recommendation": "Monitor the impact of the policy in report-only mode. If the behavior is as expected and the policy is intended to be active, change its state to 'enabled' to enforce it."
         })
     return alerts_data
-
-```

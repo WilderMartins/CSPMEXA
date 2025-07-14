@@ -2,17 +2,20 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     HuaweiECSServerDataInput, HuaweiECSAddressInput, HuaweiECSImageInput, HuaweiECSFlavorInput,
     HuaweiVPCSecurityGroupInput, HuaweiVPCSecurityGroupRuleInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.huawei_ecs_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.huawei_ecs_policies import (
     evaluate_huawei_ecs_instance_policies,
     evaluate_huawei_vpc_sg_policies,
     HuaweiECSPublicIPPolicy,
-    # Adicionar HuaweiECSMissingKeyPairPolicy se implementada
     HuaweiVPCSGAllowsPublicIngressToPortPolicy
+)
+from policy_engine_service.app.schemas.input_data_schema import (
+    HuaweiECSServerDataInput, HuaweiECSAddressInput, HuaweiECSImageInput, HuaweiECSFlavorInput,
+    HuaweiVPCSecurityGroupInput, HuaweiVPCSecurityGroupRuleInput
 )
 
 # --- Fixtures de Dados de Teste para Huawei ECS e VPC SG ---
@@ -148,12 +151,3 @@ def test_evaluate_huawei_vpc_sg_policies_one_vulnerable_sg():
     policy_ids = {alert.policy_id for alert in alerts}
     assert "HUAWEI_VPC_SG_Public_Ingress_SSH" in policy_ids
     assert "HUAWEI_VPC_SG_Public_Ingress_RDP" in policy_ids
-```
-
-Ajustes feitos durante a escrita dos testes em `huawei_ecs_policies.py`:
-*   Na política `HuaweiVPCSGAllowsPublicIngressToPortPolicy`:
-    *   A lógica de correspondência de protocolo foi ajustada para que `self.protocol == "any"` também corresponda se `rule.protocol` for `None` (que significa qualquer protocolo na Huawei).
-    *   A lógica de correspondência de porta foi ajustada para considerar `port_range_min` e `port_range_max` sendo `None` como "qualquer porta".
-*   Os testes agora passam o `region_id` para as funções de avaliação, pois as políticas podem precisar dele para o contexto do alerta.
-
-Este arquivo contém testes para as políticas de ECS e VPC Security Group da Huawei Cloud.

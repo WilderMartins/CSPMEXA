@@ -237,4 +237,3 @@ if __name__ == "__main__":
 
     # asyncio.run(main_test_m365_collectors())
     print("M365 collector structure created. Run with configured M365 App credentials for live test.")
-```

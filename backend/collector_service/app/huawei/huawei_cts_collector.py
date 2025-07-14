@@ -209,4 +209,3 @@ def get_huawei_cts_traces( # Removido async def, pois a chamada SDK é síncrona
 if __name__ == "__main__":
     # Teste local já estava comentado, mantendo assim.
     print("Coletor CTS Huawei refinado. Adapte com chamadas reais ao SDK e documentação.")
-```

@@ -198,4 +198,3 @@ def get_gcp_scc_findings( # Removido async def
 if __name__ == "__main__":
     # Teste local já estava comentado
     print("Coletor GCP SCC refinado. Adapte com chamadas reais ao SDK e documentação.")
-```

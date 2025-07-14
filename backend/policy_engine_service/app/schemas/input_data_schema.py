@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
+from pydantic import EmailStr
 
 # Schemas espelhando a saída do Collector Service para os dados relevantes para políticas
 
@@ -145,8 +146,15 @@ class IAMUserDataInput(BaseModel):
     class Config:
         populate_by_name = True
 
-# Adicionar IAMRoleDataInput e IAMPolicyDataInput similarmente se forem ser analisados.
-# Por agora, vamos focar nas políticas acima.
+class IAMRoleDataInput(BaseModel):
+    arn: str = Field(alias="Arn")
+    role_name: str = Field(alias="RoleName")
+    path: str = Field(alias="Path")
+    role_id: str = Field(alias="RoleId")
+    create_date: datetime = Field(alias="CreateDate")
+    inline_policies: Optional[List[IAMUserPolicyInput]] = None
+    class Config:
+        populate_by_name = True
 
 
 # Schema genérico para a requisição de análise

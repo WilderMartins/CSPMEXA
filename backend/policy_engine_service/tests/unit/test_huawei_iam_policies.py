@@ -2,15 +2,17 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     HuaweiIAMUserDataInput, HuaweiIAMUserLoginProtectInput, HuaweiIAMUserAccessKeyInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.huawei_iam_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.huawei_iam_policies import (
     evaluate_huawei_iam_user_policies,
     HuaweiIAMUserMFADisabledPolicy,
     HuaweiIAMUserInactiveAccessKeyPolicy
-    # Adicionar HuaweiIAMRootUserActiveAccessKeyPolicy se implementada e testável sem dados reais de root
+)
+from policy_engine_service.app.schemas.input_data_schema import (
+    HuaweiIAMUserDataInput, HuaweiIAMUserLoginProtectInput, HuaweiIAMUserAccessKeyInput
 )
 
 # --- Fixtures de Dados de Teste para Huawei IAM ---
@@ -134,10 +136,3 @@ def test_evaluate_huawei_iam_user_policies_skips_user_with_error(secure_huawei_i
     )
     alerts = evaluate_huawei_iam_user_policies([user_with_error, secure_huawei_iam_user_input], "domain-mixed")
     assert len(alerts) == 0 # Erro é pulado, seguro não gera alertas
-```
-
-Ajustes feitos durante a escrita dos testes em `huawei_iam_policies.py`:
-*   Na política `HuaweiIAMUserInactiveAccessKeyPolicy`, a descrição e o título foram ajustados para refletir que, devido à falta de dados de "último uso" do coletor, ela primariamente identifica chaves com status "Inactive". A lógica de "não usada por X dias" para chaves ativas foi comentada, pois não é implementável sem esses dados.
-*   O `account_id` passado para `policy.check` (que é o `domain_id` para IAM Huawei) é usado no alerta.
-
-Este arquivo agora contém testes para as políticas de usuários IAM da Huawei Cloud implementadas.

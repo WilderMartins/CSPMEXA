@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput, GCPFindingInput
-from app.schemas.alert_schema import AlertSeverityEnum # Para mapear severidades do SCC
+from ..schemas.gcp.gcp_scc_input_schemas import GCPSCCFindingCollectionInput, GCPFindingInput
+from ..schemas.alert_schema import AlertSeverityEnum # Para mapear severidades do SCC
 
 # Mapeamento de severidade do GCP SCC para AlertSeverityEnum
 # GCP SCC: CRITICAL, HIGH, MEDIUM, LOW, SEVERITY_UNSPECIFIED
@@ -117,5 +117,3 @@ def process_gcp_scc_findings(
         })
 
     return alerts_data
-
-```

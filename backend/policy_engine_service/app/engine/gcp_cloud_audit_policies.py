@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
-from app.schemas.gcp.gcp_cloud_audit_input_schemas import GCPCloudAuditLogCollectionInput, GCPLogEntryInput
-from app.schemas.alert_schema import AlertSeverityEnum
+from ..schemas.gcp.gcp_cloud_audit_input_schemas import GCPCloudAuditLogCollectionInput, GCPLogEntryInput
+from ..schemas.alert_schema import AlertSeverityEnum
 
 # Nomes de métodos IAM críticos do GCP a serem monitorados
 CRITICAL_GCP_IAM_METHODS = [
@@ -122,4 +122,3 @@ def evaluate_gcp_cloud_audit_log_policies(
             })
 
     return alerts_data
-```

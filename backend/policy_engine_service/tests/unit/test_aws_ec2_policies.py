@@ -2,18 +2,20 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     EC2InstanceDataInput, EC2InstanceState,
     EC2SecurityGroupDataInput, EC2IpPermission
 )
-from app.schemas.alert_schema import Alert
-from app.engine.aws_ec2_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.aws_ec2_policies import (
     evaluate_ec2_sg_policies,
     evaluate_ec2_instance_policies,
     EC2SGPublicIngressAllPortsPolicy,
     EC2SGPublicIngressSpecificPortPolicy,
     EC2InstancePublicIPPolicy,
-    EC2InstanceNoIAMProfilePolicy
+    EC2InstanceNoIAMProfilePolicy,
+    EC2InstanceMissingRequiredTagsPolicy,
+    EC2InstanceUnapprovedAMIPolicy
 )
 
 # --- Fixtures de Dados de Teste para EC2 ---

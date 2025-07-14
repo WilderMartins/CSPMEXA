@@ -2,18 +2,17 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     S3BucketDataInput, S3BucketACLDetails, S3BucketACLGrant, S3BucketACLGrantee,
     S3BucketVersioning, S3BucketLogging, S3BucketPublicAccessBlock
 )
-from app.schemas.alert_schema import Alert
-from app.engine.aws_s3_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.aws_s3_policies import (
     evaluate_s3_policies,
     S3PublicReadACLPolicy,
     S3PublicPolicyPolicy,
     S3VersioningDisabledPolicy,
-    S3LoggingDisabledPolicy,
-    # Adicionar outras classes de política aqui se forem testadas individualmente
+    S3LoggingDisabledPolicy
 )
 
 # --- Fixtures de Dados de Teste ---

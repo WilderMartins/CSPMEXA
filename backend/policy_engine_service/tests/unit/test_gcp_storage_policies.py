@@ -2,16 +2,20 @@ import pytest
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.schemas.input_data_schema import (
+from policy_engine_service.app.schemas.input_data_schema import (
     GCPStorageBucketDataInput, GCPBucketIAMPolicyInput, GCPBucketIAMBindingInput,
     GCPBucketVersioningInput, GCPBucketLoggingInput
 )
-from app.schemas.alert_schema import Alert
-from app.engine.gcp_storage_policies import (
+from policy_engine_service.app.schemas.alert_schema import Alert
+from policy_engine_service.app.engine.gcp_storage_policies import (
     evaluate_gcp_storage_policies,
     GCPStorageBucketPublicIAMPolicy,
     GCPStorageBucketVersioningDisabledPolicy,
     GCPStorageBucketLoggingDisabledPolicy
+)
+from policy_engine_service.app.schemas.input_data_schema import (
+    GCPStorageBucketDataInput, GCPBucketIAMPolicyInput, GCPBucketIAMBindingInput,
+    GCPBucketVersioningInput, GCPBucketLoggingInput
 )
 
 # --- Fixtures de Dados de Teste para GCP Storage ---
@@ -147,10 +151,3 @@ def test_evaluate_gcp_storage_policies_skips_bucket_with_error(secure_gcp_bucket
     )
     alerts = evaluate_gcp_storage_policies([bucket_with_error, secure_gcp_bucket_input], "test-project-id")
     assert len(alerts) == 0 # Erro é pulado, seguro não gera alertas
-```
-
-Ajustes feitos durante a escrita dos testes:
-*   No schema `GCPStorageBucketDataInput`, o alias de `website_configuration` era `website` e `retention_policy` era `retentionPolicy` para corresponder aos nomes de campo do objeto Python do SDK do Google Cloud Storage.
-*   No `gcp_storage_policies.py`, a verificação de logging desabilitado agora checa se `bucket.logging is None` OU `not bucket.logging.log_bucket`.
-*   No `gcp_storage_policies.py`, o `effective_project_id_for_alert` no `evaluate_gcp_storage_policies` usa `project_id` (da requisição de análise) como primário e faz fallback para `bucket.project_number` se o primeiro não estiver disponível.
-*   O campo `details` do `Alert` para `POLICY_ENGINE_ERROR_GCP` agora usa `bucket.model_dump(exclude_none=True, by_alias=True)` para melhor serialização.

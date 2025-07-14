@@ -223,5 +223,3 @@ def test_credential_object_caching(MockObsClient, MockBasicCredentials):
 
     manager.get_vpc_client(region_id='cn-north-1') # Third call, after cache clear
     assert MockBasicCredentials.call_count == 2 # Called again as cache was cleared
-
-```
