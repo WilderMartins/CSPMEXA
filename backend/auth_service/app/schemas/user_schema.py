@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
 import datetime
-from auth_service.app.models.user_model import UserRole # Importar o Enum UserRole
+from app.models.user_model import UserRole # Importar o Enum UserRole
 
 
 # Propriedades básicas do usuário
