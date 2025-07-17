@@ -591,6 +591,23 @@ from app.schemas.gcp import gcp_cloud_audit_log_schemas
 from app.huawei import huawei_csg_collector
 from app.schemas.huawei import huawei_csg_schemas
 
+# Adicionar imports para o novo coletor AWS CloudTrail e seus schemas
+from app.aws import cloudtrail_collector
+from app.schemas import collector_cloudtrail_schemas
+
+
+@router.get("/aws/cloudtrail", response_model=List[collector_cloudtrail_schemas.CloudTrailData], name="aws:collect_cloudtrail_data")
+async def collect_aws_cloudtrail_data():
+    """Coleta dados de configuração do AWS CloudTrail."""
+    try:
+        # A função de coleta pode precisar de credenciais, que seriam obtidas de forma segura
+        # e passadas para o coletor. Assumindo que o coletor lida com a obtenção de credenciais.
+        data = await cloudtrail_collector.list_trails() # A função precisa ser async
+        return data
+    except Exception as e:
+        logger.exception("Erro inesperado ao coletar dados do AWS CloudTrail.")
+        raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
+
 
 @router.get(f"{HUAWEI_ROUTER_PREFIX}/cts/traces", response_model=huawei_cts_schemas.CTSTraceCollection, name="huawei:collect_cts_traces")
 async def collect_huawei_cts_traces_data(

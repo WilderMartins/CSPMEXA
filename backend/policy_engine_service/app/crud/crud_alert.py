@@ -5,7 +5,7 @@ import datetime
 
 from app.models.alert_model import AlertModel, AlertStatus, AlertSeverity, AlertCreate, AlertUpdate
 from app.schemas.alert_schema import AlertSchema # Using the refined AlertSchema for responses
-from sqlalchemy import desc, asc
+from sqlalchemy import desc, asc, func
 
 class CRUDAlert:
     def __init__(self, model: Type[AlertModel]):
@@ -158,6 +158,27 @@ class CRUDAlert:
             db.delete(alert_obj)
             db.commit()
         return alert_obj
+
+    def get_summary(self, db: Session) -> dict:
+        """
+        Calcula um resumo dos alertas, como contagem por severidade e status.
+        """
+        severity_counts = db.query(
+            self.model.severity, func.count(self.model.id)
+        ).group_by(self.model.severity).all()
+
+        status_counts = db.query(
+            self.model.status, func.count(self.model.id)
+        ).group_by(self.model.status).all()
+
+        total_alerts = db.query(func.count(self.model.id)).scalar()
+
+        summary = {
+            "total_alerts": total_alerts,
+            "by_severity": {str(severity.name): count for severity, count in severity_counts},
+            "by_status": {str(status.name): count for status, count in status_counts}
+        }
+        return summary
 
 alert_crud = CRUDAlert(AlertModel)
 

@@ -117,12 +117,25 @@ async def get_iam_user_details(user_name: str, client) -> Dict[str, Any]:
     return details
 
 
+async def get_account_summary_data(client) -> Dict[str, Any]:
+    """Coleta o sumário da conta IAM."""
+    try:
+        summary_map = client.get_account_summary()
+        return summary_map.get("SummaryMap", {})
+    except ClientError as e:
+        logger.error(f"Could not get IAM account summary: {e.response['Error']['Message']}")
+        return {"Error": f"Could not get IAM account summary: {e.response['Error']['Message']}"}
+
 async def get_iam_users_data() -> List[IAMUserData]:
     client = get_iam_client() # Pode levantar HTTPException
     users_data: List[IAMUserData] = []
 
     try:
+        # Coletar o sumário da conta primeiro
+        account_summary = await get_account_summary_data(client)
+
         paginator = client.get_paginator('list_users')
+        first_user = True
         for page in paginator.paginate():
             for user_dict in page.get("Users", []):
                 user_name = user_dict["UserName"]
@@ -137,9 +150,11 @@ async def get_iam_users_data() -> List[IAMUserData]:
                 iam_user = IAMUserData(
                     **user_dict,
                     **user_specific_details,
-                    error_details=error_details_user
+                    error_details=error_details_user,
+                    account_summary=account_summary if first_user else None
                 )
                 users_data.append(iam_user)
+                first_user = False
 
     except ClientError as e:
         logger.error(f"ClientError listing IAM users: {e.response['Error']['Message']}")

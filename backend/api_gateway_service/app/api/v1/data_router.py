@@ -102,35 +102,66 @@ ROUTER_PREFIX = "/collect/aws" # Usado para os endpoints de proxy de coleta
 async def collect_s3_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de S3 buckets."""
+    """
+    **Coleta Dados de Buckets S3 (AWS)**
+
+    Inicia uma coleta de dados de todos os buckets S3 na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui uma lista detalhada de buckets com suas configurações de segurança,
+    como ACLs, políticas, versionamento e logging.
+    """
     return await _proxy_collector_request("GET", "/collect/s3", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/ec2/instances", response_model=List[collector_ec2_schemas.Ec2InstanceData], name="collector:get_ec2_instances")
 async def collect_ec2_instances_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de instâncias EC2."""
+    """
+    **Coleta Dados de Instâncias EC2 (AWS)**
+
+    Inicia uma coleta de dados de todas as instâncias EC2 na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como estado da instância, tipo, IPs, perfil IAM associado e Security Groups.
+    """
     return await _proxy_collector_request("GET", "/collect/ec2/instances", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/ec2/security-groups", response_model=List[collector_ec2_schemas.SecurityGroup], name="collector:get_ec2_security_groups")
 async def collect_ec2_security_groups_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de Security Groups EC2."""
+    """
+    **Coleta Dados de Security Groups (AWS)**
+
+    Inicia uma coleta de dados de todos os Security Groups na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui as regras de entrada e saída (inbound/outbound) para cada grupo.
+    """
     return await _proxy_collector_request("GET", "/collect/ec2/security-groups", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/users", response_model=List[collector_iam_schemas.IAMUserData], name="collector:get_iam_users")
 async def collect_iam_users_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de usuários IAM."""
+    """
+    **Coleta Dados de Usuários IAM (AWS)**
+
+    Inicia uma coleta de dados de todos os usuários IAM na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como políticas associadas, status do MFA e uso de chaves de acesso.
+    """
     return await _proxy_collector_request("GET", "/collect/iam/users", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/roles", response_model=List[collector_iam_schemas.IAMRoleData], name="collector:get_iam_roles")
 async def collect_iam_roles_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de roles IAM."""
+    """
+    **Coleta Dados de Roles IAM (AWS)**
+
+    Inicia uma coleta de dados de todas as roles IAM na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como políticas de confiança (assume role policy) e último uso.
+    """
     return await _proxy_collector_request("GET", "/collect/iam/roles", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/policies", response_model=List[collector_iam_schemas.IAMPolicyData], name="collector:get_iam_policies")
@@ -139,7 +170,14 @@ async def collect_iam_policies_gateway(
     scope: str = Query("Local", enum=["All", "AWS", "Local"], description="Escopo das políticas a serem listadas."),
     current_user: TokenData = Depends(require_user),
 ):
-    """Proxy para coletar dados de políticas IAM gerenciadas."""
+    """
+    **Coleta Dados de Políticas IAM (AWS)**
+
+    Inicia uma coleta de dados de políticas IAM gerenciadas na conta AWS.
+    Este endpoint atua como um proxy para o `collector_service`.
+    Use o parâmetro `scope` para filtrar entre políticas gerenciadas pela AWS,
+    políticas customizadas (Local) ou todas.
+    """
     return await _proxy_collector_request(
         "GET", "/collect/iam/policies", current_user, request, params={"scope": scope}
     )
@@ -158,10 +196,14 @@ async def analyze_s3_data_orchestrated(
     current_user: TokenData = Depends(require_user),
 ):
     """
-    Orquestra a coleta de dados S3 e sua análise.
-    1. Chama o Collector Service para obter dados S3.
-    2. Envia os dados S3 para o Policy Engine Service para análise.
-    3. Retorna os alertas gerados.
+    **Orquestra a Análise de Segurança de Buckets S3 (AWS)**
+
+    Este endpoint executa um fluxo completo de análise de segurança para os buckets S3:
+    1.  **Coleta**: Chama o `collector_service` para obter a configuração atual de todos os buckets S3.
+    2.  **Análise**: Envia os dados coletados para o `policy_engine_service`.
+    3.  **Resultado**: O `policy_engine_service` avalia os dados contra um conjunto de políticas de segurança
+        (ex: buckets públicos, logging desabilitado, etc.) e retorna uma lista de alertas para as
+        más configurações encontradas.
     """
     downstream_headers = {}
     # auth_header = request.headers.get("Authorization")

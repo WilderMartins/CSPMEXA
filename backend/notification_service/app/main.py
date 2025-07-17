@@ -1,10 +1,12 @@
-from fastapi import FastAPI
-from app.core.config import settings
-from app.api.v1.notification_controller import router as notification_router
 import logging
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from app.core.config import settings
+from app.api.v1 import notification_controller
+from app.core.logging_config import setup_logging
 
-# Configure logging based on settings
-logging.basicConfig(level=settings.LOG_LEVEL.upper() if settings.LOG_LEVEL else logging.INFO)
+# Configurar logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -14,47 +16,42 @@ app = FastAPI(
     description=settings.APP_DESCRIPTION,
 )
 
+# Middleware de tratamento de erros
+@app.middleware("http")
+async def error_handling_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logger.exception(f"Ocorreu um erro não tratado no notification_service: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Ocorreu um erro interno no notification_service."},
+        )
+
 @app.on_event("startup")
 async def startup_event():
-    logger.info(f"'{settings.PROJECT_NAME} - v{settings.APP_VERSION}' starting up...")
-    logger.info(f"Log level set to: {logging.getLevelName(logger.getEffectiveLevel())}")
-    if not all([settings.SMTP_HOST, settings.SMTP_PORT, settings.EMAILS_FROM_EMAIL, settings.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL]):
-        logger.warning("SMTP email notification settings are not fully configured. Email sending might fail.")
-    else:
-        logger.info(f"Email notifications configured to send from: {settings.EMAILS_FROM_EMAIL} via {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-        logger.info(f"Default critical alert recipient: {settings.DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}")
-
+    logger.info(f"Iniciando o serviço: {settings.PROJECT_NAME}")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info(f"'{settings.PROJECT_NAME}' shutting down...")
+    logger.info(f"Encerrando o serviço: {settings.PROJECT_NAME}")
 
 @app.get("/health", tags=["Health Check"])
-async def health_check():
-    # Basic health check. Could be expanded to check SMTP connectivity if needed.
-    return {"status": "ok", "service_name": settings.PROJECT_NAME, "version": settings.APP_VERSION}
+def health_check():
+    return {"status": "ok"}
 
-# Include the notification router
-# All endpoints in notification_controller.py will be prefixed with /api/v1
-# (e.g., /api/v1/notify/email)
 app.include_router(
-    notification_router,
-    prefix=settings.API_V1_STR, # The controller itself has /notify in its paths
-    tags=["Notifications"]
+    notification_controller.router,
+    prefix=settings.API_V1_STR,
+    tags=["Notifications"],
 )
 
 if __name__ == "__main__":
     import uvicorn
-
-    service_port = settings.NOTIFICATION_SERVICE_PORT
-    reload_uvicorn = settings.RELOAD_UVICORN
-    log_level_uvicorn = settings.LOG_LEVEL.lower()
-
-    logger.info(f"Starting Uvicorn for {settings.PROJECT_NAME} locally on port {service_port}...")
     uvicorn.run(
-        "main:app",
+        app,
         host="0.0.0.0",
-        port=service_port,
-        reload=reload_uvicorn,
-        log_level=log_level_uvicorn
+        port=8003,
+        reload=settings.RELOAD_UVICORN,
+        log_level=settings.LOG_LEVEL.lower(),
     )

@@ -59,3 +59,9 @@ class AlertUpdate(BaseModel):
 
     class Config:
         use_enum_values = True
+
+# Schema for the alert summary
+class AlertSummarySchema(BaseModel):
+    total_alerts: int
+    by_severity: Dict[str, int]
+    by_status: Dict[str, int]
