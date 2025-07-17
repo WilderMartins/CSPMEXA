@@ -2,11 +2,15 @@ import hvac
 from typing import List, Dict, Any
 from app.core.config import get_vault_client
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class CredentialsService:
     def __init__(self):
         self.vault_client: hvac.Client = get_vault_client()
         if not self.vault_client:
-            raise ConnectionError("Não foi possível conectar ao Vault. O serviço de credenciais não pode operar.")
+            logger.warning("Não foi possível conectar ao Vault na inicialização. O serviço de credenciais tentará se reconectar se necessário.")
 
     def save_credentials(self, provider: str, credentials: Dict[str, Any]) -> None:
         """
@@ -16,6 +20,8 @@ class CredentialsService:
             provider: O nome do provedor (ex: 'aws').
             credentials: Um dicionário com as credenciais.
         """
+        if not self.vault_client:
+            raise ConnectionError("A conexão com o Vault não está disponível.")
         path = f"secret/data/{provider}_credentials"
         print(f"Salvando credenciais no Vault em: {path}")
         try:
@@ -31,6 +37,8 @@ class CredentialsService:
         """
         Lista os segredos de credenciais configurados no Vault.
         """
+        if not self.vault_client:
+            raise ConnectionError("A conexão com o Vault não está disponível.")
         try:
             # Lista todos os segredos no backend 'secret/'
             list_response = self.vault_client.secrets.kv.v2.list_secrets(path='')
@@ -49,6 +57,8 @@ class CredentialsService:
         """
         Deleta as credenciais de um provedor do Vault.
         """
+        if not self.vault_client:
+            raise ConnectionError("A conexão com o Vault não está disponível.")
         path = f"{provider}_credentials"
         print(f"Deletando credenciais do Vault em: {path}")
         try:

@@ -6,6 +6,7 @@ SQLAlchemy~=1.4.0
 psycopg2-binary
 hvac # Cliente Python para o Vault
 PyYAML # Para carregar políticas a partir de arquivos YAML
+python-json-logger # Para logging estruturado
 
 # Test dependencies
 pytest

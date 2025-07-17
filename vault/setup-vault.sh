@@ -1,65 +1,97 @@
 #!/bin/bash
+set -e
 
-# --- Esperar o Vault ficar disponível ---
-echo "Aguardando o Vault iniciar..."
-while ! curl -s -f http://vault:8200/v1/sys/health; do
+# Função para esperar o Vault ficar disponível
+wait_for_vault() {
+  echo "Aguardando o Vault iniciar..."
+  until curl -s -f http://vault:8200/v1/sys/health; do
     sleep 1
-done
-echo "Vault está pronto!"
+  done
+  echo "Vault está pronto!"
+}
 
-# --- Habilitar o motor de segredos KV v2 ---
-# Usamos o KV v2 porque ele oferece versionamento de segredos.
-echo "Habilitando o motor de segredos KV v2 em 'secret/'..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data '{"type": "kv-v2"}' \
-     http://vault:8200/v1/sys/mounts/secret || echo "Motor 'secret' já pode estar habilitado."
+# Função para fazer requisições à API do Vault
+vault_request() {
+  method=$1
+  path=$2
+  data=$3
+  curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request "$method" --data "$data" "http://vault:8200/v1/$path"
+}
 
-# --- Escrever segredos no Vault ---
-# Em um cenário real, estes valores viriam de um local seguro, não hardcoded.
-# Para este projeto, vamos definir valores padrão sensíveis.
+# Habilitar o motor de segredos KV v2
+enable_kv_secrets() {
+  echo "Habilitando o motor de segredos KV v2 em 'secret/'..."
+  vault_request POST sys/mounts/secret '{"type": "kv-v2"}' || echo "Motor 'secret' já pode estar habilitado."
+}
 
-# Segredos do Banco de Dados
-DB_USER=${VAULT_DB_USER:-cspmexa_user}
-DB_PASSWORD=${VAULT_DB_PASSWORD:-a_very_secure_password_from_vault}
-echo "Escrevendo segredos do banco de dados em 'secret/database'..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data "{\"data\": {\"user\": \"$DB_USER\", \"password\": \"$DB_PASSWORD\"}}" \
-     http://vault:8200/v1/secret/data/database
+# Escrever os segredos no Vault
+write_secrets() {
+  echo "Escrevendo segredos no Vault..."
+  # Segredos do Banco de Dados
+  DB_USER=${VAULT_DB_USER:-cspmexa_user}
+  DB_PASSWORD=${VAULT_DB_PASSWORD:-a_very_secure_password_from_vault}
+  vault_request POST secret/data/database "{\"data\": {\"user\": \"$DB_USER\", \"password\": \"$DB_PASSWORD\"}}"
 
-# Segredo JWT (geramos um novo e seguro)
-JWT_SECRET=${VAULT_JWT_SECRET:-$(openssl rand -hex 32)}
-echo "Gerando e escrevendo novo JWT_SECRET_KEY em 'secret/jwt'..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data "{\"data\": {\"key\": \"$JWT_SECRET\"}}" \
-     http://vault:8200/v1/secret/data/jwt
+  # Segredo JWT
+  JWT_SECRET=${VAULT_JWT_SECRET:-$(openssl rand -hex 32)}
+  vault_request POST secret/data/jwt "{\"data\": {\"key\": \"$JWT_SECRET\"}}"
 
-# Segredos do Google OAuth (para login)
-GOOGLE_CLIENT_ID=${VAULT_GOOGLE_CLIENT_ID:-COLOQUE_SEU_GOOGLE_CLIENT_ID_AQUI}
-GOOGLE_CLIENT_SECRET=${VAULT_GOOGLE_CLIENT_SECRET:-COLOQUE_SEU_GOOGLE_CLIENT_SECRET_AQUI}
-echo "Escrevendo placeholders para Google OAuth em 'secret/google_oauth'..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data "{\"data\": {\"client_id\": \"$GOOGLE_CLIENT_ID\", \"client_secret\": \"$GOOGLE_CLIENT_SECRET\"}}" \
-     http://vault:8200/v1/secret/data/google_oauth
+  # Outros segredos (placeholders)
+  vault_request POST secret/data/google_oauth '{"data": {"client_id": "placeholder", "client_secret": "placeholder"}}'
+  vault_request POST secret/data/smtp '{"data": {"host": "", "port": "587", "user": "", "password": ""}}'
+  vault_request POST secret/data/aws_credentials '{"data": {"aws_access_key_id": "", "aws_secret_access_key": ""}}'
+  vault_request POST secret/data/azure_credentials '{"data": {"azure_client_id": "", "azure_client_secret": "", "azure_tenant_id": "", "azure_subscription_id": ""}}'
+}
 
-# Segredos de SMTP (para notificações por email)
-echo "Escrevendo placeholders para SMTP em 'secret/smtp'..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data '{"data": {"host": "", "port": "587", "user": "", "password": ""}}' \
-     http://vault:8200/v1/secret/data/smtp
+# Habilitar e configurar a autenticação AppRole
+setup_approle() {
+  echo "Habilitando a autenticação AppRole..."
+  vault_request POST sys/auth/approle '{"type": "approle"}' || echo "Autenticação AppRole já pode estar habilitada."
 
-# Segredos para Provedores de Nuvem (placeholders)
-# O ideal é ter um caminho por provedor.
-echo "Escrevendo placeholders para credenciais de nuvem..."
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data '{"data": {"aws_access_key_id": "", "aws_secret_access_key": ""}}' \
-     http://vault:8200/v1/secret/data/aws_credentials
+  # Políticas
+  echo "Criando políticas..."
+  vault_request POST sys/policy/auth-service-policy '{"policy": "path \"secret/data/database\" { capabilities = [\"read\"] } \n path \"secret/data/jwt\" { capabilities = [\"read\"] } \n path \"secret/data/google_oauth\" { capabilities = [\"read\"] }"}'
+  vault_request POST sys/policy/collector-service-policy '{"policy": "path \"secret/data/aws_credentials\" { capabilities = [\"read\"] } \n path \"secret/data/azure_credentials\" { capabilities = [\"read\"] }"}'
+  vault_request POST sys/policy/notification-service-policy '{"policy": "path \"secret/data/smtp\" { capabilities = [\"read\"] }"}'
+  # O API Gateway e o Policy Engine não precisam de segredos por enquanto, mas podemos criar políticas vazias se necessário.
 
-curl -s --header "X-Vault-Token: $VAULT_TOKEN" --request POST \
-     --data '{"data": {"azure_client_id": "", "azure_client_secret": "", "azure_tenant_id": "", "azure_subscription_id": ""}}' \
-     http://vault:8200/v1/secret/data/azure_credentials
+  # Criar AppRoles e obter RoleIDs
+  echo "Criando AppRoles..."
+  AUTH_ROLE_ID=$(vault_request GET auth/approle/role/auth-service/role-id | jq -r .data.role_id)
+  COLLECTOR_ROLE_ID=$(vault_request GET auth/approle/role/collector-service/role-id | jq -r .data.role_id)
+  NOTIFICATION_ROLE_ID=$(vault_request GET auth/approle/role/notification-service/role-id | jq -r .data.role_id)
 
-echo "--- Configuração do Vault concluída! ---"
+  # Criar SecretIDs para os AppRoles
+  echo "Criando SecretIDs..."
+  AUTH_SECRET_ID=$(vault_request POST auth/approle/role/auth-service/secret-id '{}' | jq -r .data.secret_id)
+  COLLECTOR_SECRET_ID=$(vault_request POST auth/approle/role/collector-service/secret-id '{}' | jq -r .data.secret_id)
+  NOTIFICATION_SECRET_ID=$(vault_request POST auth/approle/role/notification-service/secret-id '{}' | jq -r .data.secret_id)
 
-# O script irá sair, e o container 'vault-setup' será encerrado.
-# Isso é esperado e normal.
-exit 0
+  echo "--------------------------------------------------"
+  echo "Credenciais AppRole geradas. Adicione ao seu .env:"
+  echo ""
+  echo "# Credenciais para o auth_service"
+  echo "AUTH_SERVICE_VAULT_ROLE_ID=$AUTH_ROLE_ID"
+  echo "AUTH_SERVICE_VAULT_SECRET_ID=$AUTH_SECRET_ID"
+  echo ""
+  echo "# Credenciais para o collector_service"
+  echo "COLLECTOR_SERVICE_VAULT_ROLE_ID=$COLLECTOR_ROLE_ID"
+  echo "COLLECTOR_SERVICE_VAULT_SECRET_ID=$COLLECTOR_SECRET_ID"
+  echo ""
+  echo "# Credenciais para o notification_service"
+  echo "NOTIFICATION_SERVICE_VAULT_ROLE_ID=$NOTIFICATION_ROLE_ID"
+  echo "NOTIFICATION_SERVICE_VAULT_SECRET_ID=$NOTIFICATION_SECRET_ID"
+  echo "--------------------------------------------------"
+}
+
+# Função principal
+main() {
+  wait_for_vault
+  enable_kv_secrets
+  write_secrets
+  setup_approle
+  echo "--- Configuração do Vault concluída! ---"
+  exit 0
+}
+
+main
