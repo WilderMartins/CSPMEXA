@@ -102,35 +102,66 @@ ROUTER_PREFIX = "/collect/aws" # Usado para os endpoints de proxy de coleta
 async def collect_s3_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de S3 buckets."""
+    """
+    **Coleta Dados de Buckets S3 (AWS)**
+
+    Inicia uma coleta de dados de todos os buckets S3 na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui uma lista detalhada de buckets com suas configurações de segurança,
+    como ACLs, políticas, versionamento e logging.
+    """
     return await _proxy_collector_request("GET", "/collect/s3", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/ec2/instances", response_model=List[collector_ec2_schemas.Ec2InstanceData], name="collector:get_ec2_instances")
 async def collect_ec2_instances_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de instâncias EC2."""
+    """
+    **Coleta Dados de Instâncias EC2 (AWS)**
+
+    Inicia uma coleta de dados de todas as instâncias EC2 na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como estado da instância, tipo, IPs, perfil IAM associado e Security Groups.
+    """
     return await _proxy_collector_request("GET", "/collect/ec2/instances", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/ec2/security-groups", response_model=List[collector_ec2_schemas.SecurityGroup], name="collector:get_ec2_security_groups")
 async def collect_ec2_security_groups_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de Security Groups EC2."""
+    """
+    **Coleta Dados de Security Groups (AWS)**
+
+    Inicia uma coleta de dados de todos os Security Groups na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui as regras de entrada e saída (inbound/outbound) para cada grupo.
+    """
     return await _proxy_collector_request("GET", "/collect/ec2/security-groups", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/users", response_model=List[collector_iam_schemas.IAMUserData], name="collector:get_iam_users")
 async def collect_iam_users_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de usuários IAM."""
+    """
+    **Coleta Dados de Usuários IAM (AWS)**
+
+    Inicia uma coleta de dados de todos os usuários IAM na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como políticas associadas, status do MFA e uso de chaves de acesso.
+    """
     return await _proxy_collector_request("GET", "/collect/iam/users", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/roles", response_model=List[collector_iam_schemas.IAMRoleData], name="collector:get_iam_roles")
 async def collect_iam_roles_gateway(
     request: Request, current_user: TokenData = Depends(require_user)
 ):
-    """Proxy para coletar dados de roles IAM."""
+    """
+    **Coleta Dados de Roles IAM (AWS)**
+
+    Inicia uma coleta de dados de todas as roles IAM na conta AWS configurada.
+    Este endpoint atua como um proxy para o `collector_service`.
+    A resposta inclui detalhes como políticas de confiança (assume role policy) e último uso.
+    """
     return await _proxy_collector_request("GET", "/collect/iam/roles", current_user, request)
 
 @router.get(f"{ROUTER_PREFIX}/iam/policies", response_model=List[collector_iam_schemas.IAMPolicyData], name="collector:get_iam_policies")
@@ -139,7 +170,14 @@ async def collect_iam_policies_gateway(
     scope: str = Query("Local", enum=["All", "AWS", "Local"], description="Escopo das políticas a serem listadas."),
     current_user: TokenData = Depends(require_user),
 ):
-    """Proxy para coletar dados de políticas IAM gerenciadas."""
+    """
+    **Coleta Dados de Políticas IAM (AWS)**
+
+    Inicia uma coleta de dados de políticas IAM gerenciadas na conta AWS.
+    Este endpoint atua como um proxy para o `collector_service`.
+    Use o parâmetro `scope` para filtrar entre políticas gerenciadas pela AWS,
+    políticas customizadas (Local) ou todas.
+    """
     return await _proxy_collector_request(
         "GET", "/collect/iam/policies", current_user, request, params={"scope": scope}
     )
@@ -150,90 +188,66 @@ async def collect_iam_policies_gateway(
 # Pode ser mantido ou refatorado.
 # O prefixo para estes é /analyze/aws (aplicado pelo nome do arquivo/router)
 # Atualizando response_model para usar o schema Alert específico
+async def _orchestrate_aws_analysis(
+    service_name: str,
+    collector_path: str,
+    linked_account_id: int,
+    auth_token: str
+) -> List[Dict[str, Any]]:
+    """
+    Função genérica para orquestrar a coleta e análise de serviços AWS.
+    """
+    # 1. Obter credenciais para a conta
+    credentials = await get_credentials_for_account(linked_account_id, auth_token)
+    if not credentials:
+        raise HTTPException(status_code=404, detail="Credenciais para a conta vinculada não encontradas ou acesso negado.")
+
+    # 2. Chamar o Collector Service com as credenciais
+    collected_data: List[Dict[str, Any]]
+    try:
+        # O coletor agora espera um POST com as credenciais
+        collector_response = await collector_service_client.post(collector_path, json={"credentials": credentials})
+        collector_response.raise_for_status()
+        collected_data = collector_response.json()
+    except Exception as e:
+        logger.exception(f"Erro ao coletar dados do serviço '{service_name}': {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao coletar dados do serviço '{service_name}'.")
+
+    if not collected_data:
+        return []
+
+    # 3. Enviar os dados para o Policy Engine
+    analysis_payload = {"provider": "aws", "service": service_name, "data": collected_data, "account_id": str(linked_account_id)}
+    alerts: List[Dict[str, Any]]
+    try:
+        engine_response = await policy_engine_service_client.post("/analyze", json=analysis_payload)
+        engine_response.raise_for_status()
+        alerts = engine_response.json()
+    except Exception as e:
+        logger.exception(f"Erro ao analisar dados do serviço '{service_name}': {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao analisar dados do serviço '{service_name}'.")
+
+    return alerts
+
+
 @router.post(
     "/analyze/aws/s3", response_model=List[policy_engine_alert_schema.Alert], name="orchestrator:analyze_s3"
 )
 async def analyze_s3_data_orchestrated(
     request: Request,
+    linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
     current_user: TokenData = Depends(require_user),
 ):
     """
-    Orquestra a coleta de dados S3 e sua análise.
-    1. Chama o Collector Service para obter dados S3.
-    2. Envia os dados S3 para o Policy Engine Service para análise.
-    3. Retorna os alertas gerados.
+    **Orquestra a Análise de Segurança de Buckets S3 (AWS)**
     """
-    downstream_headers = {}
-    # auth_header = request.headers.get("Authorization")
-    # if auth_header:
-    #     downstream_headers["Authorization"] = auth_header
-
-    # 1. Chamar o Collector Service
-    s3_collected_data: List[Dict[str, Any]] # Espera-se uma lista de dicts
-    try:
-        # Chamada direta ao collector service é mais eficiente aqui do que chamar o proxy do próprio gateway.
-        collector_response = await collector_service_client.get("/collect/s3", headers=downstream_headers)
-
-        if collector_response.status_code != 200:
-            # Tentar obter detalhes do erro do corpo da resposta
-            error_detail = collector_response.text
-            try:
-                error_json = collector_response.json()
-                if "detail" in error_json:
-                    error_detail = error_json["detail"]
-            except: pass
-            raise HTTPException(
-                status_code=collector_response.status_code,
-                detail=f"Error from Collector Service (S3) during orchestration: {error_detail}",
-            )
-        s3_collected_data = collector_response.json()
-
-        if not s3_collected_data: # Lista vazia é um resultado válido
-            return []
-        # Validação de erro dentro da lista já é feita pelo collector e propagada pelo proxy.
-        # Se o collector_service_client.get falhar (ex: timeout), ele levantará HTTPException.
-
-    except HTTPException as e: # Re-lançar exceções já tratadas
-        logger.error(f"HTTPException during S3 collection step in orchestration: {e.detail}")
-        raise e
-    except Exception as e: # Outras exceções
-        logger.exception("Error calling Collector Service (S3) during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to collect S3 data for analysis: {str(e)}"
-        )
-
-    # 2. Enviar os dados coletados para o Policy Engine Service
-    # Ajuste o payload conforme o que o policy-engine-service espera.
-    # Exemplo: {"provider": "aws", "service": "s3", "data": s3_collected_data}
-    analysis_payload = {"provider": "aws", "service": "s3", "data": s3_collected_data}
-    alerts: List[Dict[str, Any]] # Espera-se uma lista de dicts
-    try:
-        # Endpoint no policy-engine-service (ex: /api/v1/analyze)
-        engine_response = await policy_engine_service_client.post(
-            "/analyze", data=analysis_payload, headers=downstream_headers # Assumindo que /analyze é o endpoint correto
-        )
-        if engine_response.status_code != 200:
-            error_detail = engine_response.text
-            try:
-                error_json = engine_response.json()
-                if "detail" in error_json:
-                    error_detail = error_json["detail"]
-            except: pass
-            raise HTTPException(
-                status_code=engine_response.status_code,
-                detail=f"Error from Policy Engine Service (S3 analysis) during orchestration: {error_detail}",
-            )
-        alerts = engine_response.json()
-    except HTTPException as e: # Re-lançar
-        logger.error(f"HTTPException during S3 analysis step in orchestration: {e.detail}")
-        raise e
-    except Exception as e: # Outras exceções
-        logger.exception("Error calling Policy Engine Service (S3) during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to analyze S3 data: {str(e)}"
-        )
-
-    return alerts
+    auth_token = request.headers.get("Authorization")
+    return await _orchestrate_aws_analysis(
+        service_name="s3",
+        collector_path="/collect/aws/s3",
+        linked_account_id=linked_account_id,
+        auth_token=auth_token
+    )
 
 # --- EC2 Instances Analysis Orchestration ---
 @router.post(
@@ -241,61 +255,19 @@ async def analyze_s3_data_orchestrated(
 )
 async def analyze_ec2_instances_data_orchestrated(
     request: Request,
+    linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
     current_user: TokenData = Depends(require_user),
 ):
     """
     Orquestra a coleta de dados de Instâncias EC2 e sua análise.
     """
-    downstream_headers = {} # Add auth header if needed for downstream
-    service_name = "ec2_instances"
-    collector_path = "/collect/ec2/instances"
-
-    # 1. Chamar o Collector Service
-    collected_data: List[Dict[str, Any]]
-    try:
-        collector_response = await collector_service_client.get(collector_path, headers=downstream_headers)
-        if collector_response.status_code != 200:
-            error_detail = collector_response.text
-            try: error_detail = collector_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(
-                status_code=collector_response.status_code,
-                detail=f"Error from Collector Service ({service_name}) during orchestration: {error_detail}",
-            )
-        collected_data = collector_response.json()
-        if not collected_data: return []
-    except HTTPException as e:
-        logger.error(f"HTTPException during {service_name} collection step in orchestration: {e.detail}")
-        raise e
-    except Exception as e:
-        logger.exception(f"Error calling Collector Service ({service_name}) during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to collect {service_name} data for analysis: {str(e)}"
-        )
-
-    # 2. Enviar os dados coletados para o Policy Engine Service
-    analysis_payload = {"provider": "aws", "service": service_name, "data": collected_data}
-    alerts: List[Dict[str, Any]]
-    try:
-        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
-        if engine_response.status_code != 200:
-            error_detail = engine_response.text
-            try: error_detail = engine_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(
-                status_code=engine_response.status_code,
-                detail=f"Error from Policy Engine Service ({service_name} analysis) during orchestration: {error_detail}",
-            )
-        alerts = engine_response.json()
-    except HTTPException as e:
-        logger.error(f"HTTPException during {service_name} analysis step in orchestration: {e.detail}")
-        raise e
-    except Exception as e:
-        logger.exception(f"Error calling Policy Engine Service ({service_name}) during orchestration")
-        raise HTTPException(
-            status_code=500, detail=f"Gateway failed to analyze {service_name} data: {str(e)}"
-        )
-    return alerts
+    auth_token = request.headers.get("Authorization")
+    return await _orchestrate_aws_analysis(
+        service_name="ec2_instances",
+        collector_path="/collect/aws/ec2/instances",
+        linked_account_id=linked_account_id,
+        auth_token=auth_token
+    )
 
 # --- EC2 Security Groups Analysis Orchestration ---
 @router.post(
@@ -303,45 +275,19 @@ async def analyze_ec2_instances_data_orchestrated(
 )
 async def analyze_ec2_sgs_data_orchestrated(
     request: Request,
+    linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
     current_user: TokenData = Depends(require_user),
 ):
     """
     Orquestra a coleta de dados de Security Groups EC2 e sua análise.
     """
-    downstream_headers = {}
-    service_name = "ec2_security_groups"
-    collector_path = "/collect/ec2/security-groups"
-
-    collected_data: List[Dict[str, Any]]
-    try:
-        collector_response = await collector_service_client.get(collector_path, headers=downstream_headers)
-        if collector_response.status_code != 200:
-            error_detail = collector_response.text
-            try: error_detail = collector_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service ({service_name}): {error_detail}")
-        collected_data = collector_response.json()
-        if not collected_data: return []
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gateway failed to collect {service_name} data: {str(e)}")
-
-    analysis_payload = {"provider": "aws", "service": service_name, "data": collected_data}
-    alerts: List[Dict[str, Any]]
-    try:
-        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
-        if engine_response.status_code != 200:
-            error_detail = engine_response.text
-            try: error_detail = engine_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine ({service_name} analysis): {error_detail}")
-        alerts = engine_response.json()
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze {service_name} data: {str(e)}")
-    return alerts
+    auth_token = request.headers.get("Authorization")
+    return await _orchestrate_aws_analysis(
+        service_name="ec2_security_groups",
+        collector_path="/collect/aws/ec2/security-groups",
+        linked_account_id=linked_account_id,
+        auth_token=auth_token
+    )
 
 # --- IAM Users Analysis Orchestration ---
 @router.post(
@@ -349,45 +295,19 @@ async def analyze_ec2_sgs_data_orchestrated(
 )
 async def analyze_iam_users_data_orchestrated(
     request: Request,
+    linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
     current_user: TokenData = Depends(require_user),
 ):
     """
     Orquestra a coleta de dados de Usuários IAM e sua análise.
     """
-    downstream_headers = {}
-    service_name = "iam_users"
-    collector_path = "/collect/iam/users" # Corrigido para o endpoint do collector
-
-    collected_data: List[Dict[str, Any]]
-    try:
-        collector_response = await collector_service_client.get(collector_path, headers=downstream_headers)
-        if collector_response.status_code != 200:
-            error_detail = collector_response.text
-            try: error_detail = collector_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(status_code=collector_response.status_code, detail=f"Error from Collector Service ({service_name}): {error_detail}")
-        collected_data = collector_response.json()
-        if not collected_data: return []
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gateway failed to collect {service_name} data: {str(e)}")
-
-    analysis_payload = {"provider": "aws", "service": service_name, "data": collected_data}
-    alerts: List[Dict[str, Any]]
-    try:
-        engine_response = await policy_engine_service_client.post("/analyze", data=analysis_payload, headers=downstream_headers)
-        if engine_response.status_code != 200:
-            error_detail = engine_response.text
-            try: error_detail = engine_response.json().get("detail", error_detail)
-            except: pass
-            raise HTTPException(status_code=engine_response.status_code, detail=f"Error from Policy Engine ({service_name} analysis): {error_detail}")
-        alerts = engine_response.json()
-    except HTTPException as e:
-        raise e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Gateway failed to analyze {service_name} data: {str(e)}")
-    return alerts
+    auth_token = request.headers.get("Authorization")
+    return await _orchestrate_aws_analysis(
+        service_name="iam_users",
+        collector_path="/collect/aws/iam/users",
+        linked_account_id=linked_account_id,
+        auth_token=auth_token
+    )
 
 # --- Endpoints de Coleta GCP (Proxy para Collector Service) ---
 GCP_COLLECT_ROUTER_PREFIX = "/collect/gcp"

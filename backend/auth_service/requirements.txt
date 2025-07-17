@@ -11,3 +11,5 @@ python-multipart
 httpx
 alembic
 hvac # Cliente Python para o Vault
+slowapi # Para rate limiting
+python-json-logger # Para logging estruturado

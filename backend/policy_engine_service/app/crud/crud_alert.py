@@ -5,7 +5,7 @@ import datetime
 
 from app.models.alert_model import AlertModel, AlertStatus, AlertSeverity, AlertCreate, AlertUpdate
 from app.schemas.alert_schema import AlertSchema # Using the refined AlertSchema for responses
-from sqlalchemy import desc, asc
+from sqlalchemy import desc, asc, func
 
 class CRUDAlert:
     def __init__(self, model: Type[AlertModel]):
@@ -159,6 +159,27 @@ class CRUDAlert:
             db.commit()
         return alert_obj
 
+    def get_summary(self, db: Session) -> dict:
+        """
+        Calcula um resumo dos alertas, como contagem por severidade e status.
+        """
+        severity_counts = db.query(
+            self.model.severity, func.count(self.model.id)
+        ).group_by(self.model.severity).all()
+
+        status_counts = db.query(
+            self.model.status, func.count(self.model.id)
+        ).group_by(self.model.status).all()
+
+        total_alerts = db.query(func.count(self.model.id)).scalar()
+
+        summary = {
+            "total_alerts": total_alerts,
+            "by_severity": {str(severity.name): count for severity, count in severity_counts},
+            "by_status": {str(status.name): count for status, count in status_counts}
+        }
+        return summary
+
 alert_crud = CRUDAlert(AlertModel)
 
 # Adicionar import para o cliente de notificação e AlertSeverity enum
@@ -216,10 +237,8 @@ async def create_alert_and_notify(db: Session, *, alert_in: AlertCreate) -> Aler
         asyncio.create_task(notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification))
 
 
-        # Se precisarmos garantir que foi enviado antes de retornar (não recomendado para APIs síncronas):
-        # await notification_client.send_critical_alert_notification(alert_schema_for_notification)
-        # await notification_client.send_critical_alert_webhook_notification(alert_schema_for_notification)
-        # await notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification)
+    # Disparar a verificação de regras de notificação
+    asyncio.create_task(notification_client.trigger_notifications_for_alert(alert_schema_for_notification))
 
     return created_alert_model
 

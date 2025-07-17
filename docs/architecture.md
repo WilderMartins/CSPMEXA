@@ -30,16 +30,13 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
     *   **Porta Dev Padrão:** `8001`
 
 3.  **`policy-engine-service` (Serviço do Motor de Políticas):**
-    *   **Responsabilidades Atuais (AWS, GCP, Huawei Cloud, Azure & Google Workspace):**
-        *   Receber dados de configuração (via `api-gateway-service`).
-        *   **AWS:** Aplicar políticas para S3, EC2 (Instâncias, SGs), Usuários IAM.
-        *   **GCP:** Aplicar políticas para Cloud Storage Buckets, Compute Engine VMs, Firewalls VPC, Políticas IAM de Projeto.
-        *   **Huawei Cloud:** Aplicar políticas para OBS Buckets, ECS VMs, VPC SGs, IAM Users.
-        *   **Azure:** Aplicar políticas para Virtual Machines e Storage Accounts.
-        *   **Google Workspace:** Aplicar políticas para Usuários e configurações/arquivos do Drive (Drives Compartilhados, arquivos públicos/link).
-        *   Gerar e retornar uma lista de "Alertas" (descobertas).
-    *   **Tecnologia:** Python com FastAPI, Pydantic.
-    *   **Comunicação:** REST API (endpoint `/analyze` que aceita dados de vários provedores/serviços).
+    *   **Responsabilidades Atuais:**
+        *   **Inventário de Ativos**: Receber dados de configuração do `collector-service` e persistir informações sobre os ativos da nuvem (VMs, buckets, etc.) em um banco de dados de inventário.
+        *   **Análise de Políticas**: Aplicar um conjunto de regras e políticas de segurança contra os dados de configuração coletados para identificar más configurações.
+        *   **Análise de Caminhos de Ataque**: Construir um grafo de ativos e suas relações para identificar sequências de vulnerabilidades que poderiam ser exploradas por um atacante.
+        *   **Geração de Alertas**: Criar e persistir alertas para cada má configuração ou caminho de ataque encontrado.
+    *   **Tecnologia:** Python com FastAPI, Pydantic, SQLAlchemy, **NetworkX** (para análise de grafos).
+    *   **Comunicação:** REST API.
     *   **Porta Dev Padrão:** `8002`
 
 4.  **`api-gateway-service` (Serviço de API Gateway):**
@@ -77,9 +74,10 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
 
 ## Escolhas de Banco de Dados (MVP Alpha)
 
-*   **`auth-service`:** PostgreSQL (para usuários, tokens de refresh, configurações de MFA, etc.). As migrações são gerenciadas via Alembic.
-*   **`policy-engine-service` (Alertas):** Os alertas gerados são persistidos pelo `policy-engine-service` em uma tabela dedicada (`alerts`) dentro do mesmo banco de dados PostgreSQL utilizado pelo `auth-service`. A tabela de alertas é criada na inicialização do `policy-engine-service` se não existir (usando SQLAlchemy `Base.metadata.create_all(engine)`), não utilizando Alembic neste MVP.
-*   **Dados de Configuração da Nuvem (Coletados):** Atualmente, os dados coletados pelo `collector-service` são transitórios. Eles são enviados para o `policy-engine-service` via API Gateway e não são persistidos em um banco de dados dedicado pelo collector.
+*   **`auth-service`**: PostgreSQL. Armazena dados de usuários, roles e contas vinculadas. As migrações são gerenciadas via Alembic.
+*   **`policy-engine-service`**: PostgreSQL. Armazena os alertas gerados, o inventário de ativos (`cloud_assets`, `asset_relationships`) e os caminhos de ataque (`attack_paths`). As migrações são gerenciadas via Alembic.
+*   **`notification-service`**: PostgreSQL. Armazena os canais e as regras de notificação. As migrações são gerenciadas via Alembic.
+*   **Dados de Configuração da Nuvem (Coletados)**: Os dados brutos coletados pelo `collector-service` são enviados para o `policy-engine-service`, que os processa e os salva de forma estruturada no seu banco de dados de inventário.
 
 **Limitações do MVP Alpha:**
 *   Os dados de configuração da nuvem coletados não são persistidos; cada análise de configuração é feita sob demanda. (Alertas SÃO persistidos).
@@ -143,7 +141,9 @@ graph TD
     end
 
     subgraph "Bancos de Dados & Externos"
-        DB1[(PostgreSQL - AuthDB)]
+        DB_Auth[(PostgreSQL - AuthDB)]
+        DB_Engine[(PostgreSQL - EngineDB)]
+        DB_Notify[(PostgreSQL - NotifyDB)]
         AWSAPI[AWS APIs]
         GCPApi[GCP APIs]
         HuaweiAPI[Huawei Cloud APIs]
@@ -156,7 +156,7 @@ graph TD
 
     B <-->|Login, Callback| C;
     C --> GoogleOAuth;
-    C --- DB1;
+    C --- DB_Auth;
 
     B -->|/collect/* (Proxy)| D;
     B -->|/analyze/* (Coleta)| D;
@@ -167,12 +167,13 @@ graph TD
     D --> GoogleWorkspaceAPI;
 
     B -->|/analyze/* (Análise)| E;
-    D -- Dados Coletados AWS, GCP, Huawei, Azure, GWS (via B) --> E;
+    D -- Dados Coletados (via B) --> E;
 
     E -- Alertas Gerados (via B) --> A;
-    E ---|Persiste Alertas| DB1;
-    E -->|Notificar Alertas Críticos| G;
-    G -.->|Email, Webhook (Futuro)| ExternalSystems[Sistemas Externos];
+    E ---|Persiste Inventário, Alertas, Caminhos de Ataque| DB_Engine;
+    E -->|Aciona Notificação| G;
+    G --- DB_Notify;
+    G -.->|Envia Notificações| ExternalSystems[Sistemas Externos];
 
 ```
 *Os dados de configuração da nuvem coletados são transitórios. Alertas SÃO persistidos no backend neste MVP Alpha.*

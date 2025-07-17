@@ -43,6 +43,7 @@ class IAMUserData(BaseModel):
 
     tags: Optional[List[Dict[str, str]]] = Field(None, alias="Tags")
     error_details: Optional[str] = Field(None, description="Details of any error encountered while fetching data for this user.")
+    account_summary: Optional[Dict[str, Any]] = Field(None, description="Account summary map, attached to the first user in the list.")
 
     class Config:
         populate_by_name = True

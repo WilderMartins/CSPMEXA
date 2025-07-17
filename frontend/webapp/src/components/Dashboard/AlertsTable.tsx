@@ -36,6 +36,8 @@ function Th({ children, reversed, sorted, onSort, width }: ThProps) {
  * Representa a estrutura de um objeto de Alerta.
  * Esta interface é usada tanto pelo `AlertsTable` quanto pelo `DashboardPage`.
  */
+import ReactMarkdown from 'react-markdown';
+
 export interface Alert {
   /** Identificador numérico único do alerta. */
   id: number;
@@ -56,6 +58,7 @@ export interface Alert {
   status: string;
   details?: Record<string, any>;
   recommendation?: string;
+  remediation_guide?: string;
   created_at: string;
   updated_at: string;
   first_seen_at: string;
@@ -330,6 +333,14 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
             {selectedAlert.region && <Text><strong>{t('alertItem.region')}:</strong> {selectedAlert.region}</Text>}
             <Text><strong>{t('alertItem.description')}:</strong> {selectedAlert.description}</Text>
             {selectedAlert.recommendation && <Text><strong>{t('alertItem.recommendation')}:</strong> {selectedAlert.recommendation}</Text>}
+            {selectedAlert.remediation_guide && (
+              <div>
+                <Text fw={500}>{t('alertItem.remediationGuide')}:</Text>
+                <Box p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: '4px', border: '1px solid var(--mantine-color-gray-3)' }}>
+                  <ReactMarkdown>{selectedAlert.remediation_guide}</ReactMarkdown>
+                </Box>
+              </div>
+            )}
             <Text><strong>{t('alertItem.policyId')}:</strong> {selectedAlert.policy_id}</Text>
             <Text><strong>{t('alertItem.firstSeen')}:</strong> {new Date(selectedAlert.first_seen_at).toLocaleString()}</Text>
             <Text><strong>{t('alertItem.lastSeen')}:</strong> {new Date(selectedAlert.last_seen_at).toLocaleString()}</Text>

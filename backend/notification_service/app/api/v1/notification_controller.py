@@ -157,6 +157,47 @@ async def trigger_google_chat_notification(
     return NotificationResponse(
         status="accepted",
         message="Google Chat notification task accepted and will be processed in the background.",
+from app.crud.crud_notification_rule import notification_rule_crud
+from app.db.session import get_db
+from app.models.notification_channel_model import ChannelTypeEnum
+
         recipient=f"Google Chat Webhook (ends ...{target_url[-20:]})", # Não expor URL completa
         notification_type="google_chat"
     )
+
+@router.post("/trigger", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_notifications_from_alert(
+    alert_data: AlertDataPayload,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Recebe um alerta, verifica as regras de notificação correspondentes e
+    dispara as notificações apropriadas em background.
+    """
+    logger.info(f"Recebido gatilho de notificação para alerta: {alert_data.title} (Provedor: {alert_data.provider}, Severidade: {alert_data.severity})")
+
+    rules = notification_rule_crud.get_multi(db) # Idealmente, isso seria mais eficiente, talvez filtrando no DB
+
+    triggered_tasks = 0
+    for rule in rules:
+        # A comparação de enums pode ser feita diretamente com os valores de string
+        if rule.provider.value == alert_data.provider and rule.severity.value == alert_data.severity:
+            channel = rule.channel
+            logger.info(f"Regra '{rule.name}' correspondeu. Acionando notificação para o canal '{channel.name}' (Tipo: {channel.type.value}).")
+
+            if channel.type == ChannelTypeEnum.EMAIL:
+                background_tasks.add_task(send_email_background, recipient_email=channel.configuration, subject=f"CSPMEXA Alert: {alert_data.title}", alert_data=alert_data)
+                triggered_tasks += 1
+            elif channel.type == ChannelTypeEnum.WEBHOOK:
+                background_tasks.add_task(send_webhook_background, target_url=channel.configuration, alert_data=alert_data)
+                triggered_tasks += 1
+            elif channel.type == ChannelTypeEnum.GOOGLE_CHAT:
+                background_tasks.add_task(send_google_chat_background, target_webhook_url=channel.configuration, alert_data=alert_data)
+                triggered_tasks += 1
+
+    if triggered_tasks > 0:
+        return {"status": "accepted", "message": f"{triggered_tasks} tarefas de notificação acionadas para processamento."}
+    else:
+        logger.info(f"Nenhuma regra de notificação correspondeu ao alerta '{alert_data.title}'. Nenhuma notificação enviada.")
+        return {"status": "no-match", "message": "Nenhuma regra de notificação correspondeu ao alerta."}
