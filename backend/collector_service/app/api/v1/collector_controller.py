@@ -13,17 +13,15 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.get("/s3", response_model=List[S3BucketData])
-async def collect_s3_data(
-    # current_user: Any = Depends(get_current_active_user) # Descomentar se autenticação for necessária
-):
+from app.schemas.base import CredentialsPayload
+
+@router.post("/aws/s3", response_model=List[S3BucketData])
+async def collect_s3_data(payload: CredentialsPayload):
     """
     Endpoint para coletar dados de configuração de buckets S3.
-    Retorna uma lista de dados de buckets S3 ou levanta HTTPException em caso de erro global.
-    Erros específicos de bucket são incluídos no campo 'error_details' de cada item da lista.
     """
     try:
-        data = await s3_collector.get_s3_data()
+        data = await s3_collector.get_s3_data(credentials=payload.credentials)
         return data
     except HTTPException as http_exc:
         logger.error(f"HTTPException during S3 data collection: {http_exc.detail}")
