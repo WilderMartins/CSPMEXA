@@ -46,6 +46,7 @@ def evaluate_policy(policy: Dict[str, Any], data: List[Dict[str, Any]], account_
                     "description": violation.get("details"),
                     "policy_id": policy["id"],
                     "recommendation": policy.get("recommendation"),
+                    "remediation_guide": policy.get("remediation_guide"),
                 })
             return alerts
         except Exception as e:
