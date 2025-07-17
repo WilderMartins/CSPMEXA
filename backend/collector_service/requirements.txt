@@ -41,3 +41,7 @@ google-auth-oauthlib~=1.0.0
 
 # Microsoft 365 / Graph API
 msal~=1.20 # Microsoft Authentication Library for Python
+
+# Outros
+hvac # Cliente Python para o Vault
+python-json-logger # Para logging estruturado

@@ -2,3 +2,4 @@
 pytest
 pytest-asyncio
 httpx
+pytest-cov # Para medição de cobertura de testes

@@ -17,22 +17,20 @@ logging.basicConfig(level=logging.INFO)
 
 iam_client_cache = None
 
-def get_iam_client():
-    global iam_client_cache
-    if iam_client_cache is None:
-        try:
-            # IAM é um serviço global, mas o cliente Boto3 ainda pode ser associado a uma região na configuração.
-            # A documentação do Boto3 sugere que, para serviços globais, a região no cliente é ignorada
-            # para o endpoint do serviço, mas pode ser usada para outras coisas como assinatura.
-            # Usar a região padrão definida nas configurações é uma prática segura.
-            iam_client_cache = boto3.client("iam", region_name=settings.AWS_REGION_NAME)
-        except (NoCredentialsError, PartialCredentialsError) as e:
-            logger.error(f"AWS credentials not found or incomplete for IAM: {e}")
-            raise HTTPException(status_code=500, detail="AWS credentials not configured for IAM.") from e
-        except Exception as e:
-            logger.error(f"Error creating IAM client: {e}")
-            raise HTTPException(status_code=500, detail=f"Error creating IAM client: {str(e)}") from e
-    return iam_client_cache
+def get_iam_client(credentials: Dict[str, Any]):
+    """Cria um cliente Boto3 para o IAM com as credenciais fornecidas."""
+    try:
+        return boto3.client(
+            "iam",
+            region_name=settings.AWS_REGION_NAME, # IAM é global, mas a região é necessária
+            aws_access_key_id=credentials.get('aws_access_key_id'),
+            aws_secret_access_key=credentials.get('aws_secret_access_key'),
+            aws_session_token=credentials.get('aws_session_token'),
+        )
+    except (NoCredentialsError, PartialCredentialsError) as e:
+        raise HTTPException(status_code=403, detail=f"Credenciais AWS para IAM inválidas: {e}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao criar cliente IAM: {e}")
 
 async def get_iam_user_details(user_name: str, client) -> Dict[str, Any]:
     """Coleta detalhes para um usuário IAM específico."""
@@ -117,12 +115,25 @@ async def get_iam_user_details(user_name: str, client) -> Dict[str, Any]:
     return details
 
 
-async def get_iam_users_data() -> List[IAMUserData]:
-    client = get_iam_client() # Pode levantar HTTPException
+async def get_account_summary_data(client) -> Dict[str, Any]:
+    """Coleta o sumário da conta IAM."""
+    try:
+        summary_map = client.get_account_summary()
+        return summary_map.get("SummaryMap", {})
+    except ClientError as e:
+        logger.error(f"Could not get IAM account summary: {e.response['Error']['Message']}")
+        return {"Error": f"Could not get IAM account summary: {e.response['Error']['Message']}"}
+
+async def get_iam_users_data(credentials: Dict[str, Any]) -> List[IAMUserData]:
+    client = get_iam_client(credentials)
     users_data: List[IAMUserData] = []
 
     try:
+        # Coletar o sumário da conta primeiro
+        account_summary = await get_account_summary_data(client)
+
         paginator = client.get_paginator('list_users')
+        first_user = True
         for page in paginator.paginate():
             for user_dict in page.get("Users", []):
                 user_name = user_dict["UserName"]
@@ -137,9 +148,11 @@ async def get_iam_users_data() -> List[IAMUserData]:
                 iam_user = IAMUserData(
                     **user_dict,
                     **user_specific_details,
-                    error_details=error_details_user
+                    error_details=error_details_user,
+                    account_summary=account_summary if first_user else None
                 )
                 users_data.append(iam_user)
+                first_user = False
 
     except ClientError as e:
         logger.error(f"ClientError listing IAM users: {e.response['Error']['Message']}")
@@ -196,8 +209,8 @@ async def get_iam_role_details(role_name: str, client) -> Dict[str, Any]:
 
     return details
 
-async def get_iam_roles_data() -> List[IAMRoleData]:
-    client = get_iam_client()
+async def get_iam_roles_data(credentials: Dict[str, Any]) -> List[IAMRoleData]:
+    client = get_iam_client(credentials)
     roles_data: List[IAMRoleData] = []
 
     try:
@@ -245,12 +258,12 @@ async def get_iam_roles_data() -> List[IAMRoleData]:
     return roles_data
 
 
-async def get_iam_policies_data(scope: str = "Local") -> List[IAMPolicyData]:
+async def get_iam_policies_data(credentials: Dict[str, Any], scope: str = "Local") -> List[IAMPolicyData]:
     """
     Coleta dados de políticas IAM gerenciadas.
     Scope: 'All' (todas), 'AWS' (gerenciadas pela AWS), 'Local' (gerenciadas pelo cliente - padrão).
     """
-    client = get_iam_client()
+    client = get_iam_client(credentials)
     policies_data: List[IAMPolicyData] = []
 
     try:

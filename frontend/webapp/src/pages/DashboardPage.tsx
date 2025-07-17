@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Title, Text, Container } from '@mantine/core';
+import { Title, Text, Container, Grid, Space } from '@mantine/core';
+import { api } from '../services/api';
 
-// Importar as novas páginas de análise por provedor
+// Importar componentes do Dashboard
+import SummaryCards from '../components/Dashboard/SummaryCards';
+import AlertsBySeverityChart from '../components/Dashboard/AlertsBySeverityChart';
+
+// Importar as páginas de análise por provedor
 import AwsDashboardPage from './Dashboard/AwsDashboardPage';
 import GcpDashboardPage from './Dashboard/GcpDashboardPage';
 import AzureDashboardPage from './Dashboard/AzureDashboardPage';
@@ -11,22 +16,54 @@ import HuaweiDashboardPage from './Dashboard/HuaweiDashboardPage';
 import GwsDashboardPage from './Dashboard/GwsDashboardPage';
 import M365DashboardPage from './Dashboard/M365DashboardPage';
 
+interface SummaryData {
+  total_alerts: number;
+  by_severity: { [key: string]: number };
+  by_status: { [key: string]: number };
+}
+
 const DashboardHomePage = () => {
   const { t } = useTranslation();
+  const [summary, setSummary] = useState<SummaryData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    api.get<SummaryData>('/dashboard/summary')
+      .then(response => {
+        setSummary(response.data);
+        setLoading(false);
+      })
+      .catch(error => {
+        console.error('Error fetching summary data:', error);
+        setLoading(false);
+      });
+  }, []);
+
   return (
-    <Container>
-      <Title order={2} ta="center" mt="xl">{t('dashboard.welcome.title', 'Welcome to the Dashboard')}</Title>
-      <Text ta="center" mt="md" c="dimmed">{t('dashboard.welcome.subtitle', 'Select a provider from the menu to start an analysis.')}</Text>
+    <Container fluid>
+      <Title order={1} mb="lg">{t('dashboard.title', 'Visão Geral de Segurança')}</Title>
+
+      {loading ? (
+        <Text>Carregando dashboard...</Text>
+      ) : summary ? (
+        <>
+          <SummaryCards />
+          <Space h="xl" />
+          <Grid>
+            <Grid.Col span={{ base: 12, md: 6 }}>
+              <AlertsBySeverityChart data={summary.by_severity} />
+            </Grid.Col>
+            {/* Outros gráficos ou tabelas podem ser adicionados aqui */}
+          </Grid>
+        </>
+      ) : (
+        <Text c="red">Não foi possível carregar os dados do dashboard.</Text>
+      )}
     </Container>
   );
 };
 
-/**
- * `DashboardPage` agora atua como um roteador para as sub-páginas de cada provedor.
- * Ele renderiza a página de análise específica com base na URL.
- *
- * @component
- */
 const DashboardPage: React.FC = () => {
   return (
     <Routes>

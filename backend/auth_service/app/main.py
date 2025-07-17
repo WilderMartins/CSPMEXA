@@ -1,70 +1,77 @@
-from fastapi import FastAPI
+import logging
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
-from app.db.session import engine, Base  # , create_db_and_tables
-from app.api.v1 import auth_controller # Importado
+from app.api.v1 import auth_controller, admin_controller, linked_account_controller
+from app.db.session import engine
+from app.models import user_model
+from app.core.logging_config import setup_logging # Importar a configuração de logging
 
+# Configurar o logging estruturado ANTES de instanciar o app
+setup_logging()
+logger = logging.getLogger(__name__)
 
-# --- Database table creation (for development) ---
-# Remova ou mova para um script de migração (Alembic) para produção
-def create_tables():
-    Base.metadata.create_all(bind=engine)
+# Cria as tabelas no banco de dados (se não existirem)
+user_model.Base.metadata.create_all(bind=engine)
 
+from app.core.rate_limiter import limiter
 
-# create_tables() # Chamada para criar tabelas ao iniciar (cuidado em produção)
-# --- End Database table creation ---
-
-
+# Configuração do Rate Limiter
 app = FastAPI(
-    title=settings.PROJECT_NAME, openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
 
+# Registrar o limiter no app
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Middleware de tratamento de erros
+@app.middleware("http")
+async def error_handling_middleware(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        logger.exception(f"Ocorreu um erro não tratado: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Ocorreu um erro interno no servidor."},
+        )
 
 @app.on_event("startup")
 async def startup_event():
-    # Idealmente, use Alembic para migrações.
-    # Para desenvolvimento, podemos criar tabelas aqui.
-    # Certifique-se que o DB exista antes de rodar.
-    try:
-        create_tables() # Cria tabelas se não existirem (ideal para dev, Alembic para prod)
-        print("Database tables checked/created (if they didn't exist).")
+    logger.info(f"Iniciando o serviço: {settings.PROJECT_NAME}")
 
-        # Tentar definir o usuário inicial como admin
-        # Isso deve ser chamado depois que as tabelas são criadas e o DB está acessível.
-        # Precisamos de uma sessão de DB para isso.
-        from app.db.session import SessionLocal
-        from app.services.user_service import user_service as service_user # Renomeado para evitar conflito
-        db_session = SessionLocal()
-        try:
-            print("Attempting to set initial admin user...")
-            initial_admin = service_user.set_initial_admin_user(db_session)
-            if initial_admin:
-                print(f"Initial admin user set/verified: {initial_admin.email}")
-            else:
-                print("No initial admin user set (no users found or admin already exists).")
-        finally:
-            db_session.close()
-
-    except Exception as e:
-        print(f"Error during startup tasks (tables or initial admin): {e}")
-        print("Please ensure the database is running and accessible.")
-
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info(f"Encerrando o serviço: {settings.PROJECT_NAME}")
 
 @app.get("/health", tags=["Health Check"])
 async def health_check():
     return {"status": "ok"}
 
+# Incluir os roteadores da API
+app.include_router(
+    auth_controller.router,
+    prefix=settings.API_V1_STR + "/auth",
+    tags=["Authentication"]
+)
 
-from app.api.v1 import admin_controller # Adicionado
+app.include_router(
+    admin_controller.router,
+    prefix=settings.API_V1_STR + "/admin",
+    tags=["Admin"]
+)
 
-# Incluir roteadores da API
-app.include_router(auth_controller.router, prefix=settings.API_V1_STR, tags=["Authentication"])
-app.include_router(admin_controller.router, prefix=f"{settings.API_V1_STR}/admin", tags=["Admin"])
-
+app.include_router(
+    linked_account_controller.router,
+    prefix=settings.API_V1_STR + "/accounts",
+    tags=["Linked Accounts"]
+)
 
 if __name__ == "__main__":
     import uvicorn
-
-    # Lembre-se de descomentar CMD e EXPOSE no Dockerfile
-    # uvicorn.run(app, host="0.0.0.0", port=8000)
-    # Para desenvolvimento local:
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    # O uvicorn usará a configuração de logging já definida
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

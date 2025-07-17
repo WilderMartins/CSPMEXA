@@ -5,10 +5,18 @@ import datetime
 
 from app.db.session import get_db
 from app.crud.crud_alert import alert_crud
-from app.schemas.alert_schema import AlertSchema, AlertCreate, AlertUpdate, AlertStatusEnum, AlertSeverityEnum
+from app.schemas.alert_schema import AlertSchema, AlertCreate, AlertUpdate, AlertStatusEnum, AlertSeverityEnum, AlertSummarySchema
 from app.models.alert_model import AlertModel # For direct model usage if necessary
 
 router = APIRouter()
+
+@router.get("/summary", response_model=AlertSummarySchema)
+def get_alerts_summary(db: Session = Depends(get_db)):
+    """
+    Get a summary of alerts, including counts by severity and status.
+    """
+    summary = alert_crud.get_summary(db=db)
+    return summary
 
 @router.post("/", response_model=AlertSchema, status_code=201)
 def create_alert(

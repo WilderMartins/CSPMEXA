@@ -1,80 +1,83 @@
 import logging
 from typing import List, Dict, Any
 from app.schemas.input_data_schema import AnalysisRequest
+from app.schemas.asset_schema import AssetCreate
 from app.engine.policy_loader import loaded_policies
-from app.engine.generic_policy_evaluator import evaluate_resource
+from app.engine.generic_policy_evaluator import evaluate_policy
+from app.crud.crud_asset import asset_crud
+from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
 class PolicyEngine:
     def __init__(self):
-        """
-        Inicializa o motor de políticas.
-        As políticas já são carregadas na memória pelo módulo policy_loader.
-        """
         self.policies = loaded_policies
         logger.info(f"Motor de Políticas inicializado com {len(self.policies)} políticas carregadas.")
 
+    def _save_assets(self, db: Session, request_data: AnalysisRequest):
+        logger.info(f"Salvando/Atualizando {len(request_data.data)} ativos para a conta {request_data.account_id}")
+        for resource_data in request_data.data:
+            # Lida com diferentes campos de ID
+            unique_asset_id = resource_data.get("arn") or resource_data.get("asset_id") or resource_data.get("id")
+            if not unique_asset_id:
+                logger.warning(f"Recurso do tipo '{request_data.service}' sem um ID único. Pulando salvamento no inventário.")
+                continue
+
+            asset_in = AssetCreate(
+                asset_id=unique_asset_id,
+                asset_type=request_data.service,
+                name=resource_data.get("name"),
+                provider=request_data.provider,
+                account_id=request_data.account_id,
+                region=resource_data.get("region"),
+                configuration=resource_data,
+            )
+            asset_crud.create_or_update(db, obj_in=asset_in)
+        logger.info("Ativos salvos/atualizados com sucesso.")
+
     async def analyze(self, request_data: AnalysisRequest) -> List[Dict[str, Any]]:
-        """
-        Ponto de entrada principal para analisar os dados de recursos da nuvem de forma genérica.
-        Filtra as políticas relevantes e avalia cada recurso contra elas.
-        """
         generated_alerts: List[Dict[str, Any]] = []
 
         provider = request_data.provider.lower()
-        # O 'service' na requisição agora mapeia para 'resource_type' nas políticas.
-        # Ex: service 's3' -> resource_type 'bucket'
-        # Precisamos de um mapeamento ou convenção. Por enquanto, vamos assumir que o 'service'
-        # da requisição pode ser usado para encontrar o 'resource_type' relevante.
-        # Vamos simplificar e usar 'service' para filtrar.
         service = request_data.service.lower()
         data = request_data.data
         account_id = request_data.account_id
 
         if not data:
-            logger.info(f"Nenhum dado fornecido para {provider}/{service}. Análise pulada.")
             return []
 
-        # Filtra as políticas que se aplicam ao provedor e serviço da requisição.
-        # Esta lógica pode ser aprimorada para mapear 'service' para 'resource_type'.
-        relevant_policies = [
-            p for p in self.policies
-            if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service
-        ]
+        with SessionLocal() as db:
+            # 1. Salvar os ativos no inventário
+            self._save_assets(db, request_data)
 
-        if not relevant_policies:
-            logger.warning(f"Nenhuma política encontrada para {provider}/{service}. Análise pulada.")
-            return []
+            # 2. Avaliar políticas
+            relevant_policies = [p for p in self.policies if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service]
+            if relevant_policies:
+                for policy in relevant_policies:
+                    try:
+                        alerts_from_policy = evaluate_policy(policy=policy, data=data, account_id=account_id)
+                        if alerts_from_policy:
+                            # O ideal é que evaluate_policy também use a sessão do DB para criar os alertas
+                            generated_alerts.extend(alerts_from_policy)
+                    except Exception as e:
+                        logger.error(f"Erro ao avaliar a política '{policy.get('id')}': {e}", exc_info=True)
 
-        logger.info(f"Analisando {len(data)} recursos de {provider}/{service} contra {len(relevant_policies)} políticas.")
-
-        # Itera sobre cada recurso enviado nos dados da requisição
-        for resource_item in data:
-            if not isinstance(resource_item, dict):
-                try:
-                    # Tenta converter objetos Pydantic para dicts
-                    resource_dict = resource_item.model_dump(exclude_none=True)
-                except AttributeError:
-                    logger.error(f"Item de dado não é um dicionário e não pôde ser convertido: {resource_item}")
-                    continue
-            else:
-                resource_dict = resource_item
-
-            # Adiciona o account_id ao recurso para que o avaliador possa usá-lo.
-            resource_dict['account_id'] = account_id
-
-            # Para cada recurso, avalia contra todas as políticas relevantes
-            for policy in relevant_policies:
-                try:
-                    alert_data = evaluate_resource(resource=resource_dict, policy=policy)
-                    if alert_data:
-                        generated_alerts.append(alert_data)
-                except Exception as e:
-                    logger.error(f"Erro crítico ao avaliar a política '{policy.get('id')}' para o recurso '{resource_dict.get('id')}': {e}", exc_info=True)
+            # 3. Executar análise de caminhos de ataque
+            from app.services.graph_analysis_service import run_attack_path_analysis
+            run_attack_path_analysis(db)
 
         logger.info(f"Análise para {provider}/{service} concluída. {len(generated_alerts)} alertas gerados.")
         return generated_alerts
 
-# Instância global do motor
+policy_engine = PolicyEngine()
+            try:
+                alerts_from_policy = evaluate_policy(policy=policy, data=data, account_id=account_id)
+                if alerts_from_policy:
+                    generated_alerts.extend(alerts_from_policy)
+            except Exception as e:
+                logger.error(f"Erro ao avaliar a política '{policy.get('id')}': {e}", exc_info=True)
+
+        logger.info(f"Análise para {provider}/{service} concluída. {len(generated_alerts)} alertas gerados.")
+        return generated_alerts
+
 policy_engine = PolicyEngine()

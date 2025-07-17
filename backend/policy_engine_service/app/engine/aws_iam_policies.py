@@ -281,6 +281,40 @@ class IAMRoleHasInlinePolicies(IAMPolicy):
 iam_role_policies_to_evaluate.append(IAMRoleHasInlinePolicies())
 
 
+class IAMRootAccountMFAPolicy(IAMPolicy):
+    def __init__(self):
+        super().__init__(
+            policy_id="CIS-AWS-1.1",
+            title="MFA para usuário Root",
+            description="O MFA (Multi-Factor Authentication) deve estar habilitado para o usuário 'root' da conta AWS para aumentar a segurança.",
+            severity="Critical",
+            recommendation="Habilite o MFA para o usuário root no console do IAM."
+        )
+
+    def check(self, user: IAMUserDataInput, account_id: Optional[str]) -> Optional[Alert]:
+        # Esta política só precisa ser executada uma vez por conta.
+        # Ela é acionada pelo primeiro usuário na lista que contém o sumário.
+        if user.account_summary:
+            # O get_account_summary retorna 1 se MFA está habilitado, 0 se não.
+            if user.account_summary.get("AccountMFAEnabled", 0) == 0:
+                return Alert(
+                    id=str(uuid.uuid4()),
+                    resource_id=f"arn:aws:iam::{account_id}:root",
+                    resource_type="IAMRootAccount",
+                    account_id=account_id or "N/A",
+                    region="global",
+                    provider="aws",
+                    severity=self.severity,
+                    title=self.title,
+                    description=self.description,
+                    policy_id=self.policy_id,
+                    details={"summary": user.account_summary},
+                    recommendation=self.recommendation
+                )
+        return None
+
+iam_user_policies_to_evaluate.append(IAMRootAccountMFAPolicy())
+
 # --- Funções de Avaliação ---
 
 def evaluate_iam_user_policies(users_data: List[IAMUserDataInput], account_id: Optional[str]) -> List[Dict[str, Any]]:
