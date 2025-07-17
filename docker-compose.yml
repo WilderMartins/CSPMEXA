@@ -22,8 +22,7 @@ services:
       POSTGRES_DB: ${AUTH_DB_NAME:-cspmexa_db}
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
-    ports:
-      - "${AUTH_DB_EXPOSED_PORT:-5433}:5432"
+    ports: []
     networks:
       - cspmexa_net
     healthcheck:
@@ -190,35 +189,35 @@ services:
       - notification_service
       - vault-setup
 
-  # --- Frontend WebApp (com Reverse Proxy Nginx) ---
-  frontend_webapp:
+  # --- Frontend Build ---
+  frontend_build:
     profiles: ["app"]
     build:
       context: ./frontend/webapp
       dockerfile: Dockerfile
       args:
-        # A URL da API agora é um caminho relativo, pois o Nginx serve ambos.
         VITE_API_BASE_URL: /api/v1
-    container_name: cspmexa-frontend-webapp
+    volumes:
+      - ./frontend/webapp/dist:/app/dist
+
+  # --- Nginx Reverse Proxy ---
+  nginx:
+    profiles: ["app"]
+    image: nginx:latest
+    container_name: cspmexa-nginx
     restart: unless-stopped
     ports:
-      # Expõe as portas padrão de HTTP e HTTPS.
       - "80:80"
       - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+      - ./frontend/webapp/dist:/usr/share/nginx/html:ro
     networks:
       - cspmexa_net
     depends_on:
-      - api_gateway_service # Informativo, pois a conexão é do browser do usuário
-    # Para desenvolvimento com hot-reload do Vite (requer modificação do Dockerfile do frontend para usar `npm run dev`):
-    # command: npm run dev -- --host 0.0.0.0 # Para expor o Vite dev server
-    # volumes:
-    #   - ./frontend/webapp:/app # Monta todo o código
-    #   - /app/node_modules # Volume anônimo para não sobrescrever node_modules do host
-    # environment:
-    #   - NODE_ENV=development
-    #   - VITE_API_BASE_URL=http://localhost:${API_GATEWAY_PORT:-8050}/api/v1 # Para o Vite dev server
-    # ports:
-    #   - "${FRONTEND_PORT:-3000}:3000" # Porta do Vite dev server
+      - api_gateway_service
+      - frontend_build
 
   # --- Serviço de Instalação (Wizard) ---
   # Este serviço não tem perfil, então ele roda por padrão com 'docker compose up'

@@ -1,27 +1,18 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import axios from 'axios';
-import { useAuth } from '../../contexts/AuthContext';
 import { Title, Box, Skeleton } from '@mantine/core';
 import ProviderAnalysisSection from '../../components/Dashboard/ProviderAnalysisSection';
 import AlertsTable, { Alert as AlertType } from '../../components/Dashboard/AlertsTable';
 import ErrorMessage from '../../components/Common/ErrorMessage';
+import { apiClient } from '../../services/reportsService'; // Importando o apiClient centralizado
 
 const AwsDashboardPage: React.FC = () => {
   const { t } = useTranslation();
-  const auth = useAuth();
 
   const [alerts, setAlerts] = useState<AlertType[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [analysisType, setAnalysisType] = useState<string | null>(null);
-
-  const apiClient = useMemo(() => {
-    return axios.create({
-      baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-      headers: { 'Authorization': `Bearer ${auth.token}` }
-    });
-  }, [auth.token]);
 
   const handleAnalysis = async (provider: string, servicePath: string, currentAnalysisType: string) => {
     setIsLoading(true);
