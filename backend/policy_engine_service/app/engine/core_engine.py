@@ -46,16 +46,32 @@ class PolicyEngine:
         if not data:
             return []
 
-        # 1. Salvar os ativos no inventário
+
         with SessionLocal() as db:
+            # 1. Salvar os ativos no inventário
             self._save_assets(db, request_data)
 
-        # 2. Avaliar políticas
-        relevant_policies = [p for p in self.policies if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service]
-        if not relevant_policies:
-            return []
+            # 2. Avaliar políticas
+            relevant_policies = [p for p in self.policies if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service]
+            if relevant_policies:
+                for policy in relevant_policies:
+                    try:
+                        alerts_from_policy = evaluate_policy(policy=policy, data=data, account_id=account_id)
+                        if alerts_from_policy:
+                            # O ideal é que evaluate_policy também use a sessão do DB para criar os alertas
+                            generated_alerts.extend(alerts_from_policy)
+                    except Exception as e:
+                        logger.error(f"Erro ao avaliar a política '{policy.get('id')}': {e}", exc_info=True)
 
-        for policy in relevant_policies:
+            # 3. Executar análise de caminhos de ataque
+            from app.services.graph_analysis_service import run_attack_path_analysis
+            run_attack_path_analysis(db)
+
+        logger.info(f"Análise para {provider}/{service} concluída. {len(generated_alerts)} alertas gerados.")
+        return generated_alerts
+
+policy_engine = PolicyEngine()
+
             try:
                 alerts_from_policy = evaluate_policy(policy=policy, data=data, account_id=account_id)
                 if alerts_from_policy:

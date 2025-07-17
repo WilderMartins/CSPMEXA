@@ -7,6 +7,8 @@ psycopg2-binary
 hvac # Cliente Python para o Vault
 PyYAML # Para carregar políticas a partir de arquivos YAML
 python-json-logger # Para logging estruturado
+networkx # Para análise de grafos
+
 
 # Test dependencies
 pytest
