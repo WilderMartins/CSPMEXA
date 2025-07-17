@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Container, Title, Tabs } from '@mantine/core';
-// Importar os componentes para as abas (serão criados a seguir)
-// import ManageChannels from '../../components/Settings/ManageChannels';
-// import ManageRules from '../../components/Settings/ManageRules';
-
-const ManageChannels = () => <div>Gerenciamento de Canais (a ser implementado)</div>;
-const ManageRules = () => <div>Gerenciamento de Regras (a ser implementado)</div>;
+import ManageChannels from '../../components/Settings/ManageChannels';
+import ManageRules from '../../components/Settings/ManageRules';
 
 const NotificationsPage: React.FC = () => {
   const { t } = useTranslation();
