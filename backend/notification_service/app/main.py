@@ -2,7 +2,9 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.core.config import settings
+
 from app.api.v1 import notification_controller
+
 from app.core.logging_config import setup_logging
 
 # Configurar logging
@@ -45,6 +47,7 @@ app.include_router(
     prefix=settings.API_V1_STR,
     tags=["Notifications"],
 )
+
 
 if __name__ == "__main__":
     import uvicorn

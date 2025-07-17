@@ -44,9 +44,42 @@ class GoogleChatNotificationRequest(BaseModel):
     # thread_key: Optional[str] = None # Para agrupar mensagens em threads no Google Chat (futuro)
 
 # Schema de resposta genérico para endpoints de notificação
+from app.models.notification_channel_model import ChannelTypeEnum
+from app.models.notification_rule_model import CloudProviderEnum, AlertSeverityEnum
+
 class NotificationResponse(BaseModel):
     status: str # ex: "accepted", "failed"
     message: str
     recipient: Optional[Union[str, List[str]]] = None # Email, URL do webhook, ID do canal do Chat, etc.
     notification_type: str # ex: "email", "webhook", "google_chat"
     error_details: Optional[str] = None
+
+# --- Schemas para NotificationChannel ---
+class NotificationChannelBase(BaseModel):
+    name: str
+    type: ChannelTypeEnum
+    configuration: str
+
+class NotificationChannelCreate(NotificationChannelBase):
+    pass
+
+class NotificationChannelSchema(NotificationChannelBase):
+    id: int
+    class Config:
+        from_attributes = True
+
+# --- Schemas para NotificationRule ---
+class NotificationRuleBase(BaseModel):
+    name: str
+    provider: CloudProviderEnum
+    severity: AlertSeverityEnum
+    channel_id: int
+
+class NotificationRuleCreate(NotificationRuleBase):
+    pass
+
+class NotificationRuleSchema(NotificationRuleBase):
+    id: int
+    channel: NotificationChannelSchema # Incluir os detalhes do canal
+    class Config:
+        from_attributes = True

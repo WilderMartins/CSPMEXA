@@ -12,42 +12,35 @@ logging.basicConfig(level=logging.INFO)
 # Cache de clientes EC2 por região
 ec2_clients_cache = {}
 
-def get_ec2_client(region_name: str):
-    if region_name not in ec2_clients_cache:
-        try:
-            ec2_clients_cache[region_name] = boto3.client("ec2", region_name=region_name)
-        except (NoCredentialsError, PartialCredentialsError) as e:
-            logger.error(f"AWS credentials not found or incomplete for EC2 in region {region_name}: {e}")
-            raise HTTPException(status_code=500, detail=f"AWS credentials not configured for EC2 in {region_name}.") from e
-        except Exception as e:
-            logger.error(f"Error creating EC2 client for region {region_name}: {e}")
-            raise HTTPException(status_code=500, detail=f"Error creating EC2 client for {region_name}: {str(e)}") from e
-    return ec2_clients_cache[region_name]
-
-async def get_all_regions() -> List[str]:
-    """Obtém todas as regiões AWS disponíveis e habilitadas para a conta."""
+def get_ec2_client(region_name: str, credentials: Dict[str, Any]):
+    """Cria um cliente Boto3 para o EC2 com as credenciais fornecidas."""
     try:
-        # Um cliente EC2 de qualquer região (ou o default) pode chamar describe_regions
-        # Usar a região padrão definida nas configurações.
-        client = get_ec2_client(settings.AWS_REGION_NAME)
-        response = client.describe_regions(AllRegions=False) # AllRegions=False para apenas as habilitadas
-        return [region["RegionName"] for region in response["Regions"]]
-    except (NoCredentialsError, PartialCredentialsError):
-        logger.error("AWS credentials not found or incomplete when describing regions.")
-        raise HTTPException(status_code=500, detail="AWS credentials not configured for describe_regions.")
-    except ClientError as e:
-        logger.error(f"ClientError describing regions: {e.response['Error']['Message']}")
-        raise HTTPException(status_code=500, detail=f"ClientError describing regions: {e.response['Error']['Message']}")
+        return boto3.client(
+            "ec2",
+            region_name=region_name,
+            aws_access_key_id=credentials.get('aws_access_key_id'),
+            aws_secret_access_key=credentials.get('aws_secret_access_key'),
+            aws_session_token=credentials.get('aws_session_token'),
+        )
+    except (NoCredentialsError, PartialCredentialsError) as e:
+        raise HTTPException(status_code=403, detail=f"Credenciais AWS para EC2 inválidas: {e}")
     except Exception as e:
-        logger.error(f"Unexpected error describing regions: {e}")
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred while describing regions: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar cliente EC2: {e}")
 
+async def get_all_regions(credentials: Dict[str, Any]) -> List[str]:
+    """Obtém todas as regiões AWS disponíveis usando as credenciais fornecidas."""
+    try:
+        client = get_ec2_client(settings.AWS_REGION_NAME, credentials)
+        return [region["RegionName"] for region in client.describe_regions()['Regions']]
+    except Exception as e:
+        logger.error(f"Erro ao listar regiões AWS: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao listar regiões AWS.")
 
-async def describe_ec2_instances(region_name: str) -> List[Ec2InstanceData]:
+async def describe_ec2_instances(region_name: str, credentials: Dict[str, Any]) -> List[Ec2InstanceData]:
     """
     Descreve todas as instâncias EC2 em uma região específica.
     """
-    ec2_client = get_ec2_client(region_name)
+    ec2_client = get_ec2_client(region_name, credentials)
     instances_data: List[Ec2InstanceData] = []
 
     try:
@@ -102,11 +95,11 @@ async def describe_ec2_instances(region_name: str) -> List[Ec2InstanceData]:
 
     return instances_data
 
-async def describe_security_groups(region_name: str) -> List[SecurityGroup]:
+async def describe_security_groups(region_name: str, credentials: Dict[str, Any]) -> List[SecurityGroup]:
     """
     Descreve todos os Security Groups em uma região específica.
     """
-    ec2_client = get_ec2_client(region_name)
+    ec2_client = get_ec2_client(region_name, credentials)
     sg_data: List[SecurityGroup] = []
 
     try:
@@ -143,26 +136,26 @@ async def describe_security_groups(region_name: str) -> List[SecurityGroup]:
     return sg_data
 
 
-async def get_ec2_instance_data_all_regions() -> List[Ec2InstanceData]:
+async def get_ec2_instance_data_all_regions(credentials: Dict[str, Any]) -> List[Ec2InstanceData]:
     """Coleta dados de instâncias EC2 de todas as regiões habilitadas."""
     all_instances: List[Ec2InstanceData] = []
-    regions = await get_all_regions() # Pode levantar HTTPException
+    regions = await get_all_regions(credentials)
 
     for region in regions:
         logger.info(f"Fetching EC2 instance data for region: {region}...")
-        instances_in_region = await describe_ec2_instances(region)
+        instances_in_region = await describe_ec2_instances(region, credentials)
         all_instances.extend(instances_in_region)
     return all_instances
 
-async def get_security_group_data_all_regions() -> List[SecurityGroup]:
+async def get_security_group_data_all_regions(credentials: Dict[str, Any]) -> List[SecurityGroup]:
     """Coleta dados de Security Groups de todas as regiões habilitadas."""
     all_sgs: List[SecurityGroup] = []
-    regions = await get_all_regions() # Pode levantar HTTPException
+    regions = await get_all_regions(credentials)
 
     for region in regions:
         logger.info(f"Fetching EC2 Security Group data for region: {region}...")
         try:
-            sgs_in_region = await describe_security_groups(region) # Pode levantar HTTPException
+            sgs_in_region = await describe_security_groups(region, credentials)
             all_sgs.extend(sgs_in_region)
         except HTTPException as e:
             # Se uma região falhar, podemos decidir continuar e coletar de outras,

@@ -5,8 +5,12 @@ import './index.css'; // Estilos globais
 import { BrowserRouter } from 'react-router-dom';
 import './i18n'; // Importa a configuração do i18next
 import { AuthProvider } from './contexts/AuthContext';
+import { AccountProvider } from './contexts/AccountContext';
 import { MantineProvider } from '@mantine/core'; // Importar MantineProvider
+import { Notifications } from '@mantine/notifications';
 import '@mantine/core/styles.css'; // Importar estilos core da Mantine
+import '@mantine/notifications/styles.css';
+
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -30,10 +34,13 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       }}
       defaultColorScheme="auto"
     >
+      <Notifications />
       <Suspense fallback="Loading..."> {/* Fallback enquanto as traduções carregam */}
         <BrowserRouter>
           <AuthProvider>
-            <App />
+            <AccountProvider>
+              <App />
+            </AccountProvider>
           </AuthProvider>
         </BrowserRouter>
       </Suspense>

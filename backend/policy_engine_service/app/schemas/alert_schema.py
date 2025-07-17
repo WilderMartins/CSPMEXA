@@ -30,6 +30,7 @@ class AlertBase(BaseModel):
     # status: AlertStatusEnum = Field(AlertStatusEnum.OPEN, description="Status atual do alerta") # Status will be handled by DB default or on create
     details: Optional[Dict[str, Any]] = Field(None, description="Detalhes adicionais específicos do alerta")
     recommendation: Optional[str] = Field(None, description="Sugestão de remediação")
+    remediation_guide: Optional[str] = Field(None, description="Guia passo-a-passo para remediação, em Markdown.")
 
 class AlertCreate(AlertBase):
     # Potentially add fields specific to creation if any, e.g. if status can be set at creation
@@ -59,3 +60,9 @@ class AlertUpdate(BaseModel):
 
     class Config:
         use_enum_values = True
+
+# Schema for the alert summary
+class AlertSummarySchema(BaseModel):
+    total_alerts: int
+    by_severity: Dict[str, int]
+    by_status: Dict[str, int]
