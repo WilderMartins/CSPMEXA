@@ -195,17 +195,7 @@ async def _orchestrate_aws_analysis(
     auth_token: str
 ) -> List[Dict[str, Any]]:
     """
-
-
-    **Orquestra a Análise de Segurança de Buckets S3 (AWS)**
-
-    Este endpoint executa um fluxo completo de análise de segurança para os buckets S3:
-    1.  **Coleta**: Chama o `collector_service` para obter a configuração atual de todos os buckets S3.
-    2.  **Análise**: Envia os dados coletados para o `policy_engine_service`.
-    3.  **Resultado**: O `policy_engine_service` avalia os dados contra um conjunto de políticas de segurança
-        (ex: buckets públicos, logging desabilitado, etc.) e retorna uma lista de alertas para as
-        más configurações encontradas.
-
+    Função genérica para orquestrar a coleta e análise de serviços AWS.
     """
     # 1. Obter credenciais para a conta
     credentials = await get_credentials_for_account(linked_account_id, auth_token)

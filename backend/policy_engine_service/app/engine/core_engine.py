@@ -1,8 +1,11 @@
 import logging
 from typing import List, Dict, Any
 from app.schemas.input_data_schema import AnalysisRequest
+from app.schemas.asset_schema import AssetCreate
 from app.engine.policy_loader import loaded_policies
 from app.engine.generic_policy_evaluator import evaluate_policy
+from app.crud.crud_asset import asset_crud
+from app.db.session import SessionLocal
 
 logger = logging.getLogger(__name__)
 
@@ -10,6 +13,27 @@ class PolicyEngine:
     def __init__(self):
         self.policies = loaded_policies
         logger.info(f"Motor de Políticas inicializado com {len(self.policies)} políticas carregadas.")
+
+    def _save_assets(self, db: Session, request_data: AnalysisRequest):
+        logger.info(f"Salvando/Atualizando {len(request_data.data)} ativos para a conta {request_data.account_id}")
+        for resource_data in request_data.data:
+            # Lida com diferentes campos de ID
+            unique_asset_id = resource_data.get("arn") or resource_data.get("asset_id") or resource_data.get("id")
+            if not unique_asset_id:
+                logger.warning(f"Recurso do tipo '{request_data.service}' sem um ID único. Pulando salvamento no inventário.")
+                continue
+
+            asset_in = AssetCreate(
+                asset_id=unique_asset_id,
+                asset_type=request_data.service,
+                name=resource_data.get("name"),
+                provider=request_data.provider,
+                account_id=request_data.account_id,
+                region=resource_data.get("region"),
+                configuration=resource_data,
+            )
+            asset_crud.create_or_update(db, obj_in=asset_in)
+        logger.info("Ativos salvos/atualizados com sucesso.")
 
     async def analyze(self, request_data: AnalysisRequest) -> List[Dict[str, Any]]:
         generated_alerts: List[Dict[str, Any]] = []
@@ -20,19 +44,16 @@ class PolicyEngine:
         account_id = request_data.account_id
 
         if not data:
-            logger.info(f"Nenhum dado fornecido para {provider}/{service}. Análise pulada.")
             return []
 
-        relevant_policies = [
-            p for p in self.policies
-            if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service
-        ]
+        # 1. Salvar os ativos no inventário
+        with SessionLocal() as db:
+            self._save_assets(db, request_data)
 
+        # 2. Avaliar políticas
+        relevant_policies = [p for p in self.policies if p.get('provider', '').lower() == provider and p.get('service', '').lower() == service]
         if not relevant_policies:
-            logger.warning(f"Nenhuma política encontrada para {provider}/{service}. Análise pulada.")
             return []
-
-        logger.info(f"Analisando dados de {provider}/{service} contra {len(relevant_policies)} políticas.")
 
         for policy in relevant_policies:
             try:
@@ -40,7 +61,7 @@ class PolicyEngine:
                 if alerts_from_policy:
                     generated_alerts.extend(alerts_from_policy)
             except Exception as e:
-                logger.error(f"Erro crítico ao avaliar a política '{policy.get('id')}': {e}", exc_info=True)
+                logger.error(f"Erro ao avaliar a política '{policy.get('id')}': {e}", exc_info=True)
 
         logger.info(f"Análise para {provider}/{service} concluída. {len(generated_alerts)} alertas gerados.")
         return generated_alerts

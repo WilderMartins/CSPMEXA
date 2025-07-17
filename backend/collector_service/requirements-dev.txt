@@ -2,4 +2,5 @@
 pytest
 pytest-asyncio
 httpx
+moto[s3,ec2,iam,cloudtrail] # Adicionar moto com os serviços que vamos simular
 boto3

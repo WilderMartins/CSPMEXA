@@ -8,17 +8,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import logging
-
-logger = logging.getLogger(__name__)
-
 class CredentialsService:
     def __init__(self):
         self.vault_client: Optional[hvac.Client] = get_vault_client()
         if not self.vault_client:
-
-            logger.warning("Não foi possível conectar ao Vault na inicialização. O serviço de credenciais tentará se reconectar se necessário.")
-
+            logger.warning("Não foi possível conectar ao Vault na inicialização.")
 
     def save_credentials_for_account(
         self, db: Session, *, account_in: LinkedAccountCreate
@@ -29,9 +23,19 @@ class CredentialsService:
         if not self.vault_client:
             raise ConnectionError("A conexão com o Vault não está disponível.")
 
-        path = f"secret/data/{provider}_credentials"
-        print(f"Salvando credenciais no Vault em: {path}")
+        # Verificar se já existe uma conta com o mesmo account_id
+        db_account = linked_account_crud.get_by_account_id(db, account_id=account_in.account_id)
 
+        if db_account:
+            # Atualiza o nome se necessário
+            update_schema = LinkedAccountUpdate(name=account_in.name)
+            linked_account = linked_account_crud.update(db, db_obj=db_account, obj_in=update_schema)
+        else:
+            # Cria a nova conta
+            linked_account = linked_account_crud.create(db, obj_in=account_in)
+
+        # Salva as credenciais no Vault usando o ID da conta como parte do caminho
+        vault_path = f"secret/credentials/{linked_account.id}"
         try:
             self.vault_client.secrets.kv.v2.create_or_update_secret(
                 path=vault_path,
@@ -53,6 +57,7 @@ class CredentialsService:
         if not self.vault_client:
             raise ConnectionError("A conexão com o Vault não está disponível.")
 
+        vault_path = f"secret/credentials/{linked_account_id}"
         try:
             response = self.vault_client.secrets.kv.v2.read_secret_version(path=vault_path)
             return response['data']['data']
@@ -70,9 +75,8 @@ class CredentialsService:
         if not self.vault_client:
             raise ConnectionError("A conexão com o Vault não está disponível.")
 
-        path = f"{provider}_credentials"
-        print(f"Deletando credenciais do Vault em: {path}")
-
+        # Deleta as credenciais do Vault
+        vault_path = f"secret/credentials/{linked_account_id}"
         try:
             self.vault_client.secrets.kv.v2.delete_metadata_and_all_versions(path=vault_path)
             logger.info(f"Credenciais deletadas do Vault para a conta ID: {linked_account_id}")
