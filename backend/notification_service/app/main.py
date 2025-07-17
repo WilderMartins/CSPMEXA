@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-from app.api.v1 import notification_controller
+from app.api.v1 import notification_controller, management_controller
 from app.core.logging_config import setup_logging
 
 # Configurar logging
@@ -44,6 +44,18 @@ app.include_router(
     notification_controller.router,
     prefix=settings.API_V1_STR,
     tags=["Notifications"],
+)
+
+app.include_router(
+    management_controller.channels_router,
+    prefix=f"{settings.API_V1_STR}/management/channels",
+    tags=["Management - Channels"],
+)
+
+app.include_router(
+    management_controller.rules_router,
+    prefix=f"{settings.API_V1_STR}/management/rules",
+    tags=["Management - Rules"],
 )
 
 if __name__ == "__main__":

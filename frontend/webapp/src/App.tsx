@@ -17,6 +17,7 @@ const InsightsPage = lazy(() => import('./pages/InsightsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const CredentialsPage = lazy(() => import('./pages/Admin/CredentialsPage')); // Adicionado
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
+const NotificationsPage = lazy(() => import('./pages/Admin/NotificationsPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -180,6 +181,11 @@ function App() {
               <Route path="/settings/credentials" element={
                   <ProtectedRoute requiredRole="Administrator">
                     <CredentialsPage />
+                  </ProtectedRoute>
+                } />
+               <Route path="/settings/notifications" element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <NotificationsPage />
                   </ProtectedRoute>
                 } />
               <Route path="/access-denied" element={<AccessDeniedPage />} />

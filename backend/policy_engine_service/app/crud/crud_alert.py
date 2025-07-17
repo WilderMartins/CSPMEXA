@@ -237,10 +237,8 @@ async def create_alert_and_notify(db: Session, *, alert_in: AlertCreate) -> Aler
         asyncio.create_task(notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification))
 
 
-        # Se precisarmos garantir que foi enviado antes de retornar (não recomendado para APIs síncronas):
-        # await notification_client.send_critical_alert_notification(alert_schema_for_notification)
-        # await notification_client.send_critical_alert_webhook_notification(alert_schema_for_notification)
-        # await notification_client.send_critical_alert_google_chat_notification(alert_schema_for_notification)
+    # Disparar a verificação de regras de notificação
+    asyncio.create_task(notification_client.trigger_notifications_for_alert(alert_schema_for_notification))
 
     return created_alert_model
 
