@@ -8,6 +8,7 @@ import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as M
 import { useDisclosure } from '@mantine/hooks';
 import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
 import { useAuth } from './contexts/AuthContext';
+import { useAccount } from './contexts/AccountContext';
 
 // Lazy load das páginas principais
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -18,6 +19,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const CredentialsPage = lazy(() => import('./pages/Admin/CredentialsPage')); // Adicionado
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
 const NotificationsPage = lazy(() => import('./pages/Admin/NotificationsPage'));
+const LinkedAccountsPage = lazy(() => import('./pages/Admin/LinkedAccountsPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -58,6 +60,7 @@ const OAuthCallbackPage = () => {
 function App() {
   const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
   const auth = useAuth();
+  const { accounts, selectedAccountId, setSelectedAccountId } = useAccount();
   const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
@@ -142,9 +145,18 @@ function App() {
 
           <Group>
              {auth.isAuthenticated && (
+              <>
+                <Select
+                  placeholder="Selecione uma conta"
+                  value={selectedAccountId ? String(selectedAccountId) : null}
+                  onChange={(value) => setSelectedAccountId(value ? Number(value) : null)}
+                  data={accounts.map(acc => ({ value: String(acc.id), label: acc.name }))}
+                  disabled={accounts.length === 0}
+                />
               <MantineButton variant="light" onClick={() => auth.logout()}>
                 {t('header.btnLogout')}
               </MantineButton>
+              </>
             )}
             <Group gap="xs" ml="lg">
               <MantineButton variant={i18n.language === 'en' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('en')}>EN</MantineButton>
@@ -186,6 +198,11 @@ function App() {
                <Route path="/settings/notifications" element={
                   <ProtectedRoute requiredRole="Administrator">
                     <NotificationsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings/accounts" element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <LinkedAccountsPage />
                   </ProtectedRoute>
                 } />
               <Route path="/access-denied" element={<AccessDeniedPage />} />
