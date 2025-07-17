@@ -76,25 +76,16 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
 
 ## Instalação Rápida
 
-A instalação do CSPMEXA é simplificada através de Docker Compose e um script de inicialização.
+A instalação do CSPMEXA foi projetada para ser simples e rápida, mesmo para usuários sem experiência técnica, graças ao nosso assistente de instalação.
 
 Para instruções detalhadas e passo a passo, por favor, consulte o nosso guia de instalação:
 
 ➡️ **[Guia de Instalação (INSTALL.md)](./INSTALL.md)**
 
 O guia irá orientá-lo através do processo de:
-1.  Instalar os pré-requisitos (Docker, Git).
-2.  Clonar o projeto.
-3.  Executar o script `init.sh` que gerencia a configuração inicial e a inicialização dos serviços.
-
-## Melhorias de Segurança e Boas Práticas
-
-Este projeto foi recentemente refatorado para incorporar várias melhorias de segurança e boas práticas de desenvolvimento, incluindo:
-
-*   **Gestão de Segredos com Vault**: A autenticação dos microsserviços com o Vault foi aprimorada para usar o método **AppRole**, garantindo que cada serviço tenha acesso apenas aos segredos estritamente necessários.
-*   **Rate Limiting**: As rotas de autenticação agora possuem um limite de taxa de requisições para proteger contra ataques de força bruta.
-*   **Logging Estruturado**: Todos os microsserviços agora geram logs em formato **JSON**, facilitando a integração com plataformas de monitoramento e análise de logs.
-*   **Imagens Docker Otimizadas**: O Dockerfile do frontend foi otimizado usando builds multi-stage para criar uma imagem de produção menor e mais segura.
+1.  Preparar seu servidor com os pré-requisitos (Docker).
+2.  Baixar o projeto.
+3.  Executar o assistente de instalação web que configurará tudo para você.
 
 ### Implantação em Produção (Kubernetes)
 

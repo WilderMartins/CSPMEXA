@@ -1,28 +1,49 @@
-# Guia de Instalação do CSPMEXA (via Docker Compose)
+# Guia de Instalação Simplificado do CSPMEXA (via Docker Compose)
 
-**Nota:** Este guia descreve o método de instalação usando Docker Compose, ideal para ambientes de desenvolvimento, testes ou implantações de pequena escala. Para implantações de produção, consulte o nosso **[Guia de Implantação em Kubernetes](./kubernetes/README.md)**.
+**Nota:** Este guia descreve o método de instalação mais simples, usando Docker Compose. É ideal para ambientes de desenvolvimento, testes ou implantações de pequena escala em uma única máquina. Para implantações de produção escaláveis e de alta disponibilidade, consulte o nosso **[Guia de Implantação em Kubernetes](./kubernetes/README.md)**.
 
 ---
 
-Bem-vindo ao guia de instalação do CSPMEXA!
+Bem-vindo ao guia de instalação do CSPMEXA! Este guia foi projetado para ser o mais simples possível, permitindo que qualquer pessoa, mesmo sem conhecimento técnico profundo, possa instalar e configurar o sistema.
 
-## Passo 1: Pré-requisitos
+## Passo 1: Preparando o Servidor
 
-Antes de começar, você precisa de um servidor (ou máquina local) com um sistema operacional Linux e as seguintes ferramentas instaladas:
+Antes de começar, você precisa de um servidor (ou máquina local) com um sistema operacional Linux. Os comandos abaixo são para **Ubuntu/Debian**. Se você usa outro sistema, os comandos podem variar um pouco.
 
-*   **Docker e Docker Compose**: Usados para orquestrar os contêineres da aplicação.
-*   **Git**: Para clonar o repositório do projeto.
+### 1.1 - Instalando o Docker
 
-### 1.1 - Instalando o Docker e Docker Compose
+O Docker é a tecnologia que usamos para rodar o CSPMEXA de forma isolada e segura. Para instalá-lo, abra o terminal do seu servidor e copie e cole os comandos abaixo, um de cada vez.
 
-Se você ainda não tem o Docker instalado, siga o [guia oficial do Docker](https://docs.docker.com/engine/install/) para o seu sistema operacional. A instalação geralmente inclui o `docker-compose`.
-
-Para garantir que o Docker foi instalado corretamente, rode os comandos:
 ```bash
-docker --version
-docker-compose --version
+# Atualiza a lista de pacotes do seu servidor
+sudo apt-get update
+
+# Instala pacotes necessários para permitir que o 'apt' use um repositório sobre HTTPS
+sudo apt-get install -y ca-certificates curl gnupg
+
+# Adiciona a chave GPG oficial do Docker
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Configura o repositório do Docker
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Atualiza a lista de pacotes novamente, agora com o Docker
+sudo apt-get update
+
+# Instala o Docker Engine, CLI, Containerd e o plugin do Docker Compose
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
-Você deverá ver as versões instaladas.
+
+Para garantir que o Docker foi instalado corretamente, rode o comando:
+```bash
+sudo docker --version
+```
+Você deverá ver a versão do Docker que foi instalada.
 
 ### 1.2 - Adicionando seu usuário ao grupo do Docker (Opcional, mas recomendado)
 
@@ -32,84 +53,45 @@ Para evitar ter que digitar `sudo` toda vez que usar o Docker, adicione seu usu�
 sudo usermod -aG docker ${USER}
 ```
 
-**Importante:** Após rodar este comando, você precisa **fazer logout e login novamente** para que a alteração tenha efeito.
+**Importante:** Após rodar este comando, você precisa **fazer logout e login novamente** no servidor para que a alteração tenha efeito.
 
-## Passo 2: Baixando e Configurando o CSPMEXA
+## Passo 2: Baixando o CSPMEXA
 
-Agora que os pré-requisitos estão prontos, vamos baixar e configurar a aplicação.
-
-### 2.1 - Clonar o Repositório
+Agora que o Docker está pronto, vamos baixar o código do CSPMEXA.
 
 ```bash
+# Clone o repositório do projeto para o seu servidor
 git clone https://github.com/seu-usuario/seu-repositorio.git cspmexa
-# NOTA: Substitua a URL acima pela URL correta do repositório.
+# NOTA: Substitua a URL acima pela URL correta do repositório do projeto.
+
+# Entre na pasta do projeto
 cd cspmexa
 ```
 
-### 2.2 - Executar o Script de Inicialização
+## Passo 3: Iniciando o Assistente de Instalação
 
-Nós fornecemos um script para facilitar a configuração e inicialização da aplicação.
+A parte complicada já passou! Agora, vamos usar nosso assistente de instalação para configurar tudo de forma fácil e rápida.
 
-Rode o seguinte comando na raiz do projeto:
+Rode o seguinte comando para iniciar o assistente:
+
 ```bash
-bash init.sh
+# Este comando irá construir e iniciar o serviço de instalação.
+# Por padrão, apenas o assistente será iniciado.
+# Pode levar alguns minutos na primeira vez.
+docker compose up --build
 ```
 
-O que este script fará:
+Após o comando terminar, abra seu navegador de internet e acesse o seguinte endereço:
 
-1.  **Verificará se o Docker está em execução.**
-2.  **Criará o arquivo `.env`**: Se o arquivo `.env` não existir, ele será criado a partir do `.env.example`.
-3.  **Iniciará o Vault**: O script iniciará o Vault e um serviço de setup que irá:
-    *   Criar os segredos iniciais.
-    *   Configurar as políticas de segurança.
-    *   Gerar credenciais de acesso seguras (AppRole) para cada microsserviço.
+`http://SEU_ENDERECO_DE_IP:8080`
 
-### 2.3 - Configurar as Credenciais (Ação Manual Necessária)
+(Substitua `SEU_ENDERECO_DE_IP` pelo endereço de IP do seu servidor).
 
-Após a etapa anterior, o script irá pausar e exibir uma mensagem importante. **Você precisa configurar as credenciais de acesso ao Vault.**
+Você será recebido pelo nosso assistente de instalação passo a passo. Siga as instruções na tela para:
+1.  Configurar o banco de dados.
+2.  Definir as configurações gerais do sistema.
+3.  (Opcional) Adicionar credenciais para seus provedores de nuvem.
 
-1.  **Abra um novo terminal** e execute o seguinte comando para ver as credenciais que foram geradas:
-    ```bash
-    docker-compose logs vault-setup
-    ```
-2.  Você verá um output similar a este:
-    ```
-    --------------------------------------------------
-    Credenciais AppRole geradas. Adicione ao seu .env:
+O assistente irá gerar todas as chaves e arquivos de configuração necessários automaticamente. Ao final do processo, ele irá iniciar todos os serviços do CSPMEXA para você.
 
-    # Credenciais para o auth_service
-    AUTH_SERVICE_VAULT_ROLE_ID=...
-    AUTH_SERVICE_VAULT_SECRET_ID=...
-
-    # Credenciais para o collector_service
-    COLLECTOR_SERVICE_VAULT_ROLE_ID=...
-    COLLECTOR_SERVICE_VAULT_SECRET_ID=...
-    ...
-    --------------------------------------------------
-    ```
-3.  **Copie** estas variáveis e **cole-as** no final do seu arquivo `.env`.
-4.  **Volte para o terminal** onde o `init.sh` está pausado e pressione **[Enter]** para continuar.
-
-## Passo 3: Iniciar a Aplicação
-
-Depois de configurar o `.env` e pressionar [Enter], o script `init.sh` iniciará todos os outros serviços da aplicação em modo detached (em segundo plano).
-
-Você pode acompanhar os logs de todos os serviços com o comando:
-```bash
-docker-compose logs -f
-```
-
-A aplicação estará acessível no seu navegador em `http://localhost` ou `http://IP_DO_SEU_SERVIDOR`.
-
-E é isso! Seu sistema CSPMEXA está instalado e pronto para uso.
-
-## Gerenciando os Serviços
-
-*   **Para parar todos os serviços:**
-    ```bash
-    docker-compose down
-    ```
-*   **Para iniciar os serviços novamente (após a primeira inicialização):**
-    ```bash
-    docker-compose up -d app
-    ```
+E é isso! Seu sistema CSPMEXA estará instalado e pronto para uso.
