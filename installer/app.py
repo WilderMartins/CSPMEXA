@@ -25,6 +25,13 @@ def install():
     # Coleta os dados do formulário
     form_data = request.form.to_dict()
 
+    # --- Geração de Segredos ---
+    # Gera uma senha forte para o banco de dados se não for fornecida
+    db_password = form_data.get('AUTH_DB_PASSWORD')
+    if not db_password:
+        db_password = secrets.token_urlsafe(16)
+        flash("Uma nova senha segura para o banco de dados foi gerada.", "info")
+
     # Gera a chave secreta JWT, que é crucial para a segurança
     jwt_secret_key = secrets.token_hex(32)
 
@@ -34,7 +41,7 @@ def install():
 
 # --- Configurações de Banco de Dados (PostgreSQL) ---
 AUTH_DB_USER={form_data.get('AUTH_DB_USER', 'cspmexa_user')}
-AUTH_DB_PASSWORD={form_data.get('AUTH_DB_PASSWORD')}
+AUTH_DB_PASSWORD={db_password}
 AUTH_DB_NAME={form_data.get('AUTH_DB_NAME', 'cspmexa_db')}
 AUTH_DB_EXPOSED_PORT=5433
 

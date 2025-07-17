@@ -7,7 +7,7 @@ import axios from 'axios';
  * Para este exemplo, vamos simular a sua existência ou criar uma nova.
  * Em um projeto real, você provavelmente usaria a mesma instância do AuthContext ou uma similar.
  */
-const apiClient = axios.create({
+export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   // O token de autenticação seria adicionado por um interceptor
   // ou buscado do AuthContext e adicionado aos headers aqui, se necessário.

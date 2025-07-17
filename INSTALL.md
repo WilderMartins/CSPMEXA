@@ -78,12 +78,21 @@ Rode o seguinte comando para iniciar o assistente:
 # Este comando irá construir e iniciar o serviço de instalação.
 # Por padrão, apenas o assistente será iniciado.
 # Pode levar alguns minutos na primeira vez.
-docker compose up --build
+# É recomendado executar este comando com sudo para evitar problemas de permissão com o Docker.
+sudo docker compose up --build
 ```
 
 Após o comando terminar, abra seu navegador de internet e acesse o seguinte endereço:
 
 `http://SEU_ENDERECO_DE_IP:8080`
+
+**Nota sobre permissões:** Se você encontrar erros de "permission denied" ao executar o comando `docker compose`, pode ser necessário adicionar seu usuário ao grupo do Docker. Você pode fazer isso com o seguinte comando:
+
+```bash
+sudo usermod -aG docker ${USER}
+```
+
+Lembre-se de fazer logout e login novamente para que as alterações entrem em vigor. Se o problema persistir, executar o comando com `sudo` deve resolver o problema.
 
 (Substitua `SEU_ENDERECO_DE_IP` pelo endereço de IP do seu servidor).
 

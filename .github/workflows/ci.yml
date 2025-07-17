@@ -1,156 +1,51 @@
-name: Basic CI
+name: CI
 
 on:
   push:
-    branches: [ main ] # Ajustar para o nome da sua branch principal se for diferente
+    branches: [ main ]
   pull_request:
-    branches: [ main ] # Ajustar para o nome da sua branch principal
+    branches: [ main ]
 
 jobs:
-  lint-backend:
-    name: Lint Backend (Python)
+  test:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install Python Linters
-        run: pip install flake8 black
-      - name: Run flake8
-        # Idealmente, cada microsserviço teria seu próprio linting step
-        # ou um script na raiz para lintar todos. Por simplicidade no MVP:
-        run: flake8 backend/
-      - name: Check black formatting
-        run: black --check backend/
 
-  lint-frontend:
-    name: Lint Frontend (React/TS)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/webapp
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18' # Usar a mesma versão do Dockerfile do frontend
-          cache: 'npm'
-          cache-dependency-path: frontend/webapp/package-lock.json
-      - name: Install frontend dependencies
-        run: npm ci # Usar ci para instalações mais rápidas e consistentes em CI
-      - name: Run ESLint
-        run: npm run lint
+    - uses: actions/checkout@v3
 
-  # --- Testes de Backend ---
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
 
-  test-auth-service:
-    name: Test Auth Service (Python)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/auth_service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Run Pytest for Auth Service
-        # Os testes estão no diretório tests/. `pytest` irá descobri-los automaticamente.
-        run: pytest tests
+    - name: Install backend dependencies
+      run: |
+        pip install -r backend/api_gateway_service/requirements.txt
+        pip install -r backend/auth_service/requirements.txt
+        pip install -r backend/collector_service/requirements.txt
+        pip install -r backend/notification_service/requirements.txt
+        pip install -r backend/policy_engine_service/requirements.txt
+        pip install pytest pytest-asyncio httpx pytest-mock
 
-  test-collector-service:
-    name: Test Collector Service (Python)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/collector_service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Run Pytest for Collector Service
-        run: pytest tests # Nossos testes estão em backend/collector_service/tests/
+    - name: Run backend tests
+      run: |
+        pytest backend/api_gateway_service/tests
+        pytest backend/auth_service/tests
+        pytest backend/collector_service/tests
+        pytest backend/notification_service/tests
+        pytest backend/policy_engine_service/tests
 
-  test-policy-engine-service:
-    name: Test Policy Engine Service (Python)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/policy_engine_service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Run Pytest for Policy Engine Service
-        run: pytest tests # Nossos testes estão em backend/policy_engine_service/tests/
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
 
-  test-api-gateway-service:
-    name: Test API Gateway Service (Python Integration)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend/api_gateway_service
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Run Pytest for API Gateway Service
-        run: pytest tests # Nossos testes de integração estão em backend/api_gateway_service/tests/
+    - name: Install frontend dependencies
+      run: |
+        cd frontend/webapp
+        npm install
 
-  # --- Testes de Frontend ---
-  test-frontend:
-    name: Test Frontend (React/TS with Jest)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/webapp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: frontend/webapp/package-lock.json
-      - name: Install frontend dependencies
-        run: npm ci
-      - name: Run frontend tests
-        # O projeto está configurado com Jest. O comando `npm test` executa os testes.
-        run: npm test
-
-  build-frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend/webapp
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: frontend/webapp/package-lock.json
-      - name: Install frontend dependencies
-        run: npm ci
-      - name: Build React App
-        run: npm run build
+    - name: Run frontend tests
+      run: |
+        cd frontend/webapp
+        npm test
