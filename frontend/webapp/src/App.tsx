@@ -8,7 +8,7 @@ import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as M
 import { useDisclosure } from '@mantine/hooks';
 import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
 import { useAuth } from './contexts/AuthContext';
-import { useAccount } from './contexts/AccountContext';
+import { useAppStore } from './stores/store';
 
 // Lazy load das páginas principais
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -60,10 +60,20 @@ const OAuthCallbackPage = () => {
 };
 
 
+import { api } from './services/api';
+
 function App() {
   const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
   const auth = useAuth();
-  const { accounts, selectedAccountId, setSelectedAccountId } = useAccount();
+  const { selectedAccountId, setSelectedAccountId } = useAppStore();
+  // A lógica para buscar as contas agora precisa ser movida para dentro do App
+  // ou para um hook personalizado. Por simplicidade, vamos movê-la para cá.
+  const [accounts, setAccounts] = React.useState([]);
+  React.useEffect(() => {
+    if (auth.isAuthenticated) {
+      api.get('/accounts').then(response => setAccounts(response.data));
+    }
+  }, [auth.isAuthenticated]);
   const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {

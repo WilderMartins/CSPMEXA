@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Select, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack } from '@mantine/core'; // Importar da Mantine
+import { Table, Button, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack, Box } from '@mantine/core';
 import { IconSelector, IconChevronDown, IconChevronUp } from '@tabler/icons-react'; // Ícones para ordenação
 
 // REMOVER SIMULAÇÕES DE COMPONENTES UI (Button, Select, Modal) - eles virão da Mantine
@@ -222,36 +222,28 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     </Table.Tr>
   ));
 
+import AlertsTableFilters from './AlertsTableFilters';
+
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setCurrentPage(1);
+  };
+
   return (
     <div style={{ marginTop: rem(32) }}> {/* rem(32) é xl na Mantine */}
       <Text component="h3" size="lg" fw={600} mb="md">{title}</Text>
 
-      <Group mb="md">
-        <Select
-          label={t('alertFilters.severity')}
-          placeholder={t('alertFilters.allSeverities')}
-          value={filterSeverity}
-          onChange={(value) => { setFilterSeverity(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allSeverities') }, ...uniqueSeverities.map(s => ({ value: s, label: s }))]}
-          clearable
-        />
-        <Select
-          label={t('alertFilters.provider')}
-          placeholder={t('alertFilters.allProviders')}
-          value={filterProvider}
-          onChange={(value) => { setFilterProvider(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allProviders') }, ...uniqueProviders.map(p => ({ value: p, label: p.toUpperCase() }))]}
-          clearable
-        />
-        <Select
-          label={t('alertFilters.status')}
-          placeholder={t('alertFilters.allStatuses')}
-          value={filterStatus}
-          onChange={(value) => { setFilterStatus(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allStatuses') }, ...uniqueStatuses.map(s => ({ value: s, label: s }))]}
-          clearable
-        />
-      </Group>
+      <AlertsTableFilters
+        filterSeverity={filterSeverity}
+        setFilterSeverity={handleFilterChange(setFilterSeverity)}
+        uniqueSeverities={uniqueSeverities}
+        filterProvider={filterProvider}
+        setFilterProvider={handleFilterChange(setFilterProvider)}
+        uniqueProviders={uniqueProviders}
+        filterStatus={filterStatus}
+        setFilterStatus={handleFilterChange(setFilterStatus)}
+        uniqueStatuses={uniqueStatuses}
+      />
 
       {paginatedAlerts.length > 0 ? (
         <Table.ScrollContainer minWidth={800}>
