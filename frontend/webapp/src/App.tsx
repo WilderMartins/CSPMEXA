@@ -22,6 +22,7 @@ const NotificationsPage = lazy(() => import('./pages/Admin/NotificationsPage'));
 const LinkedAccountsPage = lazy(() => import('./pages/Admin/LinkedAccountsPage'));
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AttackPathsPage = lazy(() => import('./pages/AttackPathsPage'));
+const RemediationsPage = lazy(() => import('./pages/Admin/RemediationsPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -205,6 +206,11 @@ function App() {
                 <Route path="/settings/accounts" element={
                   <ProtectedRoute requiredRole="Administrator">
                     <LinkedAccountsPage />
+                  </ProtectedRoute>
+                } />
+              <Route path="/remediations" element={
+                  <ProtectedRoute requiredRole="Manager">
+                    <RemediationsPage />
                   </ProtectedRoute>
                 } />
               <Route path="/inventory" element={auth.isAuthenticated ? <InventoryPage /> : <Navigate to="/" replace />} />

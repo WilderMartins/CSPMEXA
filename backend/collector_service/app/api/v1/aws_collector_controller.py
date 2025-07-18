@@ -65,6 +65,12 @@ async def collect_iam_policies_data(payload: CredentialsPayload, scope: str = "L
         logger.exception("Erro ao coletar dados de políticas IAM.")
         raise HTTPException(status_code=500, detail=str(e))
 
+from pydantic import BaseModel
+
+class S3RemediationPayload(CredentialsPayload):
+    bucket_name: str
+    region: str
+
 @router.post("/cloudtrail", response_model=List[CloudTrailData])
 async def collect_cloudtrail_data(payload: CredentialsPayload):
     try:
@@ -72,4 +78,20 @@ async def collect_cloudtrail_data(payload: CredentialsPayload):
         return data
     except Exception as e:
         logger.exception("Erro ao coletar dados do CloudTrail.")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/remediate/s3-public-acl")
+async def remediate_s3_public_acl(payload: S3RemediationPayload):
+    try:
+        result = await s3_collector.remediate_public_acl(
+            credentials=payload.credentials,
+            bucket_name=payload.bucket_name,
+            region=payload.region
+        )
+        return result
+    except Exception as e:
+        logger.exception(f"Erro ao remediar o bucket {payload.bucket_name}.")
+        # A exceção já é um HTTPException, mas podemos adicionar um fallback.
+        if isinstance(e, HTTPException):
+            raise e
         raise HTTPException(status_code=500, detail=str(e))
