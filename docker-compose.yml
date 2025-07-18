@@ -50,16 +50,12 @@ services:
       - FRONTEND_URL_AUTH_CALLBACK=http://localhost:${FRONTEND_PORT:-3000}/auth/callback
       - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
-    volumes:
-      - ./backend/auth_service:/app # Monta o código para hot-reloading
-    environment:
-      # As configurações não-secretas ainda podem ser passadas por aqui
-      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
-      - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
       # Endereço do Vault para o cliente hvac
       - VAULT_ADDR=http://vault:8200
       # Token para autenticar no Vault (usando o token raiz de dev)
       - VAULT_TOKEN=root
+    volumes:
+      - ./backend/auth_service:/app # Monta o código para hot-reloading
     networks:
       - cspmexa_net
     depends_on:
@@ -97,8 +93,6 @@ services:
       - M365_CLIENT_SECRET=${M365_CLIENT_SECRET}
       - M365_TENANT_ID=${M365_TENANT_ID}
       - M365_HTTP_CLIENT_TIMEOUT=${M365_HTTP_CLIENT_TIMEOUT:-30}
-      - DEBUG_MODE=${DEBUG_MODE:-false}
-    environment:
       - DEBUG_MODE=${DEBUG_MODE:-false}
       # Conexão com o Vault
       - VAULT_ADDR=http://vault:8200
