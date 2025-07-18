@@ -1,7 +1,6 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-
 from app.models.asset_model import CloudAsset, CloudProviderEnum
 from app.schemas.asset_schema import AssetCreate
 
@@ -26,7 +25,6 @@ class CRUDAsset:
         if account_id:
             query = query.filter(CloudAsset.account_id == account_id)
         return query.offset(skip).limit(limit).all()
-
 
     def create_or_update(self, db: Session, *, obj_in: AssetCreate) -> CloudAsset:
         db_obj = self.get_by_asset_id(db, account_id=obj_in.account_id, asset_id=obj_in.asset_id)

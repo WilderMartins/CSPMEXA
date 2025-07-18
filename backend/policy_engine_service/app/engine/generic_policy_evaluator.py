@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional, Callable
 
 # Importar as funções de verificação
 from .aws_cloudtrail_policies import check_cloudtrail_multi_region, check_cloudtrail_log_file_validation
-from .aws_iam_policies import check_root_mfa_enabled
+from .aws_iam_policies import check_root_mfa_enabled, check_stale_key_s3_write_access
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ POLICY_CHECK_REGISTRY: Dict[str, Callable[[Any], List[Dict[str, Any]]]] = {
     "check_cloudtrail_multi_region": check_cloudtrail_multi_region,
     "check_cloudtrail_log_file_validation": check_cloudtrail_log_file_validation,
     "check_root_mfa_enabled": check_root_mfa_enabled,
+    "check_stale_key_s3_write_access": check_stale_key_s3_write_access,
     # Adicionar outras funções de verificação aqui
 }
 

@@ -2,9 +2,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.core.config import settings
-
-from app.api.v1 import analysis_controller, alerts_controller, asset_controller
-
+from app.api.v1 import analysis_controller, alerts_controller, asset_controller, attack_path_controller
 from app.core.logging_config import setup_logging
 from app.db.session import engine
 from app.models import alert_model
@@ -46,10 +44,9 @@ def health_check():
     return {"status": "ok"}
 
 app.include_router(analysis_controller.router, prefix=settings.API_V1_STR, tags=["Analysis"])
-
 app.include_router(alerts_controller.router, prefix=f"{settings.API_V1_STR}/alerts", tags=["Alerts"])
 app.include_router(asset_controller.router, prefix=f"{settings.API_V1_STR}/assets", tags=["Assets"])
-
+app.include_router(attack_path_controller.router, prefix=f"{settings.API_V1_STR}/attack-paths", tags=["Attack Paths"])
 
 if __name__ == "__main__":
     import uvicorn
