@@ -339,6 +339,9 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
                 <Box p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: '4px', border: '1px solid var(--mantine-color-gray-3)' }}>
                   <ReactMarkdown>{selectedAlert.remediation_guide}</ReactMarkdown>
                 </Box>
+                <Button mt="sm" size="xs" color="teal" disabled={!selectedAlert.remediation_guide}>
+                  Solicitar Remediação
+                </Button>
               </div>
             )}
             <Text><strong>{t('alertItem.policyId')}:</strong> {selectedAlert.policy_id}</Text>

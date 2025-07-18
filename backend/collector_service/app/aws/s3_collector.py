@@ -116,3 +116,17 @@ async def get_s3_data(credentials: Dict[str, Any]) -> List[S3BucketData]:
         collected_data.append(bucket_data)
 
     return collected_data
+
+async def remediate_public_acl(credentials: Dict[str, Any], bucket_name: str, region: str) -> Dict[str, Any]:
+    """
+    Aplica a ACL 'private' a um bucket S3 para remover o acesso público.
+    """
+    logger.info(f"Tentando remediar ACL pública para o bucket '{bucket_name}' na região '{region}'.")
+    s3_client = get_boto3_client("s3", region, credentials)
+    try:
+        s3_client.put_bucket_acl(Bucket=bucket_name, ACL='private')
+        logger.info(f"ACL 'private' aplicada com sucesso ao bucket '{bucket_name}'.")
+        return {"status": "success", "message": f"ACL do bucket '{bucket_name}' definida como privada."}
+    except ClientError as e:
+        logger.error(f"Erro ao tentar remediar o bucket '{bucket_name}': {e.response['Error']['Message']}")
+        raise HTTPException(status_code=500, detail=f"Erro ao aplicar ACL privada: {e.response['Error']['Message']}")
