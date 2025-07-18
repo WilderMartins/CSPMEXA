@@ -20,9 +20,8 @@ const CredentialsPage = lazy(() => import('./pages/Admin/CredentialsPage')); // 
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
 const NotificationsPage = lazy(() => import('./pages/Admin/NotificationsPage'));
 const LinkedAccountsPage = lazy(() => import('./pages/Admin/LinkedAccountsPage'));
-
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
-
+const AttackPathsPage = lazy(() => import('./pages/AttackPathsPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -208,9 +207,8 @@ function App() {
                     <LinkedAccountsPage />
                   </ProtectedRoute>
                 } />
-
               <Route path="/inventory" element={auth.isAuthenticated ? <InventoryPage /> : <Navigate to="/" replace />} />
-
+              <Route path="/attack-paths" element={auth.isAuthenticated ? <AttackPathsPage /> : <Navigate to="/" replace />} />
               <Route path="/access-denied" element={<AccessDeniedPage />} />
               <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
             </Routes>

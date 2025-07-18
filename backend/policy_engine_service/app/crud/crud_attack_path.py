@@ -8,9 +8,17 @@ class CRUDAttackPath:
     def get_by_path_id(self, db: Session, *, path_id: str) -> Optional[AttackPath]:
         return db.query(AttackPath).filter(AttackPath.path_id == path_id).first()
 
+    def get_multi(self, db: Session, *, skip: int = 0, limit: int = 100) -> List[AttackPath]:
+        return db.query(AttackPath).offset(skip).limit(limit).all()
+
     def create(self, db: Session, *, obj_in: AttackPathCreate) -> AttackPath:
         # Converte a lista de nós Pydantic para uma lista de dicts para o JSON
         nodes_as_dicts = [node.model_dump() for node in obj_in.nodes]
+
+        # Evitar duplicatas
+        existing_path = self.get_by_path_id(db, path_id=obj_in.path_id)
+        if existing_path:
+            return existing_path
 
         db_obj = AttackPath(
             path_id=obj_in.path_id,
