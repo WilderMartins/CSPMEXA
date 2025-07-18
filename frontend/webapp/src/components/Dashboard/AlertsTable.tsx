@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Select, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack } from '@mantine/core'; // Importar da Mantine
+import { Table, Button, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack, Box } from '@mantine/core';
 import { IconSelector, IconChevronDown, IconChevronUp } from '@tabler/icons-react'; // Ícones para ordenação
 
 // REMOVER SIMULAÇÕES DE COMPONENTES UI (Button, Select, Modal) - eles virão da Mantine
@@ -36,6 +36,8 @@ function Th({ children, reversed, sorted, onSort, width }: ThProps) {
  * Representa a estrutura de um objeto de Alerta.
  * Esta interface é usada tanto pelo `AlertsTable` quanto pelo `DashboardPage`.
  */
+import ReactMarkdown from 'react-markdown';
+
 export interface Alert {
   /** Identificador numérico único do alerta. */
   id: number;
@@ -56,6 +58,7 @@ export interface Alert {
   status: string;
   details?: Record<string, any>;
   recommendation?: string;
+  remediation_guide?: string;
   created_at: string;
   updated_at: string;
   first_seen_at: string;
@@ -219,36 +222,28 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     </Table.Tr>
   ));
 
+import AlertsTableFilters from './AlertsTableFilters';
+
+  const handleFilterChange = (setter) => (value) => {
+    setter(value);
+    setCurrentPage(1);
+  };
+
   return (
     <div style={{ marginTop: rem(32) }}> {/* rem(32) é xl na Mantine */}
       <Text component="h3" size="lg" fw={600} mb="md">{title}</Text>
 
-      <Group mb="md">
-        <Select
-          label={t('alertFilters.severity')}
-          placeholder={t('alertFilters.allSeverities')}
-          value={filterSeverity}
-          onChange={(value) => { setFilterSeverity(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allSeverities') }, ...uniqueSeverities.map(s => ({ value: s, label: s }))]}
-          clearable
-        />
-        <Select
-          label={t('alertFilters.provider')}
-          placeholder={t('alertFilters.allProviders')}
-          value={filterProvider}
-          onChange={(value) => { setFilterProvider(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allProviders') }, ...uniqueProviders.map(p => ({ value: p, label: p.toUpperCase() }))]}
-          clearable
-        />
-        <Select
-          label={t('alertFilters.status')}
-          placeholder={t('alertFilters.allStatuses')}
-          value={filterStatus}
-          onChange={(value) => { setFilterStatus(value); setCurrentPage(1); }}
-          data={[{ value: '', label: t('alertFilters.allStatuses') }, ...uniqueStatuses.map(s => ({ value: s, label: s }))]}
-          clearable
-        />
-      </Group>
+      <AlertsTableFilters
+        filterSeverity={filterSeverity}
+        setFilterSeverity={handleFilterChange(setFilterSeverity)}
+        uniqueSeverities={uniqueSeverities}
+        filterProvider={filterProvider}
+        setFilterProvider={handleFilterChange(setFilterProvider)}
+        uniqueProviders={uniqueProviders}
+        filterStatus={filterStatus}
+        setFilterStatus={handleFilterChange(setFilterStatus)}
+        uniqueStatuses={uniqueStatuses}
+      />
 
       {paginatedAlerts.length > 0 ? (
         <Table.ScrollContainer minWidth={800}>
@@ -330,6 +325,17 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
             {selectedAlert.region && <Text><strong>{t('alertItem.region')}:</strong> {selectedAlert.region}</Text>}
             <Text><strong>{t('alertItem.description')}:</strong> {selectedAlert.description}</Text>
             {selectedAlert.recommendation && <Text><strong>{t('alertItem.recommendation')}:</strong> {selectedAlert.recommendation}</Text>}
+            {selectedAlert.remediation_guide && (
+              <div>
+                <Text fw={500}>{t('alertItem.remediationGuide')}:</Text>
+                <Box p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: '4px', border: '1px solid var(--mantine-color-gray-3)' }}>
+                  <ReactMarkdown>{selectedAlert.remediation_guide}</ReactMarkdown>
+                </Box>
+                <Button mt="sm" size="xs" color="teal" disabled={!selectedAlert.remediation_guide}>
+                  Solicitar Remediação
+                </Button>
+              </div>
+            )}
             <Text><strong>{t('alertItem.policyId')}:</strong> {selectedAlert.policy_id}</Text>
             <Text><strong>{t('alertItem.firstSeen')}:</strong> {new Date(selectedAlert.first_seen_at).toLocaleString()}</Text>
             <Text><strong>{t('alertItem.lastSeen')}:</strong> {new Date(selectedAlert.last_seen_at).toLocaleString()}</Text>

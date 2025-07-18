@@ -110,6 +110,13 @@ Se você é um desenvolvedor e deseja entender a fundo a arquitetura ou contribu
 └── README.md        # Este arquivo
 ```
 
+## Documentação
+
+Temos duas principais fontes de documentação:
+
+*   **[Guia de Arquitetura (`docs/architecture.md`)](./docs/architecture.md)**: Para desenvolvedores que desejam entender a fundo a estrutura de microsserviços, o fluxo de dados e como contribuir com o projeto.
+*   **[Guia do Usuário (`docs/user_guide/01-instalacao.md`)](./docs/user_guide/01-instalacao.md)**: Para usuários finais que desejam aprender a instalar e usar a aplicação no dia a dia.
+
 ## Roadmap de Alto Nível
 
 Consultar o plano de desenvolvimento para o roadmap detalhado das fases e features.

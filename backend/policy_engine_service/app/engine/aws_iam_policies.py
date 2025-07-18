@@ -281,6 +281,103 @@ class IAMRoleHasInlinePolicies(IAMPolicy):
 iam_role_policies_to_evaluate.append(IAMRoleHasInlinePolicies())
 
 
+class IAMRootAccountMFAPolicy(IAMPolicy):
+    def __init__(self):
+        super().__init__(
+            policy_id="CIS-AWS-1.1",
+            title="MFA para usuário Root",
+            description="O MFA (Multi-Factor Authentication) deve estar habilitado para o usuário 'root' da conta AWS para aumentar a segurança.",
+            severity="Critical",
+            recommendation="Habilite o MFA para o usuário root no console do IAM."
+        )
+
+    def check(self, user: IAMUserDataInput, account_id: Optional[str]) -> Optional[Alert]:
+        # Esta política só precisa ser executada uma vez por conta.
+        # Ela é acionada pelo primeiro usuário na lista que contém o sumário.
+        if user.account_summary:
+            # O get_account_summary retorna 1 se MFA está habilitado, 0 se não.
+            if user.account_summary.get("AccountMFAEnabled", 0) == 0:
+                return Alert(
+                    id=str(uuid.uuid4()),
+                    resource_id=f"arn:aws:iam::{account_id}:root",
+                    resource_type="IAMRootAccount",
+                    account_id=account_id or "N/A",
+                    region="global",
+                    provider="aws",
+                    severity=self.severity,
+                    title=self.title,
+                    description=self.description,
+                    policy_id=self.policy_id,
+                    details={"summary": user.account_summary},
+                    recommendation=self.recommendation
+                )
+        return None
+
+import json
+from datetime import datetime, timezone, timedelta
+
+iam_user_policies_to_evaluate.append(IAMRootAccountMFAPolicy())
+
+def check_stale_key_s3_write_access(users_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Verifica se um usuário tem uma chave de acesso antiga (>90 dias) e permissão de escrita em S3.
+    ATTACK-PATH-IAM-S3-1
+    """
+    alerts = []
+    ninety_days_ago = datetime.now(timezone.utc) - timedelta(days=90)
+
+    for user in users_data:
+        if not user.get("access_keys"):
+            continue
+
+        stale_keys = []
+        for key in user.get("access_keys", []):
+            if key.get("Status") == "Active":
+                last_used_str = key.get("LastUsedDate")
+                create_date_str = key.get("CreateDate")
+
+                last_used = datetime.fromisoformat(last_used_str) if last_used_str else None
+                create_date = datetime.fromisoformat(create_date_str) if create_date_str else None
+
+                # Considera a chave antiga se nunca foi usada e foi criada há mais de 90 dias,
+                # ou se foi usada pela última vez há mais de 90 dias.
+                is_stale = (last_used is None and create_date and create_date < ninety_days_ago) or \
+                           (last_used and last_used < ninety_days_ago)
+
+                if is_stale:
+                    stale_keys.append(key.get("AccessKeyId"))
+
+        if stale_keys:
+            # A chave está antiga. Agora, verifique as permissões de escrita em S3.
+            # Esta é uma verificação simplificada. Uma real precisaria de um resolvedor de políticas complexo.
+            has_s3_write = False
+            for policy in user.get("attached_policies", []) + user.get("inline_policies", []):
+                policy_doc_str = policy.get("policy_document", "{}")
+                policy_doc = json.loads(policy_doc_str) if isinstance(policy_doc_str, str) else policy_doc_str
+
+                for stmt in policy_doc.get("Statement", []):
+                    if stmt.get("Effect") == "Allow":
+                        actions = stmt.get("Action", [])
+                        if isinstance(actions, str) and ("s3:PutObject" in actions or "s3:*" in actions):
+                            has_s3_write = True
+                            break
+                        elif isinstance(actions, list) and any("s3:PutObject" in a or "s3:*" in a for a in actions):
+                            has_s3_write = True
+                            break
+                if has_s3_write:
+                    break
+
+            if has_s3_write:
+                alerts.append({
+                    "resource_id": user.get("arn"),
+                    "resource_type": "IAMUser",
+                    "region": "global",
+                    "status": "FAIL",
+                    "details": f"O usuário '{user.get('user_name')}' tem chaves de acesso antigas ({', '.join(stale_keys)}) e permissões de escrita em S3."
+                })
+
+    return alerts
+
 # --- Funções de Avaliação ---
 
 def evaluate_iam_user_policies(users_data: List[IAMUserDataInput], account_id: Optional[str]) -> List[Dict[str, Any]]:

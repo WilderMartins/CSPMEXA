@@ -1,0 +1,9 @@
+policies:
+  - id: "ATTACK-PATH-IAM-S3-1"
+    provider: "aws"
+    service: "iam" # A política é acionada pelos dados do IAM
+    severity: "HIGH"
+    title: "Caminho de Ataque: Chave IAM Antiga com Acesso de Escrita a S3"
+    description: "Um usuário IAM possui uma chave de acesso que não é usada há mais de 90 dias e tem permissões para escrever em um ou mais buckets S3. Uma chave antiga e comprometida poderia ser usada para exfiltrar ou corromper dados."
+    recommendation: "Rotacione ou exclua a chave de acesso antiga. Revise as permissões do usuário para garantir que ele siga o princípio do menor privilégio."
+    check_function: "check_stale_key_s3_write_access"

@@ -189,5 +189,28 @@ class NotificationServiceClient:
             logger.exception(f"Unexpected error sending Google Chat notification for alert ID {alert.id}: {e}")
             return False
 
+    async def trigger_notifications_for_alert(self, alert_data: "AlertSchema"):
+        """
+        Envia os detalhes de um alerta para o notification_service para que ele
+        verifique as regras e dispare as notificações apropriadas.
+        """
+        if not self.base_url:
+            logger.warning("NOTIFICATION_SERVICE_URL not configured. Skipping notification trigger.")
+            return
+
+        trigger_endpoint = f"{self.base_url}/trigger"
+        try:
+            # O schema do alerta já deve ser compatível com o que o notification_service espera
+            alert_payload = alert_data.model_dump(mode="json")
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(trigger_endpoint, json=alert_payload)
+
+            if response.status_code == 202: # Accepted
+                logger.info(f"Notification trigger for alert ID {alert_data.id} accepted by Notification Service.")
+            else:
+                logger.error(f"Failed to trigger notification for alert ID {alert_data.id}. Status: {response.status_code}, Response: {response.text}")
+        except Exception as e:
+            logger.exception(f"Unexpected error triggering notification for alert ID {alert_data.id}: {e}")
+
 # Instância do cliente para ser usada no serviço
 notification_client = NotificationServiceClient(base_url=settings.NOTIFICATION_SERVICE_URL)

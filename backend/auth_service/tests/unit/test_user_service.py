@@ -169,8 +169,45 @@ def test_get_or_create_user_oauth_existing_user_by_google_id_no_changes(mock_db_
     assert updated_user.profile_picture_url == original_profile_picture_url
     mock_db_session.add.assert_not_called()
 
-# Poderíamos adicionar mais testes, como:
-# - Usuário encontrado por google_id, mas o e-mail fornecido é diferente (como o serviço lida com isso?)
-# - Usuário encontrado por e-mail, mas já tem um google_id diferente do fornecido (conflito)
-# - Campos full_name ou profile_picture_url são None no input (não devem sobrescrever valores existentes com None)
-#   A lógica atual: `if full_name and user.full_name != full_name:` -> se full_name for None no input, não atualiza. Correto.
+def test_get_or_create_user_oauth_conflict_different_google_id(mock_db_session):
+    """
+    Testa o caso de conflito onde um usuário é encontrado por e-mail,
+    mas já possui um google_id diferente do que foi fornecido.
+    """
+    existing_email = "conflict@example.com"
+    existing_google_id = "google_id_already_set"
+    new_google_id_from_login = "new_google_id_from_login_flow"
+
+    mock_user_with_google_id = User(
+        id=4,
+        email=existing_email,
+        google_id=existing_google_id
+    )
+
+    # Simular: 1. Nenhum usuário por new_google_id. 2. Usuário encontrado por e-mail.
+    def side_effect_filter_first(*args, **kwargs):
+        if mock_db_session.query(User).filter().first.call_count == 1:
+            return None
+        return mock_user_with_google_id
+
+    mock_db_session.query(User).filter().first.side_effect = side_effect_filter_first
+
+    # O serviço deve retornar o usuário existente sem alterar o google_id
+    # ou, idealmente, logar um aviso de segurança.
+    # A lógica atual não faz a verificação de conflito, apenas não atualiza.
+    # Vamos testar o comportamento atual.
+    result_user = user_service_instance.get_or_create_user_oauth(
+        db=mock_db_session,
+        email=existing_email,
+        google_id=new_google_id_from_login,
+        full_name="Any Name",
+        profile_picture_url=None
+    )
+
+    # Verificar que o google_id original não foi sobrescrito
+    assert result_user.google_id == existing_google_id
+    assert result_user.google_id != new_google_id_from_login
+
+    # O commit ainda será chamado por causa da atualização do nome/foto
+    mock_db_session.commit.assert_called_once()
+    mock_db_session.refresh.assert_called_once_with(mock_user_with_google_id)

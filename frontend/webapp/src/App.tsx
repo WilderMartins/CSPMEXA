@@ -8,6 +8,7 @@ import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as M
 import { useDisclosure } from '@mantine/hooks';
 import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
 import { useAuth } from './contexts/AuthContext';
+import { useAppStore } from './stores/store';
 
 // Lazy load das páginas principais
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -17,6 +18,11 @@ const InsightsPage = lazy(() => import('./pages/InsightsPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const CredentialsPage = lazy(() => import('./pages/Admin/CredentialsPage')); // Adicionado
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
+const NotificationsPage = lazy(() => import('./pages/Admin/NotificationsPage'));
+const LinkedAccountsPage = lazy(() => import('./pages/Admin/LinkedAccountsPage'));
+const InventoryPage = lazy(() => import('./pages/InventoryPage'));
+const AttackPathsPage = lazy(() => import('./pages/AttackPathsPage'));
+const RemediationsPage = lazy(() => import('./pages/Admin/RemediationsPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -54,9 +60,20 @@ const OAuthCallbackPage = () => {
 };
 
 
+import { api } from './services/api';
+
 function App() {
   const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
   const auth = useAuth();
+  const { selectedAccountId, setSelectedAccountId } = useAppStore();
+  // A lógica para buscar as contas agora precisa ser movida para dentro do App
+  // ou para um hook personalizado. Por simplicidade, vamos movê-la para cá.
+  const [accounts, setAccounts] = React.useState([]);
+  React.useEffect(() => {
+    if (auth.isAuthenticated) {
+      api.get('/accounts').then(response => setAccounts(response.data));
+    }
+  }, [auth.isAuthenticated]);
   const { t, i18n } = useTranslation();
 
   const changeLanguage = (lng: string) => {
@@ -141,9 +158,18 @@ function App() {
 
           <Group>
              {auth.isAuthenticated && (
+              <>
+                <Select
+                  placeholder="Selecione uma conta"
+                  value={selectedAccountId ? String(selectedAccountId) : null}
+                  onChange={(value) => setSelectedAccountId(value ? Number(value) : null)}
+                  data={accounts.map(acc => ({ value: String(acc.id), label: acc.name }))}
+                  disabled={accounts.length === 0}
+                />
               <MantineButton variant="light" onClick={() => auth.logout()}>
                 {t('header.btnLogout')}
               </MantineButton>
+              </>
             )}
             <Group gap="xs" ml="lg">
               <MantineButton variant={i18n.language === 'en' ? "filled" : "default"} size="xs" onClick={() => changeLanguage('en')}>EN</MantineButton>
@@ -182,6 +208,23 @@ function App() {
                     <CredentialsPage />
                   </ProtectedRoute>
                 } />
+               <Route path="/settings/notifications" element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <NotificationsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings/accounts" element={
+                  <ProtectedRoute requiredRole="Administrator">
+                    <LinkedAccountsPage />
+                  </ProtectedRoute>
+                } />
+              <Route path="/remediations" element={
+                  <ProtectedRoute requiredRole="Manager">
+                    <RemediationsPage />
+                  </ProtectedRoute>
+                } />
+              <Route path="/inventory" element={auth.isAuthenticated ? <InventoryPage /> : <Navigate to="/" replace />} />
+              <Route path="/attack-paths" element={auth.isAuthenticated ? <AttackPathsPage /> : <Navigate to="/" replace />} />
               <Route path="/access-denied" element={<AccessDeniedPage />} />
               <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
             </Routes>

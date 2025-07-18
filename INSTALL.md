@@ -55,18 +55,30 @@ sudo usermod -aG docker ${USER}
 
 **Importante:** Após rodar este comando, você precisa **fazer logout e login novamente** no servidor para que a alteração tenha efeito.
 
-## Passo 2: Baixando o CSPMEXA
+## Passo 2: Baixando e Configurando o CSPMEXA
 
-Agora que o Docker está pronto, vamos baixar o código do CSPMEXA.
+Agora que o Docker está pronto, vamos baixar e configurar o código do CSPMEXA.
 
 ```bash
-# Clone o repositório do projeto para o seu servidor
+# 1. Clone o repositório do projeto
 git clone https://github.com/seu-usuario/seu-repositorio.git cspmexa
-# NOTA: Substitua a URL acima pela URL correta do repositório do projeto.
-
-# Entre na pasta do projeto
 cd cspmexa
+
+# 2. Copie o arquivo de exemplo de ambiente
+cp .env.example .env
 ```
+
+### 2.1 - Gerar a Chave Secreta JWT
+
+Antes de iniciar a aplicação, você **precisa** gerar uma chave secreta para a segurança dos tokens de autenticação.
+
+Execute o seguinte comando no seu terminal:
+```bash
+openssl rand -hex 32
+```
+Este comando irá gerar uma string longa e aleatória, que é a sua chave secreta.
+
+Agora, abra o arquivo `.env` que você acabou de criar e encontre a linha `JWT_SECRET_KEY=...`. Substitua o valor do placeholder pela chave que você gerou.
 
 ## Passo 3: Iniciando o Assistente de Instalação
 

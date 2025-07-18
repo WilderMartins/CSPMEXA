@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from app.core.config import settings
-from app.api.v1 import auth_router, data_router, alerts_router # Adicionado alerts_router
+from app.api.v1 import auth_router, data_router, alerts_router, dashboard_router
 from app.services import http_client # Import para fechar o cliente HTTP na saída
 from app.core.security import TokenData, get_current_user # Para o endpoint de teste de autenticação
 import logging
@@ -61,6 +61,13 @@ app.include_router(
     alerts_router.router,
     prefix=settings.API_V1_STR + "/alerts", # Ex: /api/v1/alerts/
     tags=["Alerts Management"]
+)
+
+# dashboard_router lida com /api/v1/dashboard/*
+app.include_router(
+    dashboard_router.router,
+    prefix=settings.API_V1_STR + "/dashboard",
+    tags=["Dashboard"]
 )
 
 

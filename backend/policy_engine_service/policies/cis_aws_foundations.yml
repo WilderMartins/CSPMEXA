@@ -1,0 +1,65 @@
+policies:
+  - id: "CIS-AWS-1.1"
+    provider: "aws"
+    service: "iam"
+    severity: "CRITICAL"
+    title: "MFA para usuário Root"
+    description: "O MFA (Multi-Factor Authentication) deve estar habilitado para o usuário 'root' da conta AWS para aumentar a segurança."
+    recommendation: "Habilite o MFA para o usuário root no console do IAM."
+    remediation_guide: |
+      #### Usando o Console da AWS:
+      1. Faça login no Console de Gerenciamento da AWS como o usuário **root**.
+      2. Navegue até o serviço **IAM (Identity and Access Management)**.
+      3. No painel do IAM, você verá um aviso de segurança sobre a ativação do MFA para o root. Clique em **'Add MFA'**.
+      4. Siga as instruções para configurar um dispositivo MFA virtual (como Google Authenticator ou Authy) ou um dispositivo de hardware.
+    check_function: "check_root_mfa_enabled"
+
+  - id: "CIS-AWS-2.2"
+    provider: "aws"
+    service: "cloudtrail"
+    severity: "HIGH"
+    title: "CloudTrail habilitado em todas as regiões"
+    description: "Pelo menos um trail do AWS CloudTrail deve ser configurado para receber eventos de log de todas as regiões."
+    recommendation: "Crie um novo trail do CloudTrail e marque a opção 'Apply trail to all regions' ou modifique um trail existente."
+    remediation_guide: |
+      #### Usando o Console da AWS:
+      1. Navegue até o serviço **CloudTrail**.
+      2. No painel de navegação, escolha **Trails**.
+      3. Se você não tiver um trail, clique em **Create trail**. Se tiver um, selecione-o e clique em **Edit**.
+      4. Na seção **General details**, certifique-se de que a opção **'Apply trail to all regions'** está marcada.
+      5. Salve as alterações.
+
+      #### Usando a AWS CLI:
+      ```bash
+      # Para criar um novo trail multi-região:
+      aws cloudtrail create-trail --name NOME_DO_TRAIL --s3-bucket-name NOME_DO_BUCKET --is-multi-region-trail
+
+      # Para atualizar um trail existente:
+      aws cloudtrail update-trail --name NOME_DO_TRAIL --is-multi-region-trail
+      ```
+    check_function: "check_cloudtrail_multi_region"
+
+  - id: "CIS-AWS-2.3"
+    provider: "aws"
+    service: "cloudtrail"
+    severity: "MEDIUM"
+    title: "Validação de arquivos de log do CloudTrail habilitada"
+    description: "A validação da integridade dos arquivos de log do CloudTrail deve estar habilitada para garantir que os logs não foram alterados."
+    recommendation: "Habilite a validação de arquivos de log nas configurações do seu trail do CloudTrail."
+    remediation_guide: |
+      #### Usando o Console da AWS:
+      1. Navegue até o serviço **CloudTrail**.
+      2. No painel de navegação, escolha **Trails**.
+      3. Selecione o trail que você deseja modificar e vá para a seção de configurações.
+      4. Em **Additional settings**, marque a opção **'Enable log file validation'**.
+      5. Salve as alterações.
+
+      #### Usando a AWS CLI:
+      ```bash
+      # Ao criar um novo trail:
+      aws cloudtrail create-trail --name NOME_DO_TRAIL --s3-bucket-name NOME_DO_BUCKET --enable-log-file-validation
+
+      # Para atualizar um trail existente:
+      aws cloudtrail update-trail --name NOME_DO_TRAIL --enable-log-file-validation
+      ```
+    check_function: "check_cloudtrail_log_file_validation"
