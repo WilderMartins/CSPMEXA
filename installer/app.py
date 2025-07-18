@@ -65,10 +65,10 @@ def pre_install_check():
 @app.route('/cleanup')
 def cleanup():
     """Executa a limpeza do ambiente Docker."""
-    flash("Iniciando limpeza do ambiente Docker anterior...", "info")
+    app.logger.info("Iniciando limpeza do ambiente Docker anterior...")
     app.logger.info("Executando 'docker compose down' para limpar contêineres e volumes anônimos.")
     run_docker_command(["docker", "compose", "down", "-v", "--remove-orphans"], ignore_errors=True)
-    flash("Ambiente limpo com sucesso! Você pode prosseguir com a instalação.", "success")
+    app.logger.info("Ambiente limpo com sucesso! Você pode prosseguir com a instalação.")
     return redirect(url_for('install_page'))
 
 @app.route('/install', methods=['GET'])
@@ -135,10 +135,10 @@ AUTH_SERVICE_VAULT_SECRET_ID={vault_secret_id}
         with open(ENV_FILE_PATH, 'w') as f:
             f.write(env_content.strip())
 
-        flash("Arquivo .env criado com sucesso!", "success")
+        app.logger.info("Arquivo .env criado com sucesso!")
 
         # Iniciar serviços em segundo plano
-        flash("Iniciando a instalação dos serviços em segundo plano...", "info")
+        app.logger.info("Iniciando a instalação dos serviços em segundo plano...")
         run_docker_command(["docker", "compose", "up", "-d", "--build"], wait=False)
 
         # Redirecionar para a página de sucesso/status
