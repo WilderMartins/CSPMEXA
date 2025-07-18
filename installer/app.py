@@ -33,7 +33,7 @@ def run_docker_command(command, capture=True):
             )
             return "", ""
     except subprocess.CalledProcessError as e:
-        error_message = f"Comando falhou: {' '.join(full_command)}\n"
+        error_message = f"Comando falhou: {' '.join(command)}\n"
         error_message += f"Stdout: {e.stdout}\n"
         error_message += f"Stderr: {e.stderr}"
         raise RuntimeError(error_message)
