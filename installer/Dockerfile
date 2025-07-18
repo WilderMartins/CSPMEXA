@@ -9,7 +9,7 @@ WORKDIR /app
 
 # Copiar o arquivo de dependências e instalar
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Copiar o resto do código do aplicativo
 COPY . .
