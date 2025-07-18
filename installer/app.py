@@ -21,7 +21,7 @@ app.logger.setLevel(logging.INFO)
 ENV_FILE_PATH = os.path.join('/app/config', '.env')
 DOCKER_COMPOSE_YML_PATH = '/app/config'
 
-def run_docker_command(command, wait=True, ignore_errors=False):
+def run_docker_command(command, wait=True, ignore_errors=False, timeout=None):
     """Helper para executar comandos Docker Compose."""
     try:
         # Usar Popen para controle não bloqueante
@@ -38,7 +38,13 @@ def run_docker_command(command, wait=True, ignore_errors=False):
             return process, None, None
 
         # Comportamento de espera padrão
-        stdout, stderr = process.communicate()
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            stdout, stderr = process.communicate()
+            # Retornar a saída obtida antes do timeout
+            return stdout, stderr
 
         if process.returncode != 0 and not ignore_errors:
             raise subprocess.CalledProcessError(
@@ -157,8 +163,8 @@ M365_TENANT_ID=""
         app.logger.info("Iniciando a instalação dos serviços em segundo plano...")
         run_docker_command(["docker", "compose", "up", "-d", "--build"], wait=False)
 
-        # Redirecionar para a página de sucesso/status
-        return redirect(url_for('success'))
+        # Redirecionar para a página de status para acompanhar o progresso
+        return redirect(url_for('status'))
 
     except (IOError, ValueError) as e:
         flash(f"Ocorreu um erro: {e}", "danger")
@@ -167,26 +173,33 @@ M365_TENANT_ID=""
 @app.route('/status')
 def status():
     """Verifica e exibe o status da instalação."""
-    # Tenta obter os logs do 'docker compose up'
     try:
+        # Obter logs com timeout para não bloquear
         stdout, stderr = run_docker_command(
-            ["docker", "compose", "logs", "--no-color"],
+            ["docker", "compose", "logs", "--no-color", "--tail=200"],
             wait=True,
-            ignore_errors=True
+            ignore_errors=True,
+            timeout=5  # Timeout de 5 segundos
         )
 
         # Analisa o status dos contêineres
         ps_stdout, _ = run_docker_command(
             ["docker", "compose", "ps", "--format", "{{.Name}}: {{.Status}}"],
-            wait=True
+            wait=True,
+            ignore_errors=True
         )
+        container_statuses = ps_stdout.strip().split('\n') if ps_stdout else []
 
-        container_statuses = ps_stdout.strip().split('\n')
-
-        # Verifica se a instalação foi concluída
-        is_done = "auth_service" in ps_stdout and "running" in ps_stdout
+        # Verifica se todos os serviços essenciais estão 'running'
+        essential_services = [
+            "api-gateway", "auth-service", "collector-service",
+            "notification-service", "policy-engine-service"
+        ]
+        running_services = [s for s in container_statuses if "running" in s or "up" in s]
+        is_done = all(any(service in status for status in running_services) for service in essential_services)
 
     except Exception as e:
+        app.logger.error(f"Erro ao obter status da instalação: {e}")
         stdout = ""
         stderr = f"Erro ao obter status: {e}"
         container_statuses = []
