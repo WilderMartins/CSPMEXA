@@ -45,19 +45,23 @@
 
                 <h4>Status dos Contêineres</h4>
                 <div id="statuses">
-                    {% for status in statuses %}
-                        {% if 'running' in status or 'up' in status %}
-                            <p class="status-running">{{ status }}</p>
-                        {% elif 'exited' in status %}
-                            <p class="status-exited">{{ status }}</p>
-                        {% else %}
-                            <p class="status-starting">{{ status }}</p>
-                        {% endif %}
-                    {% endfor %}
+                    {% if statuses %}
+                        {% for status in statuses %}
+                            {% if 'running' in status %}
+                                <p class="status-running">{{ status }}</p>
+                            {% elif 'exited' in status %}
+                                <p class="status-exited">{{ status }}</p>
+                            {% else %}
+                                <p class="status-starting">{{ status }}</p>
+                            {% endif %}
+                        {% endfor %}
+                    {% else %}
+                        <p>Aguardando informações dos contêineres...</p>
+                    {% endif %}
                 </div>
 
                 <h4 class="mt-4">Logs</h4>
-                <pre id="logs">{{ logs }}</pre>
+                <pre id="logs">{% if logs %}{{ logs }}{% else %}Aguardando logs...{% endif %}</pre>
 
                 {% if errors %}
                     <h4 class="mt-4">Erros</h4>
