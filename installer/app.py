@@ -21,20 +21,32 @@ app.logger.setLevel(logging.INFO)
 ENV_FILE_PATH = os.path.join('/app/config', '.env')
 DOCKER_COMPOSE_YML_PATH = '/app/config'
 
-def run_docker_command(command, capture=True, ignore_errors=False):
+def run_docker_command(command, wait=True, ignore_errors=False):
     """Helper para executar comandos Docker Compose."""
     try:
-        if capture:
-            result = subprocess.run(
-                command, check=not ignore_errors, cwd=DOCKER_COMPOSE_YML_PATH,
-                capture_output=True, text=True
+        # Usar Popen para controle não bloqueante
+        process = subprocess.Popen(
+            command,
+            cwd=DOCKER_COMPOSE_YML_PATH,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if not wait:
+            # Retorna o processo imediatamente para execução em segundo plano
+            return process, None, None
+
+        # Comportamento de espera padrão
+        stdout, stderr = process.communicate()
+
+        if process.returncode != 0 and not ignore_errors:
+            raise subprocess.CalledProcessError(
+                process.returncode, command, output=stdout, stderr=stderr
             )
-            return result.stdout, result.stderr
-        else:
-            subprocess.run(
-                command, check=not ignore_errors, cwd=DOCKER_COMPOSE_YML_PATH
-            )
-            return "", ""
+
+        return stdout, stderr
+
     except subprocess.CalledProcessError as e:
         error_message = f"Comando falhou: {' '.join(command)}\nStdout: {e.stdout}\nStderr: {e.stderr}"
         if not ignore_errors:
@@ -97,41 +109,74 @@ def extract_vault_credentials_from_logs():
 def perform_install():
     """Processa os dados do formulário, cria o .env e inicia os serviços."""
     try:
-        # 1. Iniciar o Vault
-        flash("Iniciando Vault...", "info")
-        run_docker_command(["docker", "compose", "up", "-d", "--build", "vault", "vault-setup"])
-
-        # 2. Extrair credenciais (função simplificada para este exemplo)
-        vault_creds = {"AUTH_SERVICE_VAULT_ROLE_ID": "dummy-role", "AUTH_SERVICE_VAULT_SECRET_ID": "dummy-secret"} # Placeholder
-
-        # 3. Coletar e gerar dados do .env
+        # Coletar dados do formulário
         form_data = request.form.to_dict()
         db_password = form_data.get('AUTH_DB_PASSWORD') or secrets.token_urlsafe(16)
-        jwt_secret_key = secrets.token_hex(32) # Gerado automaticamente
+        jwt_secret_key = secrets.token_hex(32)
 
+        # Usar placeholders para credenciais do Vault
+        vault_role_id = "dummy-role-id"
+        vault_secret_id = "dummy-secret-id"
+
+        # Criar o conteúdo do .env
         env_content = f"""
-# ... (conteúdo do .env como antes, usando os dados do form e do vault_creds) ...
-JWT_SECRET_KEY={jwt_secret_key}
+AUTH_DB_USER={form_data.get('AUTH_DB_USER', 'cspmexa_user')}
 AUTH_DB_PASSWORD={db_password}
-AUTH_SERVICE_VAULT_ROLE_ID={vault_creds['AUTH_SERVICE_VAULT_ROLE_ID']}
-AUTH_SERVICE_VAULT_SECRET_ID={vault_creds['AUTH_SERVICE_VAULT_SECRET_ID']}
+AUTH_DB_NAME={form_data.get('AUTH_DB_NAME', 'cspmexa_db')}
+FRONTEND_PORT={form_data.get('FRONTEND_PORT', '3000')}
+API_GATEWAY_PORT={form_data.get('API_GATEWAY_PORT', '8050')}
+GOOGLE_CLIENT_ID={form_data.get('GOOGLE_CLIENT_ID', '')}
+GOOGLE_CLIENT_SECRET={form_data.get('GOOGLE_CLIENT_SECRET', '')}
+JWT_SECRET_KEY={jwt_secret_key}
+AUTH_SERVICE_VAULT_ROLE_ID={vault_role_id}
+AUTH_SERVICE_VAULT_SECRET_ID={vault_secret_id}
 """
-        # 4. Escrever .env e iniciar serviços
+        # Escrever o arquivo .env
         with open(ENV_FILE_PATH, 'w') as f:
             f.write(env_content.strip())
 
-        flash("Iniciando serviços da aplicação...", "info")
-        run_docker_command(["docker", "compose", "--profile", "app", "up", "--build", "-d"])
+        flash("Arquivo .env criado com sucesso!", "success")
 
-        flash("Executando migrações do banco de dados...", "info")
-        time.sleep(15)
-        run_docker_command(["docker", "compose", "exec", "auth_service", "alembic", "upgrade", "head"])
+        # Iniciar serviços em segundo plano
+        flash("Iniciando a instalação dos serviços em segundo plano...", "info")
+        run_docker_command(["docker", "compose", "up", "-d", "--build"], wait=False)
 
+        # Redirecionar para a página de sucesso/status
         return redirect(url_for('success'))
 
-    except (RuntimeError, IOError, ValueError) as e:
-        flash(str(e), "danger")
+    except (IOError, ValueError) as e:
+        flash(f"Ocorreu um erro: {e}", "danger")
         return redirect(url_for('install_page'))
+
+@app.route('/status')
+def status():
+    """Verifica e exibe o status da instalação."""
+    # Tenta obter os logs do 'docker compose up'
+    try:
+        stdout, stderr = run_docker_command(
+            ["docker", "compose", "logs", "--no-color"],
+            wait=True,
+            ignore_errors=True
+        )
+
+        # Analisa o status dos contêineres
+        ps_stdout, _ = run_docker_command(
+            ["docker", "compose", "ps", "--format", "{{.Name}}: {{.Status}}"],
+            wait=True
+        )
+
+        container_statuses = ps_stdout.strip().split('\n')
+
+        # Verifica se a instalação foi concluída
+        is_done = "auth_service" in ps_stdout and "running" in ps_stdout
+
+    except Exception as e:
+        stdout = ""
+        stderr = f"Erro ao obter status: {e}"
+        container_statuses = []
+        is_done = False
+
+    return render_template('status.html', logs=stdout, errors=stderr, statuses=container_statuses, done=is_done)
 
 @app.route('/success')
 def success():
