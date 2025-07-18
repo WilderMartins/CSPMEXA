@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Pré-Instalação do CSPMEXA</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f4f4f9; }
+        .container { max-width: 700px; margin-top: 50px; }
+        .card { padding: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card text-center">
+            <h1 class="card-header bg-primary text-white p-3">Bem-vindo ao Instalador do CSPMEXA</h1>
+            <div class="card-body">
+                <p class="lead">Este assistente irá instalar e configurar a aplicação.</p>
+                <hr>
+                <h4>Limpeza do Ambiente</h4>
+                <p>Para garantir uma instalação sem conflitos, recomendamos limpar qualquer ambiente de instalação anterior. Esta ação irá parar e remover os contêineres e volumes da aplicação que possam existir.</p>
+                <a href="{{ url_for('cleanup') }}" class="btn btn-warning btn-lg">Limpar Ambiente e Iniciar Instalação</a>
+                <hr>
+                <p class="mt-3">Se você tem certeza de que não há uma instalação anterior, pode pular a limpeza.</p>
+                <a href="{{ url_for('install_page') }}" class="btn btn-secondary">Pular Limpeza e Ir para Instalação</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
