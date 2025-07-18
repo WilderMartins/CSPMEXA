@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Status da Instalação</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body { background-color: #f4f4f9; }
+        .container { max-width: 900px; margin-top: 30px; }
+        .card-header { background-color: #0056b3; color: white; }
+        #logs, #statuses {
+            background-color: #333;
+            color: #f8f9fa;
+            font-family: monospace;
+            white-space: pre-wrap;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .status-running { color: #28a745; }
+        .status-exited { color: #dc3545; }
+        .status-starting { color: #ffc107; }
+    </style>
+    {% if not done %}
+    <meta http-equiv="refresh" content="5">
+    {% endif %}
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1 class="card-header text-center p-3">Status da Instalação</h1>
+            <div class="card-body">
+                {% if done %}
+                    <div class="alert alert-success">
+                        <h4>Instalação Concluída!</h4>
+                        <p>Todos os serviços parecem estar em execução. Você pode agora acessar a aplicação.</p>
+                        <a href="/" class="btn btn-primary">Voltar para o Início</a>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info">
+                        <p>A instalação está em andamento. Esta página será atualizada a cada 5 segundos.</p>
+                    </div>
+                {% endif %}
+
+                <h4>Status dos Contêineres</h4>
+                <div id="statuses">
+                    {% for status in statuses %}
+                        {% if 'running' in status or 'up' in status %}
+                            <p class="status-running">{{ status }}</p>
+                        {% elif 'exited' in status %}
+                            <p class="status-exited">{{ status }}</p>
+                        {% else %}
+                            <p class="status-starting">{{ status }}</p>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+
+                <h4 class="mt-4">Logs</h4>
+                <pre id="logs">{{ logs }}</pre>
+
+                {% if errors %}
+                    <h4 class="mt-4">Erros</h4>
+                    <pre id="errors" class="alert alert-danger">{{ errors }}</pre>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
