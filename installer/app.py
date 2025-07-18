@@ -102,6 +102,12 @@ def extract_vault_credentials_from_logs():
 def install():
     """Processa os dados do formulário, cria o .env e inicia os serviços."""
     try:
+        # 0. Limpar ambiente anterior para evitar conflitos
+        flash("Limpando ambiente de instalação anterior...", "info")
+        app.logger.info("Executando 'docker compose down' para limpar contêineres antigos.")
+        # O -v remove volumes anônimos, --remove-orphans remove contêineres de serviços não definidos
+        run_docker_command(["compose", "down", "-v", "--remove-orphans"])
+
         # 1. Iniciar o Vault e o setup
         flash("Iniciando o Vault para configuração inicial...", "info")
         app.logger.info("Iniciando containers vault e vault-setup...")
