@@ -1,6 +1,9 @@
 # Usar uma imagem Python leve
 FROM python:3.9-slim
 
+# Instalar o cliente Docker
+RUN apt-get update && apt-get install -y docker.io
+
 # Definir o diretório de trabalho no container
 WORKDIR /app
 

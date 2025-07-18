@@ -14,11 +14,19 @@ ENV_FILE_PATH = os.path.join('/app/config', '.env')
 DOCKER_COMPOSE_YML_PATH = '/app/config'
 
 def run_docker_command(command, capture=True):
-    """Helper para executar comandos Docker."""
+    """Helper para executar comandos Docker Compose."""
+    # Garante que o comando comece com 'docker compose'
+    if command[0] == "docker" and command[1] != "compose":
+        full_command = ["docker", "compose"] + command[1:]
+    elif command[0] != "docker":
+        full_command = ["docker", "compose"] + command
+    else:
+        full_command = command
+
     try:
         if capture:
             result = subprocess.run(
-                command,
+                full_command,
                 check=True,
                 cwd=DOCKER_COMPOSE_YML_PATH,
                 capture_output=True,
@@ -27,13 +35,13 @@ def run_docker_command(command, capture=True):
             return result.stdout, result.stderr
         else:
             subprocess.run(
-                command,
+                full_command,
                 check=True,
                 cwd=DOCKER_COMPOSE_YML_PATH
             )
             return "", ""
     except subprocess.CalledProcessError as e:
-        error_message = f"Comando falhou: {' '.join(command)}\n"
+        error_message = f"Comando falhou: {' '.join(full_command)}\n"
         error_message += f"Stdout: {e.stdout}\n"
         error_message += f"Stderr: {e.stderr}"
         raise RuntimeError(error_message)
@@ -56,10 +64,11 @@ def extract_vault_credentials_from_logs():
     app.logger.info("Aguardando o container 'cspmexa-vault-setup' concluir...")
 
     # Espera o container terminar
-    run_docker_command(["docker", "wait", "cspmexa-vault-setup"])
+    subprocess.run(["docker", "wait", "cspmexa-vault-setup"], check=True)
 
     # Pega os logs
-    logs, _ = run_docker_command(["docker", "logs", "cspmexa-vault-setup"])
+    result = subprocess.run(["docker", "logs", "cspmexa-vault-setup"], check=True, capture_output=True, text=True)
+    logs = result.stdout
     app.logger.info("Logs do vault-setup obtidos.")
 
     # Extrai as credenciais usando regex
