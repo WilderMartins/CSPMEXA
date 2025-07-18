@@ -64,11 +64,15 @@ def extract_vault_credentials_from_logs():
     app.logger.info("Aguardando o container 'cspmexa-vault-setup' concluir...")
 
     # Espera o container terminar
-    subprocess.run(["docker", "wait", "cspmexa-vault-setup"], check=True)
+    # Um loop de verificação com 'docker compose ps' é mais robusto que 'wait'
+    while True:
+        stdout, _ = run_docker_command(["compose", "ps", "--status=exited", "-q", "vault-setup"], capture=True)
+        if "vault-setup" in stdout:
+            break
+        time.sleep(2)
 
     # Pega os logs
-    result = subprocess.run(["docker", "logs", "cspmexa-vault-setup"], check=True, capture_output=True, text=True)
-    logs = result.stdout
+    logs, _ = run_docker_command(["compose", "logs", "vault-setup"], capture=True)
     app.logger.info("Logs do vault-setup obtidos.")
 
     # Extrai as credenciais usando regex
