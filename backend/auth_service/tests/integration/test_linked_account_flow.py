@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from unittest.mock import patch
 
 from app.main import app
-from app.tests.integration.test_auth_flow import db_session, client # Reutilizar fixtures
 from app.schemas.linked_account_schema import LinkedAccountCreate
 from app.services.token_service import token_service
 from app.models.user_model import User, UserRole
@@ -17,7 +16,7 @@ def admin_token_headers(db_session: Session) -> dict:
     db_session.commit()
 
     # Gerar um token para este usuário
-    token = token_service.create_jwt_token(subject=str(admin_user.id), claims={"role": admin_user.role.value})
+    token = token_service.create_jwt_token_with_custom_claims(subject=str(admin_user.id), claims={"role": admin_user.role.value})
     return {"Authorization": f"Bearer {token}"}
 
 def test_create_linked_account_as_admin(client: TestClient, admin_token_headers: dict):
@@ -60,7 +59,7 @@ def test_create_linked_account_as_non_admin_fails(client: TestClient, db_session
     user = User(email="user@test.com", role=UserRole.USER, is_active=True)
     db_session.add(user)
     db_session.commit()
-    token = token_service.create_jwt_token(subject=str(user.id), claims={"role": user.role.value})
+    token = token_service.create_jwt_token_with_custom_claims(subject=str(user.id), claims={"role": user.role.value})
     headers = {"Authorization": f"Bearer {token}"}
 
     account_data = {"name": "Fail Account", "provider": "aws", "account_id": "111", "credentials": {}}
