@@ -18,8 +18,8 @@ app.logger.addHandler(handler)
 app.logger.setLevel(logging.INFO)
 
 # Caminhos
-ENV_FILE_PATH = os.path.join('/app/config', '.env')
-DOCKER_COMPOSE_YML_PATH = '/app/config'
+ENV_FILE_PATH = os.path.join('/app', '.env')
+DOCKER_COMPOSE_YML_PATH = '/app'
 
 def run_docker_command(command, wait=True, ignore_errors=False):
     """Helper para executar comandos Docker Compose."""
