@@ -46,7 +46,6 @@ class PolicyEngine:
         if not data:
             return []
 
-
         with SessionLocal() as db:
             # 1. Salvar os ativos no inventário
             self._save_assets(db, request_data)
