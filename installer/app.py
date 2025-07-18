@@ -15,18 +15,10 @@ DOCKER_COMPOSE_YML_PATH = '/app/config'
 
 def run_docker_command(command, capture=True):
     """Helper para executar comandos Docker Compose."""
-    # Garante que o comando comece com 'docker compose'
-    if command[0] == "docker" and command[1] != "compose":
-        full_command = ["docker", "compose"] + command[1:]
-    elif command[0] != "docker":
-        full_command = ["docker", "compose"] + command
-    else:
-        full_command = command
-
     try:
         if capture:
             result = subprocess.run(
-                full_command,
+                command,
                 check=True,
                 cwd=DOCKER_COMPOSE_YML_PATH,
                 capture_output=True,
@@ -66,13 +58,13 @@ def extract_vault_credentials_from_logs():
     # Espera o container terminar
     # Um loop de verificação com 'docker compose ps' é mais robusto que 'wait'
     while True:
-        stdout, _ = run_docker_command(["compose", "ps", "--status=exited", "-q", "vault-setup"], capture=True)
+        stdout, _ = run_docker_command(["docker", "compose", "ps", "--status=exited", "-q", "vault-setup"], capture=True)
         if "vault-setup" in stdout:
             break
         time.sleep(2)
 
     # Pega os logs
-    logs, _ = run_docker_command(["compose", "logs", "vault-setup"], capture=True)
+    logs, _ = run_docker_command(["docker", "compose", "logs", "vault-setup"], capture=True)
     app.logger.info("Logs do vault-setup obtidos.")
 
     # Extrai as credenciais usando regex
@@ -106,7 +98,7 @@ def install():
         flash("Limpando ambiente de instalação anterior...", "info")
         app.logger.info("Executando 'docker compose down' para limpar contêineres antigos.")
         # O -v remove volumes anônimos, --remove-orphans remove contêineres de serviços não definidos
-        run_docker_command(["compose", "down", "-v", "--remove-orphans"])
+        run_docker_command(["docker", "compose", "down", "-v", "--remove-orphans"])
 
         # 1. Iniciar o Vault e o setup
         flash("Iniciando o Vault para configuração inicial...", "info")
