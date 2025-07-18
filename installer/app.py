@@ -107,10 +107,7 @@ def perform_install():
         # 3. Coletar e gerar dados do .env
         form_data = request.form.to_dict()
         db_password = form_data.get('AUTH_DB_PASSWORD') or secrets.token_urlsafe(16)
-        jwt_secret_key = form_data.get('JWT_SECRET_KEY') # Agora vem do formulário
-
-        if not jwt_secret_key:
-            raise ValueError("JWT_SECRET_KEY é obrigatória.")
+        jwt_secret_key = secrets.token_hex(32) # Gerado automaticamente
 
         env_content = f"""
 # ... (conteúdo do .env como antes, usando os dados do form e do vault_creds) ...
