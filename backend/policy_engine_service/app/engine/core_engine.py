@@ -70,6 +70,7 @@ class PolicyEngine:
         return generated_alerts
 
 policy_engine = PolicyEngine()
+
             try:
                 alerts_from_policy = evaluate_policy(policy=policy, data=data, account_id=account_id)
                 if alerts_from_policy:
