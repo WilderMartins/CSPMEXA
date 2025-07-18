@@ -1,15 +1,15 @@
-# Usar uma imagem Python leve
-FROM python:3.9-slim
+# Usar a imagem oficial do Docker que já inclui o cliente e o compose v2
+FROM docker:latest
 
-# Instalar o cliente Docker
-RUN apt-get update && apt-get install -y docker.io
+# Instalar Python e pip
+RUN apk add --no-cache python3 py3-pip
 
 # Definir o diretório de trabalho no container
 WORKDIR /app
 
 # Copiar o arquivo de dependências e instalar
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Copiar o resto do código do aplicativo
 COPY . .
