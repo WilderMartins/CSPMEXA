@@ -11,7 +11,7 @@ from app.models.user_model import User, UserRole
 @pytest.fixture
 def admin_token_headers(db_session: Session) -> dict:
     # Criar um usuário admin para o teste
-    admin_user = User(email="admin@test.com", role=UserRole.ADMINISTRATOR, is_active=True)
+    admin_user = User(email="admin@test.com", role=UserRole.ADMIN, is_active=True)
     db_session.add(admin_user)
     db_session.commit()
 
@@ -56,7 +56,7 @@ def test_create_linked_account_as_non_admin_fails(client: TestClient, db_session
     Testa que um usuário não-admin não pode criar uma conta vinculada.
     """
     # Criar um usuário normal
-    user = User(email="user@test.com", role=UserRole.USER, is_active=True)
+    user = User(email="user@test.com", role=UserRole.ANALYST, is_active=True)
     db_session.add(user)
     db_session.commit()
     token = token_service.create_jwt_token_with_custom_claims(subject=str(user.id), claims={"role": user.role.value})
@@ -66,4 +66,4 @@ def test_create_linked_account_as_non_admin_fails(client: TestClient, db_session
     response = client.post("/api/v1/accounts/", headers=headers, json=account_data)
 
     assert response.status_code == 403 # Forbidden
-    assert "User does not have the required 'Administrator' role" in response.json()["detail"]
+    assert "User does not have the required 'admin' role" in response.json()["detail"]

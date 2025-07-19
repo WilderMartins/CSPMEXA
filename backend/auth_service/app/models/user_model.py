@@ -5,11 +5,9 @@ import enum
 
 
 class UserRole(str, enum.Enum):
-    USER = "User"
-    TECHNICAL_LEAD = "TechnicalLead"
-    MANAGER = "Manager"
-    ADMINISTRATOR = "Administrator"
-    SUPER_ADMINISTRATOR = "SuperAdministrator"
+    ADMIN = "admin"
+    ANALYST = "analyst"
+    AUDITOR = "auditor"
 
 
 _user_table_defined = False
@@ -29,7 +27,7 @@ class User(Base):
 
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)  # Mantido, pode ser redundante com SuperAdministrator ou ter outro propósito
-    role = Column(SQLAlchemyEnum(UserRole, name="user_role_enum", create_type=False), default=UserRole.USER, nullable=False)
+    role = Column(SQLAlchemyEnum(UserRole, name="user_role_enum", create_type=False), default=UserRole.ANALYST, nullable=False)
 
     # Campos de perfil adicionais (opcionais)
     full_name = Column(String, nullable=True)

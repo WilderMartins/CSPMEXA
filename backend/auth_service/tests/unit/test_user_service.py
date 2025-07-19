@@ -49,7 +49,7 @@ def test_get_or_create_user_oauth_new_user(mock_db_session):
     assert created_user.full_name == full_name
     assert created_user.profile_picture_url == profile_picture_url
     assert created_user.is_active is True
-    assert created_user.role == UserRole.USER # Verificar contra o Enum
+    assert created_user.role == UserRole.ANALYST  # Verificar contra o Enum
 
 
 def test_get_or_create_user_oauth_existing_user_by_google_id(mock_db_session):

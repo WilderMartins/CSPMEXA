@@ -61,6 +61,8 @@ services:
       - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
       - VAULT_ADDR=http://vault:8200
+      - AUDIT_SERVICE_URL=http://audit_service:8005
+
     volumes:
       - ./backend/auth_service:/app # Monta o código para hot-reloading
       - vault_secrets_auth:/vault/secrets
@@ -252,6 +254,20 @@ services:
       EOF
     depends_on:
       - vault-setup
+
+  audit_service:
+    profiles: ["app"]
+    build:
+      context: ./backend/audit_service
+      dockerfile: Dockerfile
+    container_name: cspmexa-audit-service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8005 --reload
+    volumes:
+      - ./backend/audit_service/app:/app/app
+    networks:
+      - cspmexa_net
+
 
   api_gateway_service:
     profiles: ["app"]

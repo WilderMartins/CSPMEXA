@@ -51,4 +51,4 @@ def test_google_callback_creates_new_user_and_returns_token(client, db_session):
     decoded_token = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     assert decoded_token["sub"] == str(user.id)
     assert decoded_token["email"] == "testuser@example.com"
-    assert decoded_token["role"] == "User"
+    assert decoded_token["role"] == "analyst"

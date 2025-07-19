@@ -9,7 +9,7 @@ class UserBase(BaseModel):
     email: EmailStr
     is_active: Optional[bool] = Field(True)
     is_superuser: Optional[bool] = Field(False) # Mantido para consistência, mas SuperAdministrator é o principal
-    role: Optional[UserRole] = Field(UserRole.USER) # Usar o Enum e definir default
+    role: Optional[UserRole] = Field(UserRole.ANALYST) # Usar o Enum e definir default
     google_id: Optional[str] = None
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
@@ -63,3 +63,6 @@ class MFAEnableSchema(BaseModel):
 class MFASetupSchema(BaseModel):
     secret_key: str
     otp_uri: str
+
+class RoleUpdateRequest(BaseModel):
+    role: UserRole

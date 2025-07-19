@@ -38,6 +38,15 @@ class AppSettings(BaseSettings):
     FRONTEND_URL_MFA_SETUP: str = "http://localhost:3000/mfa-setup"
     FRONTEND_URL_MFA_REQUIRED: str = "http://localhost:3000/mfa-login"
 
+    # Configurações do Vault (para o credentials_service)
+    VAULT_ADDR: str = "http://vault:8200"
+    VAULT_ROLE_ID: Optional[str] = None
+    VAULT_SECRET_ID: Optional[str] = None
+
+    # URL do serviço de auditoria
+    AUDIT_SERVICE_URL: Optional[str] = None
+
+
     class Config:
         case_sensitive = True
         # Pydantic-settings carrega automaticamente do ambiente.
@@ -45,6 +54,7 @@ class AppSettings(BaseSettings):
         # carrega o /vault/secrets/auth-secrets.env para o ambiente.
         env_file = ".env" # Pode ainda ser usado para configs não-secretas
         env_file_encoding = "utf-8"
+        extra = "ignore"
 
 @lru_cache()
 def get_settings() -> AppSettings:
@@ -60,5 +70,27 @@ def get_settings() -> AppSettings:
         logger.error(f"Erro ao carregar as configurações: {e}")
         raise
 
-# Instância global das configurações
 settings = get_settings()
+
+@lru_cache()
+def get_vault_client() -> Optional[hvac.Client]:
+    """
+    Cria e autentica um cliente HVAC para o Vault.
+    Esta função é usada especificamente pelo credentials_service.
+    """
+    client = hvac.Client(url=settings.VAULT_ADDR)
+    try:
+        if settings.VAULT_ROLE_ID and settings.VAULT_SECRET_ID:
+            client.auth.approle.login(
+                role_id=settings.VAULT_ROLE_ID,
+                secret_id=settings.VAULT_SECRET_ID,
+            )
+            if client.is_authenticated():
+                logger.info("Cliente do Vault autenticado com sucesso via AppRole para o credentials_service.")
+                return client
+    except Exception as e:
+        logger.error(f"Falha ao autenticar no Vault com AppRole para o credentials_service: {e}")
+
+    logger.warning("Não foi possível autenticar no Vault com AppRole. O credentials_service pode não funcionar.")
+    return None
+
