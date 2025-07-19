@@ -177,14 +177,23 @@ def perform_install():
     try:
         # Coletar dados do formulário
         form_data = request.form.to_dict()
+
+        # Validação de e-mails
+        emails_to_validate = [
+            'EMAILS_FROM_EMAIL',
+            'DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL',
+            'GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL'
+        ]
+        for email_field in emails_to_validate:
+            email = form_data.get(email_field)
+            if email and not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                flash(f"O endereço de e-mail fornecido para '{email_field}' é inválido.", "danger")
+                return redirect(url_for('install_page'))
+
         db_password = form_data.get('AUTH_DB_PASSWORD') or secrets.token_urlsafe(16)
         jwt_secret_key = secrets.token_hex(32)
 
-        # Usar placeholders para credenciais do Vault
-        vault_role_id = "dummy-role-id"
-        vault_secret_id = "dummy-secret-id"
-
-        # Criar o conteúdo do .env
+        # Criar o conteúdo do .env com todos os campos do formulário
         env_content = f"""
 AUTH_DB_USER={form_data.get('AUTH_DB_USER', 'cspmexa_user')}
 AUTH_DB_PASSWORD={db_password}
@@ -194,24 +203,24 @@ API_GATEWAY_PORT={form_data.get('API_GATEWAY_PORT', '8050')}
 GOOGLE_CLIENT_ID={form_data.get('GOOGLE_CLIENT_ID', '')}
 GOOGLE_CLIENT_SECRET={form_data.get('GOOGLE_CLIENT_SECRET', '')}
 JWT_SECRET_KEY={jwt_secret_key}
-AUTH_SERVICE_VAULT_ROLE_ID={vault_role_id}
-AUTH_SERVICE_VAULT_SECRET_ID={vault_secret_id}
-EMAILS_FROM_EMAIL=""
-DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=""
-AWS_ACCESS_KEY_ID=""
-AWS_SECRET_ACCESS_KEY=""
-GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL=""
-AZURE_SUBSCRIPTION_ID=""
-AZURE_TENANT_ID=""
-AZURE_CLIENT_ID=""
-AZURE_CLIENT_SECRET=""
-HUAWEICLOUD_SDK_AK=""
-HUAWEICLOUD_SDK_SK=""
-HUAWEICLOUD_SDK_PROJECT_ID=""
-HUAWEICLOUD_SDK_DOMAIN_ID=""
-M365_CLIENT_ID=""
-M365_CLIENT_SECRET=""
-M365_TENANT_ID=""
+AUTH_SERVICE_VAULT_ROLE_ID={form_data.get('AUTH_SERVICE_VAULT_ROLE_ID', '')}
+AUTH_SERVICE_VAULT_SECRET_ID={form_data.get('AUTH_SERVICE_VAULT_SECRET_ID', '')}
+EMAILS_FROM_EMAIL={form_data.get('EMAILS_FROM_EMAIL', '')}
+DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL={form_data.get('DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL', '')}
+AWS_ACCESS_KEY_ID={form_data.get('AWS_ACCESS_KEY_ID', '')}
+AWS_SECRET_ACCESS_KEY={form_data.get('AWS_SECRET_ACCESS_KEY', '')}
+GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL={form_data.get('GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL', '')}
+AZURE_SUBSCRIPTION_ID={form_data.get('AZURE_SUBSCRIPTION_ID', '')}
+AZURE_TENANT_ID={form_data.get('AZURE_TENANT_ID', '')}
+AZURE_CLIENT_ID={form_data.get('AZURE_CLIENT_ID', '')}
+AZURE_CLIENT_SECRET={form_data.get('AZURE_CLIENT_SECRET', '')}
+HUAWEICLOUD_SDK_AK={form_data.get('HUAWEICLOUD_SDK_AK', '')}
+HUAWEICLOUD_SDK_SK={form_data.get('HUAWEICLOUD_SDK_SK', '')}
+HUAWEICLOUD_SDK_PROJECT_ID={form_data.get('HUAWEICLOUD_SDK_PROJECT_ID', '')}
+HUAWEICLOUD_SDK_DOMAIN_ID={form_data.get('HUAWEICLOUD_SDK_DOMAIN_ID', '')}
+M365_CLIENT_ID={form_data.get('M365_CLIENT_ID', '')}
+M365_CLIENT_SECRET={form_data.get('M365_CLIENT_SECRET', '')}
+M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 """
         # Escrever o arquivo .env
         with open(ENV_FILE_PATH, 'w') as f:
