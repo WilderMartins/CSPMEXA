@@ -4,7 +4,7 @@ import secrets
 import shutil
 import subprocess
 import time
-from flask import Flask, render_template, request, redirect, flash, url_for
+from flask import Flask, render_template, request, redirect, flash, url_for, jsonify
 import logging
 import sys
 
@@ -213,45 +213,60 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
         flash(f"Ocorreu um erro: {e}", "danger")
         return redirect(url_for('install_page'))
 
+from flask import jsonify
+
 @app.route('/status')
 def status():
-    """Verifica e exibe o status da instalação."""
+    """Verifica e retorna o status da instalação como JSON."""
+    services = [
+        "postgres_auth_db", "vault", "vault-setup", "auth_service",
+        "collector_service", "policy_engine_service", "notification_service",
+        "api_gateway_service", "frontend_build", "nginx"
+    ]
+    statuses = {}
+    for service in services:
+        try:
+            stdout, _ = run_docker_command(
+                ["docker", "compose", "ps", "--format", "{{.State}}", service],
+                wait=True,
+                ignore_errors=True
+            )
+            status_text = stdout.strip()
+            if not status_text:
+                statuses[service] = "not_started"
+            else:
+                # Simplifica o status para facilitar a análise no frontend
+                if 'running' in status_text:
+                    statuses[service] = 'running'
+                elif 'exited' in status_text:
+                    statuses[service] = 'exited'
+                else:
+                    statuses[service] = 'starting'
+        except Exception as e:
+            statuses[service] = "error"
+            app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
+
+    essential_services = [
+        "api_gateway_service", "auth_service", "collector_service",
+        "notification_service", "policy_engine_service", "nginx"
+    ]
+    is_done = all(statuses.get(s) == 'running' for s in essential_services)
+
+    return jsonify(statuses=statuses, done=is_done)
+
+@app.route('/logs/<service_name>')
+def service_logs(service_name):
+    """Retorna os logs de um serviço específico."""
     try:
-        # Analisa o status dos contêineres
-        ps_stdout, ps_stderr = run_docker_command(
-            ["docker", "compose", "ps", "--format", "{{.Name}}: {{.State}}"],
+        logs, _ = run_docker_command(
+            ["docker", "compose", "logs", "--no-color", "--tail=100", service_name],
             wait=True,
             ignore_errors=True
         )
-        container_statuses = ps_stdout.strip().split('\n') if ps_stdout else []
-
-        # Obter logs apenas dos contêineres que estão 'running' ou 'exited'
-        log_stdout, log_stderr = run_docker_command(
-            ["docker", "compose", "logs", "--no-color", "--tail=200"],
-            wait=True,
-            ignore_errors=True
-        )
-
-        # Combinar saídas de erro para depuração
-        errors = (ps_stderr or "") + "\n" + (log_stderr or "")
-        errors = errors.strip()
-
-        # Verifica se todos os serviços essenciais estão 'running'
-        essential_services = [
-            "api-gateway", "auth-service", "collector-service",
-            "notification-service", "policy-engine-service"
-        ]
-        running_services = [s for s in container_statuses if "running" in s]
-        is_done = all(any(service in status for status in running_services) for service in essential_services)
-
+        return logs
     except Exception as e:
-        app.logger.error(f"Erro ao obter status da instalação: {e}")
-        log_stdout = ""
-        errors = f"Erro ao obter status: {e}"
-        container_statuses = []
-        is_done = False
-
-    return render_template('status.html', logs=log_stdout, errors=errors, statuses=container_statuses, done=is_done)
+        app.logger.error(f"Erro ao obter logs para o serviço {service_name}: {e}")
+        return f"Erro ao carregar logs para {service_name}."
 
 @app.route('/success')
 def success():
