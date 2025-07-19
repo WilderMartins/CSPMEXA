@@ -6,19 +6,17 @@
 
 Bem-vindo ao guia de instalação do CSPMEXA! Este guia foi projetado para ser o mais simples possível, permitindo que qualquer pessoa, mesmo sem conhecimento técnico profundo, possa instalar e configurar o sistema.
 
-## Passo 1: Preparando o Servidor
+## Passo 1: Pré-requisitos
 
-Antes de começar, você precisa de um servidor (ou máquina local) com um sistema operacional Linux. Os comandos abaixo são para **Ubuntu/Debian**. Se você usa outro sistema, os comandos podem variar um pouco.
+Antes de começar, você precisa de um servidor (ou máquina local) com um sistema operacional Linux e o Docker instalado.
 
 ### 1.1 - Instalando o Docker
 
-O Docker é a tecnologia que usamos para rodar o CSPMEXA de forma isolada e segura. Para instalá-lo, abra o terminal do seu servidor e copie e cole os comandos abaixo, um de cada vez.
+Se você ainda não tem o Docker, pode instalá-lo seguindo o guia oficial para o seu sistema operacional. Para **Ubuntu/Debian**, você pode usar os seguintes comandos:
 
 ```bash
-# Atualiza a lista de pacotes do seu servidor
+# Atualiza a lista de pacotes e instala dependências
 sudo apt-get update
-
-# Instala pacotes necessários para permitir que o 'apt' use um repositório sobre HTTPS
 sudo apt-get install -y ca-certificates curl gnupg
 
 # Adiciona a chave GPG oficial do Docker
@@ -31,21 +29,13 @@ echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# Atualiza a lista de pacotes novamente, agora com o Docker
 sudo apt-get update
 
 # Instala o Docker Engine, CLI, Containerd e o plugin do Docker Compose
 sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 ```
 
-Para garantir que o Docker foi instalado corretamente, rode o comando:
-```bash
-sudo docker --version
-```
-Você deverá ver a versão do Docker que foi instalada.
-
-### 1.2 - Adicionando seu usuário ao grupo do Docker (Opcional, mas recomendado)
+### 1.2 - Permissões do Docker (Recomendado)
 
 Para evitar ter que digitar `sudo` toda vez que usar o Docker, adicione seu usuário ao grupo `docker`:
 
@@ -55,43 +45,22 @@ sudo usermod -aG docker ${USER}
 
 **Importante:** Após rodar este comando, você precisa **fazer logout e login novamente** no servidor para que a alteração tenha efeito.
 
-## Passo 2: Baixando e Configurando o CSPMEXA
+## Passo 2: Baixando e Iniciando o Instalador
 
-Agora que o Docker está pronto, vamos baixar e configurar o código do CSPMEXA.
+Com os pré-requisitos atendidos, o resto do processo é feito pelo nosso assistente de instalação web.
 
 ```bash
 # 1. Clone o repositório do projeto
-git clone https://github.com/seu-usuario/seu-repositorio.git cspmexa
+git clone https://github.com/CSPFatec/cspmexa.git
 cd cspmexa
 
-# 2. Copie o arquivo de exemplo de ambiente
-cp .env.example .env
+# 2. Inicie o assistente de instalação
+docker compose up --build installer
 ```
 
-### 2.1 - Gerar a Chave Secreta JWT
+Este comando irá construir e iniciar apenas o serviço de instalação.
 
-Antes de iniciar a aplicação, você **precisa** gerar uma chave secreta para a segurança dos tokens de autenticação.
-
-Execute o seguinte comando no seu terminal:
-```bash
-openssl rand -hex 32
-```
-Este comando irá gerar uma string longa e aleatória, que é a sua chave secreta.
-
-Agora, abra o arquivo `.env` que você acabou de criar e encontre a linha `JWT_SECRET_KEY=...`. Substitua o valor do placeholder pela chave que você gerou.
-
-## Passo 3: Iniciando o Assistente de Instalação
-
-A parte complicada já passou! Agora, vamos usar nosso assistente de instalação para configurar tudo de forma fácil e rápida.
-
-Rode o seguinte comando para iniciar o assistente:
-
-```bash
-# Este comando irá construir e iniciar o serviço de instalação.
-# Por padrão, apenas o assistente será iniciado.
-# Pode levar alguns minutos na primeira vez.
-docker compose up --build
-```
+## Passo 3: Usando o Assistente de Instalação Web
 
 Após o comando terminar, abra seu navegador de internet e acesse o seguinte endereço:
 
@@ -99,11 +68,22 @@ Após o comando terminar, abra seu navegador de internet e acesse o seguinte end
 
 (Substitua `SEU_ENDERECO_DE_IP` pelo endereço de IP do seu servidor).
 
-Você será recebido pelo nosso assistente de instalação passo a passo. Siga as instruções na tela para:
-1.  Configurar o banco de dados.
-2.  Definir as configurações gerais do sistema.
-3.  (Opcional) Adicionar credenciais para seus provedores de nuvem.
+O assistente irá guiá-lo em três etapas:
 
-O assistente irá gerar todas as chaves e arquivos de configuração necessários automaticamente. Ao final do processo, ele irá iniciar todos os serviços do CSPMEXA para você.
+### Etapa 1: Verificação de Pré-requisitos
+O assistente verificará automaticamente se o Docker está instalado, em execução e se você tem as permissões corretas. Se houver algum problema, ele fornecerá instruções sobre como corrigi-lo.
+
+### Etapa 2: Configuração do Ambiente
+Você será apresentado a um formulário para configurar todos os aspectos do seu ambiente, incluindo:
+-   Configurações de banco de dados.
+-   Credenciais para o Google OAuth.
+-   (Opcional) Credenciais para os provedores de nuvem que você deseja monitorar (AWS, Azure, etc.).
+
+O assistente irá gerar automaticamente todos os arquivos de configuração necessários (`.env`) e as chaves de segurança.
+
+### Etapa 3: Acompanhamento da Instalação
+Após enviar a configuração, você será redirecionado para uma página de status detalhada. Nesta página, você poderá ver o status de cada serviço individualmente (ex: "iniciando", "em execução", "com falha") e visualizar os logs de cada serviço para diagnosticar problemas facilmente.
+
+Quando todos os serviços essenciais estiverem em execução, a instalação estará concluída!
 
 E é isso! Seu sistema CSPMEXA estará instalado e pronto para uso.

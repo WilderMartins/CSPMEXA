@@ -2,28 +2,98 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Pré-Instalação do CSPMEXA</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instalação - Verificação de Pré-requisitos</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <style>
-        body { background-color: #f4f4f9; }
-        .container { max-width: 700px; margin-top: 50px; }
-        .card { padding: 30px; }
+        body { background-color: #f8f9fa; }
+        .container { max-width: 700px; margin-top: 4rem; }
+        .card { padding: 2rem; }
+        .status-icon { font-size: 1.2rem; }
+        .bi-check-circle-fill { color: #198754; } /* Verde */
+        .bi-x-circle-fill { color: #dc3545; } /* Vermelho */
+        .bi-question-circle-fill { color: #ffc107; } /* Amarelo */
+        .table th { width: 40%; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="card text-center">
-            <h1 class="card-header bg-primary text-white p-3">Bem-vindo ao Instalador do CSPMEXA</h1>
-            <div class="card-body">
-                <p class="lead">Este assistente irá instalar e configurar a aplicação.</p>
-                <hr>
-                <h4>Limpeza do Ambiente</h4>
-                <p>Para garantir uma instalação sem conflitos, recomendamos limpar qualquer ambiente de instalação anterior. Esta ação irá parar e remover os contêineres e volumes da aplicação que possam existir.</p>
-                <a href="{{ url_for('cleanup') }}" class="btn btn-warning btn-lg">Limpar Ambiente e Iniciar Instalação</a>
-                <hr>
-                <p class="mt-3">Se você tem certeza de que não há uma instalação anterior, pode pular a limpeza.</p>
-                <a href="{{ url_for('install_page') }}" class="btn btn-secondary">Pular Limpeza e Ir para Instalação</a>
-            </div>
+        <div class="card shadow-sm">
+            <h1 class="text-center mb-4">Verificação de Pré-requisitos</h1>
+            <p>Antes de prosseguir com a instalação, o sistema verificou se os pré-requisitos essenciais estão corretamente configurados no seu ambiente.</p>
+
+            <table class="table table-bordered my-4">
+                <thead>
+                    <tr>
+                        <th>Componente</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Docker Instalado</td>
+                        <td class="text-center">
+                            <i class="bi {{ 'bi-check-circle-fill' if prereqs.docker_installed else 'bi-x-circle-fill' }} status-icon"></i>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Serviço do Docker em Execução</td>
+                        <td class="text-center">
+                            <i class="bi {{ 'bi-check-circle-fill' if prereqs.docker_running else 'bi-x-circle-fill' }} status-icon"></i>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Permissão para Executar Docker</td>
+                        <td class="text-center">
+                            <i class="bi {{ 'bi-check-circle-fill' if prereqs.docker_permission else 'bi-x-circle-fill' }} status-icon"></i>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Docker Compose Instalado</td>
+                        <td class="text-center">
+                            <i class="bi {{ 'bi-check-circle-fill' if prereqs.docker_compose_installed else 'bi-x-circle-fill' }} status-icon"></i>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            {% if not all_ok %}
+                <div class="alert alert-danger">
+                    <h5 class="alert-heading">Problemas Encontrados!</h5>
+                    <p>Um ou mais pré-requisitos não foram atendidos. Por favor, corrija os problemas abaixo antes de continuar.</p>
+                    <ul>
+                        {% if not prereqs.docker_installed %}
+                            <li><b>Docker não encontrado:</b> O comando <code>docker</code> não foi encontrado no seu sistema. Certifique-se de que o Docker está instalado corretamente.</li>
+                        {% endif %}
+                        {% if not prereqs.docker_running %}
+                            <li><b>Serviço do Docker parado:</b> Não foi possível conectar ao daemon do Docker. Verifique se o serviço do Docker está em execução (<code>sudo systemctl status docker</code>).</li>
+                        {% endif %}
+                        {% if not prereqs.docker_permission %}
+                            <li><b>Permissão do Docker negada:</b> O usuário atual não tem permissão para usar o Docker. Adicione seu usuário ao grupo <code>docker</code> com o comando <code>sudo usermod -aG docker ${USER}</code> e reinicie sua sessão (logout/login).</li>
+                        {% endif %}
+                        {% if not prereqs.docker_compose_installed %}
+                            <li><b>Docker Compose não encontrado:</b> O comando <code>docker compose</code> não está funcionando. Verifique se o plugin do Docker Compose foi instalado corretamente.</li>
+                        {% endif %}
+                    </ul>
+                    <hr>
+                    <p class="mb-0">
+                        Consulte o <a href="https://github.com/CSPFatec/cspmexa/blob/main/INSTALL.md" target="_blank">Guia de Instalação</a> para instruções detalhadas.
+                    </p>
+                </div>
+                 <div class="d-grid mt-3">
+                    <a href="{{ url_for('pre_install_check') }}" class="btn btn-primary">Verificar Novamente</a>
+                </div>
+            {% else %}
+                <div class="alert alert-success">
+                    <h5 class="alert-heading">Tudo Certo!</h5>
+                    <p>Todos os pré-requisitos foram atendidos. Você pode prosseguir com a instalação.</p>
+                </div>
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('cleanup') }}" class="btn btn-danger">Limpar Ambiente Anterior e Instalar</a>
+                    <a href="{{ url_for('install_page') }}" class="btn btn-secondary">Pular Limpeza e Ir para Instalação</a>
+                </div>
+            {% endif %}
         </div>
     </div>
 </body>

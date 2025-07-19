@@ -6,7 +6,7 @@ import { Routes, Route, Link, Navigate, useLocation, useNavigate, NavLink } from
 import { useTranslation } from 'react-i18next';
 import { AppShell, Burger, Group, UnstyledButton, Text, Box, Anchor, Button as MantineButton, Loader, Center, NavLink as MantineNavLink } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox } from '@tabler/icons-react';
+import { IconGauge, IconChartInfographic, IconBulb, IconSettings, IconKey, IconBrandAws, IconBrandGoogle, IconCloud, IconBrandWindows, IconBuildingStore, IconBox, IconBook } from '@tabler/icons-react';
 import { useAuth } from './contexts/AuthContext';
 import { useAppStore } from './stores/store';
 
@@ -23,6 +23,7 @@ const LinkedAccountsPage = lazy(() => import('./pages/Admin/LinkedAccountsPage')
 const InventoryPage = lazy(() => import('./pages/InventoryPage'));
 const AttackPathsPage = lazy(() => import('./pages/AttackPathsPage'));
 const RemediationsPage = lazy(() => import('./pages/Admin/RemediationsPage'));
+const AuditPage = lazy(() => import('./pages/Audit/AuditPage'));
 
 // Componentes de rota não precisam de lazy load
 import ProtectedRoute from './components/Common/ProtectedRoute';
@@ -105,6 +106,7 @@ function App() {
     { icon: <IconBulb size={22} />, label: t('header.navInsights', 'Insights'), to: '/insights' },
     { icon: <IconSettings size={22} />, label: t('header.navSettings', 'Settings'), to: '/settings' },
     { icon: <IconKey size={22} />, label: t('header.navCredentials', 'Credentials'), to: '/settings/credentials' }, // Adicionado
+    { icon: <IconBook size={22} />, label: t('header.navAudit', 'Audit'), to: '/audit' },
   ];
 
   const providerLinks = [
@@ -226,6 +228,11 @@ function App() {
               <Route path="/inventory" element={auth.isAuthenticated ? <InventoryPage /> : <Navigate to="/" replace />} />
               <Route path="/attack-paths" element={auth.isAuthenticated ? <AttackPathsPage /> : <Navigate to="/" replace />} />
               <Route path="/access-denied" element={<AccessDeniedPage />} />
+              <Route path="/audit" element={
+                  <ProtectedRoute requiredRole={["Administrator", "Auditor"]}>
+                    <AuditPage />
+                  </ProtectedRoute>
+                } />
               <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/dashboard" : "/"} replace />} />
             </Routes>
         </Suspense>
