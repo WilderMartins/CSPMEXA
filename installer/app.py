@@ -1,6 +1,7 @@
 import os
 import re
 import secrets
+import shutil
 import subprocess
 import time
 from flask import Flask, render_template, request, redirect, flash, url_for
@@ -20,6 +21,69 @@ app.logger.setLevel(logging.INFO)
 # Caminhos
 ENV_FILE_PATH = os.path.join('/app', '.env')
 DOCKER_COMPOSE_YML_PATH = '/app'
+
+def check_prerequisites():
+    """Verifica se todos os pré-requisitos para a instalação estão atendidos."""
+    app.logger.info("Iniciando verificação de pré-requisitos...")
+    prereqs = {
+        'docker_installed': False,
+        'docker_running': False,
+        'docker_permission': False,
+        'docker_compose_installed': False,
+    }
+
+    # 1. Docker está instalado?
+    if shutil.which("docker"):
+        prereqs['docker_installed'] = True
+        app.logger.info("Verificação 'docker_installed': SUCESSO")
+    else:
+        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado.")
+        return prereqs # Encerra se o Docker não estiver instalado
+
+    # 2. Docker está em execução e com permissões corretas?
+    try:
+        # Tenta executar um comando Docker que requer conexão com o daemon
+        subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        prereqs['docker_running'] = True
+        prereqs['docker_permission'] = True
+        app.logger.info("Verificação 'docker_running': SUCESSO")
+        app.logger.info("Verificação 'docker_permission': SUCESSO")
+    except subprocess.CalledProcessError as e:
+        if "permission denied" in e.stderr.lower():
+            prereqs['docker_running'] = True # O daemon está rodando, mas o usuário não tem permissão
+            app.logger.warning("Verificação 'docker_running': SUCESSO")
+            app.logger.error("Verificação 'docker_permission': FALHA - Permissão negada para acessar o Docker daemon.")
+        else:
+            app.logger.error(f"Verificação 'docker_running': FALHA - Docker daemon não parece estar em execução. Erro: {e.stderr}")
+    except FileNotFoundError:
+        # Este caso já é coberto por shutil.which, mas é uma boa prática mantê-lo
+        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado ao tentar executar 'docker info'.")
+
+
+    # 3. Docker Compose está instalado?
+    # O Docker Compose V2 é um plugin, então `docker compose` (sem hífen) é o comando preferido.
+    try:
+        subprocess.run(
+            ["docker", "compose", "version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        prereqs['docker_compose_installed'] = True
+        app.logger.info("Verificação 'docker_compose_installed': SUCESSO")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        app.logger.error("Verificação 'docker_compose_installed': FALHA - 'docker compose' não funciona.")
+
+    app.logger.info(f"Resultado da verificação de pré-requisitos: {prereqs}")
+    return prereqs
+
 
 def run_docker_command(command, wait=True, ignore_errors=False):
     """Helper para executar comandos Docker Compose."""
@@ -59,8 +123,10 @@ def run_docker_command(command, wait=True, ignore_errors=False):
 
 @app.route('/')
 def pre_install_check():
-    """Página inicial que oferece a opção de limpar o ambiente antes de instalar."""
-    return render_template('pre_install.html')
+    """Página inicial que executa a verificação de pré-requisitos."""
+    prereqs = check_prerequisites()
+    all_ok = all(prereqs.values())
+    return render_template('pre_install.html', prereqs=prereqs, all_ok=all_ok)
 
 @app.route('/cleanup')
 def cleanup():
@@ -78,32 +144,6 @@ def install_page():
         flash("Um arquivo .env já existe. Se você continuar, ele será sobrescrito.", "warning")
     return render_template('index.html')
 
-def extract_vault_credentials_from_logs():
-    """Espera o container vault-setup terminar e extrai as credenciais dos logs."""
-    flash("Aguardando a configuração do Vault...", "info")
-    app.logger.info("Aguardando 'cspmexa-vault-setup' concluir...")
-
-    # Loop de verificação para esperar o container terminar
-    for _ in range(60): # Timeout de 2 minutos
-        stdout, _ = run_docker_command(["docker", "compose", "ps", "--status=exited", "-q", "vault-setup"], capture=True)
-        if "vault-setup" in stdout:
-            break
-        time.sleep(2)
-    else:
-        raise RuntimeError("Timeout esperando pelo container vault-setup. A configuração do Vault falhou.")
-
-    logs, _ = run_docker_command(["docker", "compose", "logs", "vault-setup"], capture=True)
-    app.logger.info("Logs do vault-setup obtidos.")
-
-    credentials = {}
-    patterns = {
-        "AUTH_SERVICE_VAULT_ROLE_ID": r"AUTH_SERVICE_VAULT_ROLE_ID=([\w-]+)",
-        # ... (outros patterns)
-    }
-    # (Lógica de extração de credenciais omitida para brevidade, mas permanece a mesma)
-
-    flash("Credenciais do Vault geradas!", "success")
-    return credentials
 
 @app.route('/install', methods=['POST'])
 def perform_install():
@@ -111,14 +151,23 @@ def perform_install():
     try:
         # Coletar dados do formulário
         form_data = request.form.to_dict()
+
+        # Validação de e-mails
+        emails_to_validate = [
+            'EMAILS_FROM_EMAIL',
+            'DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL',
+            'GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL'
+        ]
+        for email_field in emails_to_validate:
+            email = form_data.get(email_field)
+            if email and not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                flash(f"O endereço de e-mail fornecido para '{email_field}' é inválido.", "danger")
+                return redirect(url_for('install_page'))
+
         db_password = form_data.get('AUTH_DB_PASSWORD') or secrets.token_urlsafe(16)
         jwt_secret_key = secrets.token_hex(32)
 
-        # Usar placeholders para credenciais do Vault
-        vault_role_id = "dummy-role-id"
-        vault_secret_id = "dummy-secret-id"
-
-        # Criar o conteúdo do .env
+        # Criar o conteúdo do .env com todos os campos do formulário
         env_content = f"""
 AUTH_DB_USER={form_data.get('AUTH_DB_USER', 'cspmexa_user')}
 AUTH_DB_PASSWORD={db_password}
@@ -128,24 +177,24 @@ API_GATEWAY_PORT={form_data.get('API_GATEWAY_PORT', '8050')}
 GOOGLE_CLIENT_ID={form_data.get('GOOGLE_CLIENT_ID', '')}
 GOOGLE_CLIENT_SECRET={form_data.get('GOOGLE_CLIENT_SECRET', '')}
 JWT_SECRET_KEY={jwt_secret_key}
-AUTH_SERVICE_VAULT_ROLE_ID={vault_role_id}
-AUTH_SERVICE_VAULT_SECRET_ID={vault_secret_id}
-EMAILS_FROM_EMAIL=""
-DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=""
-AWS_ACCESS_KEY_ID=""
-AWS_SECRET_ACCESS_KEY=""
-GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL=""
-AZURE_SUBSCRIPTION_ID=""
-AZURE_TENANT_ID=""
-AZURE_CLIENT_ID=""
-AZURE_CLIENT_SECRET=""
-HUAWEICLOUD_SDK_AK=""
-HUAWEICLOUD_SDK_SK=""
-HUAWEICLOUD_SDK_PROJECT_ID=""
-HUAWEICLOUD_SDK_DOMAIN_ID=""
-M365_CLIENT_ID=""
-M365_CLIENT_SECRET=""
-M365_TENANT_ID=""
+AUTH_SERVICE_VAULT_ROLE_ID={form_data.get('AUTH_SERVICE_VAULT_ROLE_ID', '')}
+AUTH_SERVICE_VAULT_SECRET_ID={form_data.get('AUTH_SERVICE_VAULT_SECRET_ID', '')}
+EMAILS_FROM_EMAIL={form_data.get('EMAILS_FROM_EMAIL', '')}
+DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL={form_data.get('DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL', '')}
+AWS_ACCESS_KEY_ID={form_data.get('AWS_ACCESS_KEY_ID', '')}
+AWS_SECRET_ACCESS_KEY={form_data.get('AWS_SECRET_ACCESS_KEY', '')}
+GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL={form_data.get('GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL', '')}
+AZURE_SUBSCRIPTION_ID={form_data.get('AZURE_SUBSCRIPTION_ID', '')}
+AZURE_TENANT_ID={form_data.get('AZURE_TENANT_ID', '')}
+AZURE_CLIENT_ID={form_data.get('AZURE_CLIENT_ID', '')}
+AZURE_CLIENT_SECRET={form_data.get('AZURE_CLIENT_SECRET', '')}
+HUAWEICLOUD_SDK_AK={form_data.get('HUAWEICLOUD_SDK_AK', '')}
+HUAWEICLOUD_SDK_SK={form_data.get('HUAWEICLOUD_SDK_SK', '')}
+HUAWEICLOUD_SDK_PROJECT_ID={form_data.get('HUAWEICLOUD_SDK_PROJECT_ID', '')}
+HUAWEICLOUD_SDK_DOMAIN_ID={form_data.get('HUAWEICLOUD_SDK_DOMAIN_ID', '')}
+M365_CLIENT_ID={form_data.get('M365_CLIENT_ID', '')}
+M365_CLIENT_SECRET={form_data.get('M365_CLIENT_SECRET', '')}
+M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 """
         # Escrever o arquivo .env
         with open(ENV_FILE_PATH, 'w') as f:

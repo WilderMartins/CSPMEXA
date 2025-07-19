@@ -4,6 +4,10 @@ networks:
 
 volumes:
   postgres_auth_data:
+  vault_secrets_auth:
+  vault_secrets_collector:
+  vault_secrets_notification:
+  vault_secrets_api_gateway:
   # Para desenvolvimento, podemos persistir node_modules do frontend se não quisermos reconstruir
   # frontend_node_modules:
 
@@ -37,10 +41,18 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-auth-service
     restart: unless-stopped
-    command: python /app/app/main.py # main.py lida com reload via DEBUG_MODE
+    command: >
+      sh -c "
+        # Espera o vault-agent gerar os segredos
+        while [ ! -f /vault/secrets/auth-secrets.env ]; do
+          echo 'Aguardando segredos do Vault...'
+          sleep 2
+        done
+        # Carrega os segredos e inicia a aplicação
+        . /vault/secrets/auth-secrets.env && python /app/app/main.py
+      "
     environment:
       - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
@@ -48,19 +60,48 @@ services:
       - FRONTEND_URL_AUTH_CALLBACK=http://localhost:${FRONTEND_PORT:-3000}/auth/callback
       - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
       - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
-      # Endereço do Vault para o cliente hvac
       - VAULT_ADDR=http://vault:8200
-      # Token para autenticar no Vault (usando o token raiz de dev)
-      - VAULT_TOKEN=root
     volumes:
       - ./backend/auth_service:/app # Monta o código para hot-reloading
+      - vault_secrets_auth:/vault/secrets
     networks:
       - cspmexa_net
     depends_on:
       postgres_auth_db:
         condition: service_healthy
-      vault-setup:
-        condition: service_completed_successfully
+      vault_agent_auth:
+        condition: service_started
+
+  vault_agent_auth:
+    image: hashicorp/vault:1.15
+    container_name: cspmexa-vault-agent-auth
+    volumes:
+      - vault_secrets_auth:/vault/secrets
+    entrypoint: >
+      vault agent -config=- <<EOF
+      pid_file = "/tmp/pidfile"
+      auto_auth {
+        method "approle" {
+          mount_path = "auth/approle"
+          config = {
+            role_id_file_path = "/vault/secrets/auth_role_id"
+            secret_id_file_path = "/vault/secrets/auth_secret_id"
+            remove_secret_id_file_after_read = true
+          }
+        }
+      }
+      template {
+        source      = "/vault/templates/auth-secrets.ctmpl"
+        destination = "/vault/secrets/auth-secrets.env"
+        perms       = "0400"
+        command     = "touch /vault/secrets/template_rendered"
+      }
+      vault {
+        address = "http://vault:8200"
+      }
+      EOF
+    depends_on:
+      - vault-setup
 
   collector_service:
     profiles: ["app"]
@@ -69,39 +110,60 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-collector-service
     restart: unless-stopped
-    command: python /app/app/main.py
+    command: >
+      sh -c "
+        while [ ! -f /vault/secrets/collector-secrets.env ]; do
+          echo 'Aguardando segredos do Vault...'
+          sleep 2
+        done
+        . /vault/secrets/collector-secrets.env && python /app/app/main.py
+      "
     environment:
-      - AWS_REGION_NAME=${AWS_REGION_NAME:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-credentials.json
       - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=/app/secrets/gws-sa-key.json
-      - GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL=${GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL}
       - GOOGLE_WORKSPACE_CUSTOMER_ID=${GOOGLE_WORKSPACE_CUSTOMER_ID:-my_customer}
-      - AZURE_SUBSCRIPTION_ID=${AZURE_SUBSCRIPTION_ID}
-      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
-      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
-      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
-      - HUAWEICLOUD_SDK_AK=${HUAWEICLOUD_SDK_AK}
-      - HUAWEICLOUD_SDK_SK=${HUAWEICLOUD_SDK_SK}
-      - HUAWEICLOUD_SDK_PROJECT_ID=${HUAWEICLOUD_SDK_PROJECT_ID}
-      - HUAWEICLOUD_SDK_DOMAIN_ID=${HUAWEICLOUD_SDK_DOMAIN_ID}
-      # Microsoft 365
-      - M365_CLIENT_ID=${M365_CLIENT_ID}
-      - M365_CLIENT_SECRET=${M365_CLIENT_SECRET}
-      - M365_TENANT_ID=${M365_TENANT_ID}
       - M365_HTTP_CLIENT_TIMEOUT=${M365_HTTP_CLIENT_TIMEOUT:-30}
       - DEBUG_MODE=${DEBUG_MODE:-false}
-      # Conexão com o Vault
       - VAULT_ADDR=http://vault:8200
-      - VAULT_TOKEN=root
     volumes:
       - ./backend/collector_service:/app
+      - vault_secrets_collector:/vault/secrets
       # Montar arquivos de credenciais JSON ainda pode ser necessário se não forem gerenciados pelo Vault
       - ${GCP_CREDENTIALS_PATH_HOST:-./secrets/gcp-credentials.json}:/app/secrets/gcp-credentials.json:ro
       - ${GWS_SA_KEY_PATH_HOST:-./secrets/gws-sa-key.json}:/app/secrets/gws-sa-key.json:ro
     networks:
       - cspmexa_net
+    depends_on:
+      - vault_agent_collector
+
+  vault_agent_collector:
+    image: hashicorp/vault:1.15
+    container_name: cspmexa-vault-agent-collector
+    volumes:
+      - vault_secrets_collector:/vault/secrets
+    entrypoint: >
+      vault agent -config=- <<EOF
+      pid_file = "/tmp/pidfile"
+      auto_auth {
+        method "approle" {
+          mount_path = "auth/approle"
+          config = {
+            role_id_file_path = "/vault/secrets/collector_role_id"
+            secret_id_file_path = "/vault/secrets/collector_secret_id"
+            remove_secret_id_file_after_read = true
+          }
+        }
+      }
+      template {
+        source      = "/vault/templates/collector-secrets.ctmpl"
+        destination = "/vault/secrets/collector-secrets.env"
+        perms       = "0400"
+        command     = "touch /vault/secrets/template_rendered"
+      }
+      vault {
+        address = "http://vault:8200"
+      }
+      EOF
     depends_on:
       - vault-setup
 
@@ -136,24 +198,60 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-notification-service
     restart: unless-stopped
-    command: python /app/app/main.py
+    command: >
+      sh -c "
+        while [ ! -f /vault/secrets/notification-secrets.env ]; do
+          echo 'Aguardando segredos do Vault...'
+          sleep 2
+        done
+        . /vault/secrets/notification-secrets.env && python /app/app/main.py
+      "
     environment:
       # Configs não-secretas
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RELOAD_UVICORN=${DEBUG_MODE:-false}
-      - EMAILS_FROM_EMAIL=${EMAILS_FROM_EMAIL}
       - EMAILS_FROM_NAME=${EMAILS_FROM_NAME:-CSPMEXA Notification}
-      - DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL=${DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL}
       # Conexão com o Vault
       - VAULT_ADDR=http://vault:8200
-      - VAULT_TOKEN=root
     volumes:
       - ./backend/notification_service/app:/app/app
+      - vault_secrets_notification:/vault/secrets
     networks:
       - cspmexa_net
     depends_on:
-      vault-setup:
-        condition: service_completed_successfully
+      vault_agent_notification:
+        condition: service_started
+
+  vault_agent_notification:
+    image: hashicorp/vault:1.15
+    container_name: cspmexa-vault-agent-notification
+    volumes:
+      - vault_secrets_notification:/vault/secrets
+    entrypoint: >
+      vault agent -config=- <<EOF
+      pid_file = "/tmp/pidfile"
+      auto_auth {
+        method "approle" {
+          mount_path = "auth/approle"
+          config = {
+            role_id_file_path = "/vault/secrets/notification_role_id"
+            secret_id_file_path = "/vault/secrets/notification_secret_id"
+            remove_secret_id_file_after_read = true
+          }
+        }
+      }
+      template {
+        source      = "/vault/templates/notification-secrets.ctmpl"
+        destination = "/vault/secrets/notification-secrets.env"
+        perms       = "0400"
+        command     = "touch /vault/secrets/template_rendered"
+      }
+      vault {
+        address = "http://vault:8200"
+      }
+      EOF
+    depends_on:
+      - vault-setup
 
   api_gateway_service:
     profiles: ["app"]
@@ -162,16 +260,22 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-api-gateway-service
     restart: unless-stopped
-    command: python /app/app/main.py
+    command: >
+      sh -c "
+        # Este serviço pode não precisar de segredos agora, mas o padrão é mantido
+        # para consistência. O arquivo de segredos pode estar vazio.
+        touch /vault/secrets/api-gateway-secrets.env
+        . /vault/secrets/api-gateway-secrets.env && python /app/app/main.py
+      "
     environment:
       # URLs dos serviços downstream são agora definidas no config.py, mas podem ser sobrescritas aqui se necessário.
       - HTTP_CLIENT_TIMEOUT=${HTTP_CLIENT_TIMEOUT:-60}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       # Conexão com o Vault
       - VAULT_ADDR=http://vault:8200
-      - VAULT_TOKEN=root
     volumes:
       - ./backend/api_gateway_service:/app
+      - vault_secrets_api_gateway:/vault/secrets
     networks:
       - cspmexa_net
     depends_on:
@@ -179,6 +283,38 @@ services:
       - collector_service
       - policy_engine_service
       - notification_service
+      - vault_agent_api_gateway
+
+  vault_agent_api_gateway:
+    image: hashicorp/vault:1.15
+    container_name: cspmexa-vault-agent-api-gateway
+    volumes:
+      - vault_secrets_api_gateway:/vault/secrets
+    entrypoint: >
+      vault agent -config=- <<EOF
+      pid_file = "/tmp/pidfile"
+      auto_auth {
+        method "approle" {
+          mount_path = "auth/approle"
+          config = {
+            role_id_file_path = "/vault/secrets/api_gateway_role_id"
+            secret_id_file_path = "/vault/secrets/api_gateway_secret_id"
+            remove_secret_id_file_after_read = true
+          }
+        }
+      }
+      template {
+        # Template vazio, pois nenhum segredo é necessário no momento
+        source      = "/vault/templates/api-gateway-secrets.ctmpl"
+        destination = "/vault/secrets/api-gateway-secrets.env"
+        perms       = "0400"
+        command     = "touch /vault/secrets/template_rendered"
+      }
+      vault {
+        address = "http://vault:8200"
+      }
+      EOF
+    depends_on:
       - vault-setup
 
   # --- Frontend Build ---
