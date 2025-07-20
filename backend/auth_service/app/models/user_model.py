@@ -1,14 +1,6 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum as SQLAlchemyEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON
 from sqlalchemy.sql import func
 from app.db.session import Base
-import enum
-
-
-class UserRole(str, enum.Enum):
-    ADMIN = "admin"
-    ANALYST = "analyst"
-    AUDITOR = "auditor"
-
 
 _user_table_defined = False
 
@@ -20,16 +12,14 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(
         String, nullable=True
-    )  # Para login tradicional futuro, não usado no MVP OAuth inicial
+    )
 
-    # Google OAuth fields
     google_id = Column(String, unique=True, index=True, nullable=True)
 
     is_active = Column(Boolean, default=True)
-    is_superuser = Column(Boolean, default=False)  # Mantido, pode ser redundante com SuperAdministrator ou ter outro propósito
-    role = Column(SQLAlchemyEnum(UserRole, name="user_role_enum", create_type=False), default=UserRole.ANALYST, nullable=False)
+    is_superuser = Column(Boolean, default=False)
+    permissions = Column(JSON, nullable=False, server_default='[]')
 
-    # Campos de perfil adicionais (opcionais)
     full_name = Column(String, nullable=True)
     profile_picture_url = Column(String, nullable=True)
 

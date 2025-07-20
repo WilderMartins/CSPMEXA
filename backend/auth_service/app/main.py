@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
-from app.api.v1 import auth_controller, admin_controller, linked_account_controller
+from app.api.v1 import auth_controller, admin_controller, linked_account_controller, permissions_controller
 from app.db.session import engine
 from app.models import user_model
 from app.core.logging_config import setup_logging # Importar a configuração de logging
@@ -69,6 +69,12 @@ app.include_router(
     linked_account_controller.router,
     prefix=settings.API_V1_STR + "/accounts",
     tags=["Linked Accounts"]
+)
+
+app.include_router(
+    permissions_controller.router,
+    prefix=settings.API_V1_STR,
+    tags=["Permissions"]
 )
 
 if __name__ == "__main__":

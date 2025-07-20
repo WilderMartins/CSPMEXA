@@ -41,69 +41,25 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-auth-service
     restart: unless-stopped
-    command: >
-      sh -c "
-        # Espera o vault-agent gerar os segredos
-        while [ ! -f /vault/secrets/auth-secrets.env ]; do
-          echo 'Aguardando segredos do Vault...'
-          sleep 2
-        done
-        # Carrega os segredos e inicia a aplicação
-        . /vault/secrets/auth-secrets.env && python /app/app/main.py
-      "
+    command: python /app/app/main.py
     environment:
       - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing}
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=http://localhost:${API_GATEWAY_PORT:-8050}/api/v1/auth/google/callback
       - FRONTEND_URL_AUTH_CALLBACK=http://localhost:${FRONTEND_PORT:-3000}/auth/callback
       - TOTP_ISSUER_NAME=${TOTP_ISSUER_NAME:-CSPMEXA}
-      - DEBUG_MODE=${DEBUG_MODE:-false} # Para hot-reloading
-      - VAULT_ADDR=http://vault:8200
+      - DEBUG_MODE=${DEBUG_MODE:-false}
       - AUDIT_SERVICE_URL=http://audit_service:8005
-
     volumes:
-      - ./backend/auth_service:/app # Monta o código para hot-reloading
-      - vault_secrets_auth:/vault/secrets
+      - ./backend/auth_service:/app
     networks:
       - cspmexa_net
     depends_on:
       postgres_auth_db:
         condition: service_healthy
-      vault_agent_auth:
-        condition: service_started
-
-  vault_agent_auth:
-    image: hashicorp/vault:1.15
-    container_name: cspmexa-vault-agent-auth
-    volumes:
-      - vault_secrets_auth:/vault/secrets
-    entrypoint: >
-      vault agent -config=- <<EOF
-      pid_file = "/tmp/pidfile"
-      auto_auth {
-        method "approle" {
-          mount_path = "auth/approle"
-          config = {
-            role_id_file_path = "/vault/secrets/auth_role_id"
-            secret_id_file_path = "/vault/secrets/auth_secret_id"
-            remove_secret_id_file_after_read = true
-          }
-        }
-      }
-      template {
-        source      = "/vault/templates/auth-secrets.ctmpl"
-        destination = "/vault/secrets/auth-secrets.env"
-        perms       = "0400"
-        command     = "touch /vault/secrets/template_rendered"
-      }
-      vault {
-        address = "http://vault:8200"
-      }
-      EOF
-    depends_on:
-      - vault-setup
 
   collector_service:
     profiles: ["app"]
@@ -180,6 +136,7 @@ services:
     environment:
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - NOTIFICATION_SERVICE_URL=http://notification_service:8003/api/v1
+      - AUDIT_SERVICE_URL=http://audit_service:8005
       # Conexão com o Vault
       - VAULT_ADDR=http://vault:8200
       - VAULT_TOKEN=root
@@ -267,7 +224,6 @@ services:
       - ./backend/audit_service/app:/app/app
     networks:
       - cspmexa_net
-
 
   api_gateway_service:
     profiles: ["app"]

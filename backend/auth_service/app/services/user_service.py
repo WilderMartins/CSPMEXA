@@ -1,8 +1,8 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.services.audit_service_client import audit_service_client
-from app.models.user_model import User, UserRole # Importar UserRole
-from app.schemas.user_schema import UserCreate, UserUpdateByAdmin # UserUpdateByAdmin é usado no tipo hint
+from app.models.user_model import User
+from app.schemas.user_schema import UserCreate, UserUpdateByAdmin
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,6 @@ class UserService:
         profile_picture_url: Optional[str] = None
     ) -> User:
         logger.info(f"Creating new OAuth user for email: {email}, google_id: {google_id}")
-        # O padrão para a role já é ANALYST no modelo, mas podemos ser explícitos aqui
         db_user = User(
             email=email,
             google_id=google_id,
@@ -32,13 +31,12 @@ class UserService:
             profile_picture_url=profile_picture_url,
             is_active=True,
             is_superuser=False,
-            role=UserRole.ANALYST
+            permissions=["run:analysis"]
         )
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
 
-        # Enviar evento de auditoria
         try:
             await audit_service_client.create_event(
                 actor="system",
@@ -135,15 +133,20 @@ class UserService:
         db.refresh(user_to_update)
         return user_to_update
 
-    def set_user_role(self, db: Session, user: User, role: UserRole) -> User:
-        """Define o papel de um usuário. O input 'role' deve ser um membro do Enum UserRole."""
-        if not isinstance(role, UserRole):
-            raise ValueError("O papel fornecido deve ser um membro do Enum UserRole.")
-        user.role = role
-        db.add(user)
-        db.commit()
-        db.refresh(user)
+    def add_permission(self, db: Session, user: User, permission: str) -> User:
+        if permission not in user.permissions:
+            user.permissions.append(permission)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
         return user
 
+    def remove_permission(self, db: Session, user: User, permission: str) -> User:
+        if permission in user.permissions:
+            user.permissions.remove(permission)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user
 
 user_service = UserService()

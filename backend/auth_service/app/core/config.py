@@ -1,4 +1,5 @@
 import os
+import hvac
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Optional
@@ -46,13 +47,9 @@ class AppSettings(BaseSettings):
     # URL do serviço de auditoria
     AUDIT_SERVICE_URL: Optional[str] = None
 
-
     class Config:
         case_sensitive = True
-        # Pydantic-settings carrega automaticamente do ambiente.
-        # O script de inicialização do contêiner (no docker-compose)
-        # carrega o /vault/secrets/auth-secrets.env para o ambiente.
-        env_file = ".env" # Pode ainda ser usado para configs não-secretas
+        env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
 
@@ -93,4 +90,3 @@ def get_vault_client() -> Optional[hvac.Client]:
 
     logger.warning("Não foi possível autenticar no Vault com AppRole. O credentials_service pode não funcionar.")
     return None
-

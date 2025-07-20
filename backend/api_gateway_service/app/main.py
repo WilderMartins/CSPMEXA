@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Depends
 from app.core.config import settings
-from app.api.v1 import auth_router, data_router, alerts_router, dashboard_router, users_router, audit_router
+from app.api.v1 import auth_router, data_router, alerts_router, dashboard_router, users_router, audit_router, remediation_router
 from app.services import http_client # Import para fechar o cliente HTTP na saída
 from app.core.security import TokenData, get_current_user # Para o endpoint de teste de autenticação
 import logging
@@ -82,6 +82,13 @@ app.include_router(
     audit_router.router,
     prefix=settings.API_V1_STR, # O prefixo /audit já está no roteador
     tags=["Audit Trails"]
+)
+
+# remediation_router lida com /api/v1/remediate/*
+app.include_router(
+    remediation_router.router,
+    prefix=settings.API_V1_STR, # O prefixo /remediate já está no roteador
+    tags=["Remediation"]
 )
 
 

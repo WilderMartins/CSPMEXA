@@ -5,11 +5,12 @@ const AuditPage: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState({ actor: '', action: '', resource: '' });
 
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await api.get('/audit/events');
+        const response = await api.get('/audit/events', { params: filters });
         setEvents(response.data);
       } catch (err) {
         setError('Failed to fetch audit events.');
@@ -19,7 +20,12 @@ const AuditPage: React.FC = () => {
     };
 
     fetchEvents();
-  }, []);
+  }, [filters]);
+
+  const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFilters((prevFilters) => ({ ...prevFilters, [name]: value }));
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -32,6 +38,31 @@ const AuditPage: React.FC = () => {
   return (
     <div>
       <h1>Audit Trail</h1>
+      <div style={{ marginBottom: '16px' }}>
+        <input
+          type="text"
+          name="actor"
+          placeholder="Filter by actor"
+          value={filters.actor}
+          onChange={handleFilterChange}
+          style={{ marginRight: '8px' }}
+        />
+        <input
+          type="text"
+          name="action"
+          placeholder="Filter by action"
+          value={filters.action}
+          onChange={handleFilterChange}
+          style={{ marginRight: '8px' }}
+        />
+        <input
+          type="text"
+          name="resource"
+          placeholder="Filter by resource"
+          value={filters.resource}
+          onChange={handleFilterChange}
+        />
+      </div>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>

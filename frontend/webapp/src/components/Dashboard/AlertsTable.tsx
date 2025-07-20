@@ -82,6 +82,8 @@ interface AlertsTableProps {
   onUpdateStatus: (alertId: number, newStatus: string) => Promise<void>;
   /** Booleano que indica se o usuário atual tem permissão para atualizar o status dos alertas. */
   canUpdateStatus: boolean;
+  /** Função chamada para acionar a remediação de um alerta. */
+  onRemediate?: (alert: Alert) => Promise<void>;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -331,8 +333,14 @@ import AlertsTableFilters from './AlertsTableFilters';
                 <Box p="xs" style={{ backgroundColor: 'var(--mantine-color-gray-0)', borderRadius: '4px', border: '1px solid var(--mantine-color-gray-3)' }}>
                   <ReactMarkdown>{selectedAlert.remediation_guide}</ReactMarkdown>
                 </Box>
-                <Button mt="sm" size="xs" color="teal" disabled={!selectedAlert.remediation_guide}>
-                  Solicitar Remediação
+                <Button
+                  mt="sm"
+                  size="xs"
+                  color="teal"
+                  onClick={() => onRemediate && onRemediate(selectedAlert)}
+                  disabled={!onRemediate}
+                >
+                  Remediar
                 </Button>
               </div>
             )}

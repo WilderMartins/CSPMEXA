@@ -11,6 +11,7 @@ class BaseAppSettings(BaseSettings):
 
     # URL do Notification Service
     NOTIFICATION_SERVICE_URL: str = "http://notification_service:8003/api/v1"
+    AUDIT_SERVICE_URL: Optional[str] = None
 
     # Endereço do Vault
     VAULT_ADDR: str = "http://vault:8200"
