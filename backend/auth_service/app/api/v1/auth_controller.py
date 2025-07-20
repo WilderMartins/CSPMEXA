@@ -63,7 +63,7 @@ async def google_callback(
         if not google_id or not email:
             raise HTTPException(status_code=500, detail="Could not retrieve essential user information from Google.")
 
-        local_user = user_service.get_or_create_user_oauth(
+        local_user = await user_service.get_or_create_user_oauth(
             db,
             google_id=google_id,
             email=email,
@@ -80,7 +80,7 @@ async def google_callback(
         else:
             jwt_claims = {
                 "email": local_user.email,
-                "role": local_user.role,
+                "permissions": local_user.permissions,
                 "full_name": local_user.full_name,
             }
             internal_jwt = token_service.create_jwt_token_with_custom_claims(
@@ -99,6 +99,7 @@ async def google_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during the login process."
         )
+
 
 # O restante do arquivo (endpoints de MFA) permanece o mesmo
 from app.services.mfa_service import mfa_service
@@ -187,7 +188,7 @@ async def mfa_verify_login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP code.")
     jwt_claims = {
         "email": user.email,
-        "role": getattr(user, 'role', 'user'),
+        "permissions": user.permissions,
         "full_name": getattr(user, 'full_name', None),
         "mfa_verified": True
     }

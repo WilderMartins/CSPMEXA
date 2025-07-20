@@ -19,7 +19,7 @@ class TokenPayload(BaseModel): # Renomeado para TokenPayload para clareza
     # Adicionar outros campos que você coloca no token
     # google_id: Optional[str] = None # Se incluído no token
 
-async def get_current_user_from_token( # Renomeado para clareza e para diferenciar de um get_current_user do request
+async def get_current_user(
     db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)
 ) -> User:
     credentials_exception = HTTPException(
@@ -59,52 +59,23 @@ async def get_current_user_from_token( # Renomeado para clareza e para diferenci
     return user
 
 async def get_current_active_user( # Esta é a dependência principal para endpoints protegidos
-    current_user: User = Depends(get_current_user_from_token),
+    current_user: User = Depends(get_current_user),
 ) -> User:
     if not current_user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
     return current_user
 
 
-def require_role(required_role: str):
+
+def require_permission(permission: str):
     """
-    Dependência FastAPI para exigir um papel específico do usuário.
-    Usa get_current_active_user para obter o usuário e depois verifica seu papel.
+    Dependência FastAPI para exigir uma permissão específica.
     """
-    async def role_checker(current_user: User = Depends(get_current_active_user)) -> User:
-        # O token JWT deve incluir um claim 'role'.
-        # A função get_current_user_from_token já buscou o User do DB, que tem o campo role.
-        if not current_user.role:
-            # Log: Usuário não tem papel definido, mas deveria ter (default 'user')
+    async def permission_checker(current_user: User = Depends(get_current_active_user)) -> User:
+        if permission not in current_user.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="User role not defined.",
-            )
-        if current_user.role != required_role:
-            # Se quisermos uma hierarquia (ex: admin pode fazer tudo que user faz),
-            # a lógica aqui seria mais complexa (ex: if required_role == "user" and current_user.role == "admin": return current_user)
-            # Para uma verificação exata de papel:
-            # Log: Tentativa de acesso a recurso com papel insuficiente
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"User does not have the required '{required_role}' role.",
-            )
-        if required_role == "admin" and not current_user.is_superuser and current_user.role != "admin":
-             # Exemplo de como 'is_superuser' poderia interagir ou ser um papel especial
-             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User requires admin privileges or to be a superuser.",
+                detail=f"User does not have the required '{permission}' permission.",
             )
         return current_user
-    return role_checker
-
-
-# Exemplo para superusuário, usando o campo is_superuser ou o papel 'admin'
-async def get_current_active_superuser( # Nome mantido para consistência com usos anteriores
-    current_user: User = Depends(get_current_active_user),
-):
-    if not current_user.is_superuser and current_user.role != "admin": # Adaptar conforme seu modelo
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn't have enough privileges for this action."
-        )
-    return current_user
+    return permission_checker

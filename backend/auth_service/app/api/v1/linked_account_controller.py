@@ -6,11 +6,11 @@ from app.db.session import get_db
 from app.schemas.linked_account_schema import LinkedAccountSchema, LinkedAccountCreate, LinkedAccountUpdate
 from app.services.credentials_service import credentials_service
 from app.crud.crud_linked_account import linked_account_crud
-from app.core.security import require_role # Proteger os endpoints
+from app.core.security import require_permission
 
 router = APIRouter()
 
-@router.post("/", response_model=LinkedAccountSchema, status_code=201, dependencies=[Depends(require_role("Administrator"))])
+@router.post("/", response_model=LinkedAccountSchema, status_code=201, dependencies=[Depends(require_permission("manage:linked_accounts"))])
 def create_linked_account(
     *,
     db: Session = Depends(get_db),
@@ -52,7 +52,7 @@ def read_linked_account(
         raise HTTPException(status_code=404, detail="Conta não encontrada.")
     return account
 
-@router.put("/{account_id}", response_model=LinkedAccountSchema, dependencies=[Depends(require_role("Administrator"))])
+@router.put("/{account_id}", response_model=LinkedAccountSchema, dependencies=[Depends(require_permission("manage:linked_accounts"))])
 def update_linked_account(
     account_id: int,
     account_in: LinkedAccountUpdate,
@@ -69,7 +69,7 @@ def update_linked_account(
     updated_account = linked_account_crud.update(db, db_obj=db_account, obj_in=account_in)
     return updated_account
 
-@router.delete("/{account_id}", status_code=204, dependencies=[Depends(require_role("Administrator"))])
+@router.delete("/{account_id}", status_code=204, dependencies=[Depends(require_permission("manage:linked_accounts"))])
 def delete_linked_account(
     account_id: int,
     db: Session = Depends(get_db)
@@ -86,7 +86,7 @@ def delete_linked_account(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/internal/credentials/{account_id}", dependencies=[Depends(require_role("Administrator"))])
+@router.get("/internal/credentials/{account_id}", dependencies=[Depends(require_permission("read:credentials"))])
 def get_account_credentials(
     account_id: int,
     db: Session = Depends(get_db)

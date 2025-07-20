@@ -14,6 +14,31 @@ const AwsDashboardPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [analysisType, setAnalysisType] = useState<string | null>(null);
 
+  const handleRemediation = async (alert: AlertType) => {
+    if (alert.policy_id !== 'S3_BUCKET_PUBLIC_ACL') {
+      setError(t('dashboardPage.remediationNotSupported', { policy: alert.policy_id }));
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await apiClient.post(`/remediate/aws/s3/public-acl`, {
+        credentials: {}, // As credenciais devem ser gerenciadas no backend
+        bucket_name: alert.resource_id,
+        region: alert.region,
+      });
+      // Atualizar a lista de alertas após a remediação
+      handleAnalysis('aws', 's3', 'AWS S3 Buckets');
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.detail || err.message;
+      setError(t('dashboardPage.errorDuringRemediation', { error: errorMessage }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAnalysis = async (provider: string, servicePath: string, currentAnalysisType: string) => {
     setIsLoading(true);
     setError(null);
@@ -72,10 +97,9 @@ const AwsDashboardPage: React.FC = () => {
         <AlertsTable
           alerts={alerts}
           title={t('dashboardPage.alertsFoundFor', { type: analysisType })}
-          // As props onUpdateStatus e canUpdateStatus precisam ser obtidas/passadas aqui se a funcionalidade for mantida
-          // Por simplicidade nesta refatoração, vamos mocká-las.
           onUpdateStatus={async () => {}}
           canUpdateStatus={false}
+          onRemediate={handleRemediation}
         />
       )}
     </div>

@@ -76,16 +76,16 @@ Este projeto visa criar uma solução de segurança em nuvem de ponta, oferecend
 
 ## Instalação Rápida
 
-A instalação do CSPMEXA foi projetada para ser simples e rápida, mesmo para usuários sem experiência técnica, graças ao nosso assistente de instalação.
+A instalação do CSPMEXA foi projetada para ser simples e robusta, graças a um assistente de instalação web interativo.
 
 Para instruções detalhadas e passo a passo, por favor, consulte o nosso guia de instalação:
 
 ➡️ **[Guia de Instalação (INSTALL.md)](./INSTALL.md)**
 
-O guia irá orientá-lo através do processo de:
-1.  Preparar seu servidor com os pré-requisitos (Docker).
-2.  Baixar o projeto.
-3.  Executar o assistente de instalação web que configurará tudo para você.
+O assistente de instalação irá guiá-lo através de todo o processo:
+1.  **Verificação de Pré-requisitos:** Garante que seu ambiente está pronto para a instalação.
+2.  **Configuração Guiada:** Um formulário completo para configurar o banco de dados, autenticação e credenciais de nuvem.
+3.  **Acompanhamento Detalhado:** Uma página de status que mostra o progresso de cada serviço individualmente, com acesso fácil aos logs.
 
 ### Implantação em Produção (Kubernetes)
 
