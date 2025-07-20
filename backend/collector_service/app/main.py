@@ -3,6 +3,8 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1 import aws_collector_controller, gcp_collector_controller, huawei_collector_controller, azure_collector_controller, google_workspace_controller, m365_collector_controller
+from app.aws.s3_collector import remediate_public_acl
+from pydantic import BaseModel
 from app.core.logging_config import setup_logging
 
 # Configurar logging
@@ -37,6 +39,19 @@ async def shutdown_event():
 @app.get("/health", tags=["Health Check"])
 def health_check():
     return {"status": "ok"}
+
+class RemediateS3PublicACLRequest(BaseModel):
+    credentials: dict
+    bucket_name: str
+    region: str
+
+@app.post("/remediate/aws/s3/public-acl", tags=["AWS Remediation"])
+async def remediate_s3_public_acl_endpoint(request: RemediateS3PublicACLRequest):
+    return await remediate_public_acl(
+        credentials=request.credentials,
+        bucket_name=request.bucket_name,
+        region=request.region,
+    )
 
 # Incluir os roteadores
 app.include_router(aws_collector_controller.router, prefix=f"{settings.API_V1_STR}/collect/aws", tags=["AWS Collector"])

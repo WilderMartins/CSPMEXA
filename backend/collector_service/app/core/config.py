@@ -1,25 +1,44 @@
 import os
-import hvac
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional, Dict, Any
+from typing import Optional
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
+    """
+    Carrega as configurações do CollectorService a partir de variáveis de ambiente.
+    O vault-agent injeta os segredos em um arquivo .env que é carregado no ambiente.
+    """
     PROJECT_NAME: str = "CollectorService"
     API_V1_STR: str = "/api/v1"
+
+    # Credenciais e configurações (a maioria virá do Vault)
     AWS_REGION_NAME: str = "us-east-1"
-    VAULT_ADDR: str = "http://vault:8200"
+    AWS_ACCESS_KEY_ID: Optional[str] = None
+    AWS_SECRET_ACCESS_KEY: Optional[str] = None
 
-    # AppRole
-    VAULT_ROLE_ID: Optional[str] = None
-    VAULT_SECRET_ID: Optional[str] = None
+    AZURE_SUBSCRIPTION_ID: Optional[str] = None
+    AZURE_TENANT_ID: Optional[str] = None
+    AZURE_CLIENT_ID: Optional[str] = None
+    AZURE_CLIENT_SECRET: Optional[str] = None
 
-    # Fallback
-    VAULT_TOKEN: Optional[str] = None
+    GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL: Optional[str] = None
+
+    HUAWEICLOUD_SDK_AK: Optional[str] = None
+    HUAWEICLOUD_SDK_SK: Optional[str] = None
+    HUAWEICLOUD_SDK_PROJECT_ID: Optional[str] = None
+    HUAWEICLOUD_SDK_DOMAIN_ID: Optional[str] = None
+
+    M365_CLIENT_ID: Optional[str] = None
+    M365_CLIENT_SECRET: Optional[str] = None
+    M365_TENANT_ID: Optional[str] = None
+
+    # Caminhos para arquivos de credenciais que ainda são montados como volumes
+    GOOGLE_APPLICATION_CREDENTIALS: Optional[str] = "/app/secrets/gcp-credentials.json"
+    GOOGLE_SERVICE_ACCOUNT_KEY_PATH: Optional[str] = "/app/secrets/gws-sa-key.json"
 
     class Config:
         case_sensitive = True
@@ -28,51 +47,13 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    return Settings()
+    logger.info("Carregando configurações para CollectorService...")
+    try:
+        settings = Settings()
+        logger.info("Configurações do CollectorService carregadas com sucesso.")
+        return settings
+    except Exception as e:
+        logger.error(f"Erro ao carregar configurações do CollectorService: {e}")
+        raise
 
 settings = get_settings()
-
-@lru_cache()
-def get_vault_client() -> Optional[hvac.Client]:
-    """Cria e autentica um cliente HVAC para o Vault usando AppRole."""
-    client = hvac.Client(url=settings.VAULT_ADDR)
-    try:
-        if settings.VAULT_ROLE_ID and settings.VAULT_SECRET_ID:
-            logger.info("Tentando autenticação no Vault via AppRole para CollectorService...")
-            client.auth.approle.login(
-                role_id=settings.VAULT_ROLE_ID,
-                secret_id=settings.VAULT_SECRET_ID,
-            )
-        elif settings.VAULT_TOKEN:
-            logger.warning("Autenticando no Vault com VAULT_TOKEN no CollectorService.")
-            client.token = settings.VAULT_TOKEN
-        else:
-            logger.error("Credenciais do Vault (AppRole ou Token) não encontradas no CollectorService.")
-            return None
-
-        if not client.is_authenticated():
-            logger.error("Falha ao autenticar no Vault no CollectorService.")
-            return None
-
-        logger.info("Autenticação no Vault bem-sucedida no CollectorService.")
-        return client
-
-    except Exception as e:
-        logger.error(f"Não foi possível conectar ou autenticar no Vault no CollectorService. Erro: {e}")
-        return None
-
-def get_credentials_from_vault(provider: str) -> Optional[Dict[str, Any]]:
-    """Busca as credenciais para um provedor específico do Vault."""
-    client = get_vault_client()
-    if not client:
-        logger.warning(f"Cliente do Vault não disponível. Não é possível buscar credenciais para {provider}.")
-        return None
-
-    path = f"{provider}_credentials"
-    logger.info(f"Buscando credenciais para '{provider}' do Vault no path 'secret/{path}'...")
-    try:
-        response = client.secrets.kv.v2.read_secret_version(path=path)
-        return response['data']['data']
-    except Exception as e:
-        logger.warning(f"Falha ao buscar credenciais para '{provider}' do Vault. Erro: {e}")
-        return None

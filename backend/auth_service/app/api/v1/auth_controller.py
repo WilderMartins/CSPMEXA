@@ -63,7 +63,7 @@ async def google_callback(
         if not google_id or not email:
             raise HTTPException(status_code=500, detail="Could not retrieve essential user information from Google.")
 
-        local_user = user_service.get_or_create_user_oauth(
+        local_user = await user_service.get_or_create_user_oauth(
             db,
             google_id=google_id,
             email=email,
@@ -99,6 +99,31 @@ async def google_callback(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An unexpected error occurred during the login process."
         )
+
+from app.schemas.user_schema import RoleUpdateRequest, User as UserSchema
+from app.core.security import require_admin
+
+@router.put("/users/{user_id}/role", response_model=UserSchema, name="users:update-role")
+@limiter.limit("10/minute")
+async def update_user_role(
+    request: Request,
+    user_id: int,
+    role_update: RoleUpdateRequest,
+    db: Session = Depends(get_db),
+    admin_user: Session = Depends(require_admin)
+):
+    """
+    Atualiza o perfil de um usuário. Apenas administradores podem executar esta ação.
+    """
+    user_to_update = user_service.get_user_by_id(db, user_id=user_id)
+    if not user_to_update:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found."
+        )
+
+    updated_user = user_service.set_user_role(db, user=user_to_update, role=role_update.role)
+    return updated_user
 
 # O restante do arquivo (endpoints de MFA) permanece o mesmo
 from app.services.mfa_service import mfa_service

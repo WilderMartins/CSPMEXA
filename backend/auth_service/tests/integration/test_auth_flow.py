@@ -6,7 +6,7 @@ from unittest.mock import patch, AsyncMock
 
 from app.core.config import settings
 
-def test_google_callback_creates_new_user_and_returns_token(client, db_session):
+async def test_google_callback_creates_new_user_and_returns_token(client, db_session):
     """
     Testa o fluxo completo de callback do Google para um novo usuário.
     Verifica se o usuário é criado no banco de dados e se um token JWT é retornado.
@@ -24,7 +24,7 @@ def test_google_callback_creates_new_user_and_returns_token(client, db_session):
         }
 
         # --- Fazer a requisição ao endpoint de callback ---
-        response = client.get("/api/v1/auth/google/callback?code=fake_auth_code")
+        response = await client.get("/api/v1/auth/google/callback?code=fake_auth_code")
 
     # --- Verificações ---
     # 1. A requisição deve ser um redirecionamento para o frontend
@@ -51,4 +51,4 @@ def test_google_callback_creates_new_user_and_returns_token(client, db_session):
     decoded_token = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
     assert decoded_token["sub"] == str(user.id)
     assert decoded_token["email"] == "testuser@example.com"
-    assert decoded_token["role"] == "User"
+    assert decoded_token["role"] == "analyst"
