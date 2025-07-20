@@ -1,15 +1,13 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 import datetime
-from app.models.user_model import UserRole # Importar o Enum UserRole
-
 
 # Propriedades básicas do usuário
 class UserBase(BaseModel):
     email: EmailStr
     is_active: Optional[bool] = Field(True)
-    is_superuser: Optional[bool] = Field(False) # Mantido para consistência, mas SuperAdministrator é o principal
-    role: Optional[UserRole] = Field(UserRole.ANALYST) # Usar o Enum e definir default
+    is_superuser: Optional[bool] = Field(False)
+    permissions: List[str] = []
     google_id: Optional[str] = None
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
@@ -36,8 +34,7 @@ class User(UserBase):
 class UserUpdate(BaseModel): # Para uso por admins ou pelo próprio usuário para certos campos
     email: Optional[EmailStr] = None
     is_active: Optional[bool] = None
-    is_superuser: Optional[bool] = None # Apenas SuperAdministrator pode mudar isso
-    role: Optional[UserRole] = None # Apenas admin/superadmin pode mudar isso
+    is_superuser: Optional[bool] = None
     full_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
 
@@ -64,5 +61,5 @@ class MFASetupSchema(BaseModel):
     secret_key: str
     otp_uri: str
 
-class RoleUpdateRequest(BaseModel):
-    role: UserRole
+class PermissionRequest(BaseModel):
+    permission: str

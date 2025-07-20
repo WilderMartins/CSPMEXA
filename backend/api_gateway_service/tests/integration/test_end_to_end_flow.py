@@ -5,7 +5,15 @@ from app.main import app
 
 client = TestClient(app)
 
-from app.models.user_model import UserRole
+
+import pytest
+from unittest.mock import patch, AsyncMock
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+from backend.api_gateway_service.app.core.security import TokenData
 
 @pytest.mark.asyncio
 @patch("app.services.http_client.auth_service_client.get")
@@ -18,8 +26,8 @@ async def test_s3_analysis_end_to_end_flow(
     mock_collector_post,
     mock_auth_get
 ):
-    # 1. Mockar o get_current_user para simular um usuário autenticado com o perfil correto
-    mock_get_current_user.return_value = TokenData(id=1, email="test@test.com", role=UserRole.ANALYST)
+    # 1. Mockar o get_current_user para simular um usuário autenticado com a permissão correta
+    mock_get_current_user.return_value = TokenData(id=1, email="test@test.com", permissions=["run:analysis"])
 
     # 2. Mockar a resposta do auth_service para o get_credentials
     mock_auth_response = AsyncMock()
@@ -44,7 +52,7 @@ async def test_s3_analysis_end_to_end_flow(
     mock_policy_engine_post.return_value = mock_policy_engine_response
 
     # 5. Chamar o endpoint de análise no API Gateway
-    response = await client.post("/api/v1/analyze/aws/s3?linked_account_id=1")
+    response = client.post("/api/v1/analyze/aws/s3?linked_account_id=1")
 
     # 6. Verificações
     assert response.status_code == 200

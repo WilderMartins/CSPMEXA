@@ -1,11 +1,11 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path="backend/auth_service/.env.test")
 
 from app.services.user_service import UserService
-from app.models.user_model import User, UserRole
+from app.models.user_model import User
 
 # Instância do serviço a ser testado
 user_service_instance = UserService()
@@ -51,7 +51,7 @@ async def test_get_or_create_user_oauth_new_user(mock_db_session):
     assert created_user.full_name == full_name
     assert created_user.profile_picture_url == profile_picture_url
     assert created_user.is_active is True
-    assert created_user.role == UserRole.ANALYST
+    assert "run:analysis" in created_user.permissions
 
 @pytest.mark.asyncio
 async def test_get_or_create_user_oauth_existing_user_by_google_id(mock_db_session):

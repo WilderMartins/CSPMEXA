@@ -80,7 +80,7 @@ async def google_callback(
         else:
             jwt_claims = {
                 "email": local_user.email,
-                "role": local_user.role,
+                "permissions": local_user.permissions,
                 "full_name": local_user.full_name,
             }
             internal_jwt = token_service.create_jwt_token_with_custom_claims(
@@ -100,30 +100,6 @@ async def google_callback(
             detail="An unexpected error occurred during the login process."
         )
 
-from app.schemas.user_schema import RoleUpdateRequest, User as UserSchema
-from app.core.security import require_admin
-
-@router.put("/users/{user_id}/role", response_model=UserSchema, name="users:update-role")
-@limiter.limit("10/minute")
-async def update_user_role(
-    request: Request,
-    user_id: int,
-    role_update: RoleUpdateRequest,
-    db: Session = Depends(get_db),
-    admin_user: Session = Depends(require_admin)
-):
-    """
-    Atualiza o perfil de um usuário. Apenas administradores podem executar esta ação.
-    """
-    user_to_update = user_service.get_user_by_id(db, user_id=user_id)
-    if not user_to_update:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found."
-        )
-
-    updated_user = user_service.set_user_role(db, user=user_to_update, role=role_update.role)
-    return updated_user
 
 # O restante do arquivo (endpoints de MFA) permanece o mesmo
 from app.services.mfa_service import mfa_service
@@ -212,7 +188,7 @@ async def mfa_verify_login(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid TOTP code.")
     jwt_claims = {
         "email": user.email,
-        "role": getattr(user, 'role', 'user'),
+        "permissions": user.permissions,
         "full_name": getattr(user, 'full_name', None),
         "mfa_verified": True
     }

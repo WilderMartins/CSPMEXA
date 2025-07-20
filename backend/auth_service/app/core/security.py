@@ -66,31 +66,16 @@ async def get_current_active_user( # Esta é a dependência principal para endpo
     return current_user
 
 
-from app.models.user_model import UserRole
 
-def require_role(allowed_roles: list[UserRole]):
+def require_permission(permission: str):
     """
-    Dependência FastAPI para exigir um dos perfis permitidos.
+    Dependência FastAPI para exigir uma permissão específica.
     """
-    async def role_checker(current_user: User = Depends(get_current_active_user)) -> User:
-        allowed_role_values = [role.value for role in allowed_roles]
-        if current_user.role not in allowed_role_values:
+    async def permission_checker(current_user: User = Depends(get_current_active_user)) -> User:
+        if permission not in current_user.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"User with role '{current_user.role}' does not have the required permissions. Allowed roles: {', '.join(allowed_role_values)}",
+                detail=f"User does not have the required '{permission}' permission.",
             )
         return current_user
-    return role_checker
-
-require_admin = require_role([UserRole.ADMIN])
-
-
-# Exemplo para superusuário, usando o campo is_superuser ou o papel 'admin'
-async def get_current_active_superuser( # Nome mantido para consistência com usos anteriores
-    current_user: User = Depends(get_current_active_user),
-):
-    if not current_user.is_superuser and current_user.role != "admin": # Adaptar conforme seu modelo
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="The user doesn't have enough privileges for this action."
-        )
-    return current_user
+    return permission_checker

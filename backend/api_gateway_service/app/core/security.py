@@ -4,14 +4,13 @@ from jose import JWTError, jwt
 from pydantic import BaseModel
 from typing import Optional, List
 from app.core.config import settings
-from app.models.user_model import UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/google/login")
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
     email: Optional[str] = None
-    role: Optional[UserRole] = None
+    permissions: List[str] = []
 
 async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
     credentials_exception = HTTPException(
@@ -30,7 +29,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
         token_data = TokenData(
             user_id=int(user_id_from_token),
             email=payload.get("email"),
-            role=payload.get("role")
+            permissions=payload.get("permissions", [])
         )
     except JWTError:
         raise credentials_exception
@@ -39,13 +38,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> TokenData:
 
     return token_data
 
-def require_role(allowed_roles: List[UserRole]):
-    async def role_checker(current_user: TokenData = Depends(get_current_user)) -> TokenData:
-        allowed_role_values = [role.value for role in allowed_roles]
-        if current_user.role not in allowed_role_values:
+def require_permission(permission: str):
+    async def permission_checker(current_user: TokenData = Depends(get_current_user)) -> TokenData:
+        if permission not in current_user.permissions:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"User with role '{current_user.role}' does not have the required permissions. Allowed roles: {', '.join(allowed_role_values)}",
+                detail=f"User does not have the required '{permission}' permission.",
             )
         return current_user
-    return role_checker
+    return permission_checker
