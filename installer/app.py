@@ -217,7 +217,7 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
             os.remove(log_file_path)
 
         run_docker_command(
-            ["docker", "compose", "--profile", "app", "up", "-d", "--build"],
+            ["docker", "compose", "up", "-d", "--build"],
             wait=False,
             log_file_path=log_file_path
         )

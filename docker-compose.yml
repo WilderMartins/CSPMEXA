@@ -14,7 +14,6 @@ volumes:
 services:
   # --- Banco de Dados ---
   postgres_auth_db:
-    profiles: ["app"]
     image: postgres:13-alpine
     container_name: cspmexa-postgres
     restart: unless-stopped
@@ -35,7 +34,6 @@ services:
 
   # --- Serviços de Backend ---
   auth_service:
-    profiles: ["app"]
     build:
       context: ./backend/auth_service
       dockerfile: Dockerfile
@@ -62,7 +60,6 @@ services:
         condition: service_healthy
 
   collector_service:
-    profiles: ["app"]
     build:
       context: ./backend/collector_service
       dockerfile: Dockerfile
@@ -128,7 +125,6 @@ services:
       - vault-setup
 
   policy_engine_service:
-    profiles: ["app"]
     build:
       context: ./backend/policy_engine_service
       dockerfile: Dockerfile
@@ -153,7 +149,6 @@ services:
         condition: service_completed_successfully
 
   notification_service:
-    profiles: ["app"]
     build:
       context: ./backend/notification_service
       dockerfile: Dockerfile
@@ -217,7 +212,6 @@ services:
       - vault-setup
 
   audit_service:
-    profiles: ["app"]
     build:
       context: ./backend/audit_service
       dockerfile: Dockerfile
@@ -230,7 +224,6 @@ services:
       - cspmexa_net
 
   api_gateway_service:
-    profiles: ["app"]
     build:
       context: ./backend/api_gateway_service
       dockerfile: Dockerfile
@@ -297,7 +290,6 @@ services:
 
   # --- Frontend Build ---
   frontend_build:
-    profiles: ["app"]
     build:
       context: ./frontend/webapp
       dockerfile: Dockerfile
@@ -308,7 +300,6 @@ services:
 
   # --- Nginx Reverse Proxy ---
   nginx:
-    profiles: ["app"]
     image: nginx:latest
     container_name: cspmexa-nginx
     restart: unless-stopped
