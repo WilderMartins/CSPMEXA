@@ -243,6 +243,5 @@ describe('DashboardPage', () => {
         // Se o botão estivesse lá e fosse clicado, o mock de apiClient.patch não deveria ser chamado.
         // Este teste já é coberto por 'does NOT show action buttons for User role'.
       });
-  });
+    });
 });
-```
