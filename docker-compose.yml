@@ -99,7 +99,9 @@ services:
     container_name: cspmexa-vault-agent-collector
     volumes:
       - vault_secrets_collector:/vault/secrets
-    entrypoint: sh -c 'vault agent -config=- <<EOF
+    entrypoint: |
+      sh -c '
+      vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
         method "approle" {
@@ -120,7 +122,8 @@ services:
       vault {
         address = "http://vault:8200"
       }
-      EOF'
+      EOF
+      '
     depends_on:
       - vault-setup
 
@@ -185,7 +188,9 @@ services:
     container_name: cspmexa-vault-agent-notification
     volumes:
       - vault_secrets_notification:/vault/secrets
-    entrypoint: sh -c 'vault agent -config=- <<EOF
+    entrypoint: |
+      sh -c '
+      vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
         method "approle" {
@@ -206,7 +211,8 @@ services:
       vault {
         address = "http://vault:8200"
       }
-      EOF'
+      EOF
+      '
     depends_on:
       - vault-setup
 
@@ -260,7 +266,9 @@ services:
     container_name: cspmexa-vault-agent-api-gateway
     volumes:
       - vault_secrets_api_gateway:/vault/secrets
-    entrypoint: sh -c 'vault agent -config=- <<EOF
+    entrypoint: |
+      sh -c '
+      vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
         method "approle" {
@@ -282,7 +290,8 @@ services:
       vault {
         address = "http://vault:8200"
       }
-      EOF'
+      EOF
+      '
     depends_on:
       - vault-setup
 
