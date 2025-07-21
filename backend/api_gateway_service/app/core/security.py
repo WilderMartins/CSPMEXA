@@ -47,3 +47,7 @@ def require_permission(permission: str):
             )
         return current_user
     return permission_checker
+
+async def require_user(current_user: TokenData = Depends(get_current_user)) -> TokenData:
+    return current_user
+

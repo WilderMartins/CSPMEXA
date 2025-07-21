@@ -85,6 +85,69 @@ def check_prerequisites():
     return prereqs
 
 
+def check_prerequisites():
+    """Verifica se todos os pré-requisitos para a instalação estão atendidos."""
+    app.logger.info("Iniciando verificação de pré-requisitos...")
+    prereqs = {
+        'docker_installed': False,
+        'docker_running': False,
+        'docker_permission': False,
+        'docker_compose_installed': False,
+    }
+
+    # 1. Docker está instalado?
+    if shutil.which("docker"):
+        prereqs['docker_installed'] = True
+        app.logger.info("Verificação 'docker_installed': SUCESSO")
+    else:
+        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado.")
+        return prereqs # Encerra se o Docker não estiver instalado
+
+    # 2. Docker está em execução e com permissões corretas?
+    try:
+        # Tenta executar um comando Docker que requer conexão com o daemon
+        subprocess.run(
+            ["docker", "info"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        prereqs['docker_running'] = True
+        prereqs['docker_permission'] = True
+        app.logger.info("Verificação 'docker_running': SUCESSO")
+        app.logger.info("Verificação 'docker_permission': SUCESSO")
+    except subprocess.CalledProcessError as e:
+        if "permission denied" in e.stderr.lower():
+            prereqs['docker_running'] = True # O daemon está rodando, mas o usuário não tem permissão
+            app.logger.warning("Verificação 'docker_running': SUCESSO")
+            app.logger.error("Verificação 'docker_permission': FALHA - Permissão negada para acessar o Docker daemon.")
+        else:
+            app.logger.error(f"Verificação 'docker_running': FALHA - Docker daemon não parece estar em execução. Erro: {e.stderr}")
+    except FileNotFoundError:
+        # Este caso já é coberto por shutil.which, mas é uma boa prática mantê-lo
+        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado ao tentar executar 'docker info'.")
+
+
+    # 3. Docker Compose está instalado?
+    # O Docker Compose V2 é um plugin, então `docker compose` (sem hífen) é o comando preferido.
+    try:
+        subprocess.run(
+            ["docker", "compose", "version"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=True,
+            text=True
+        )
+        prereqs['docker_compose_installed'] = True
+        app.logger.info("Verificação 'docker_compose_installed': SUCESSO")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        app.logger.error("Verificação 'docker_compose_installed': FALHA - 'docker compose' não funciona.")
+
+    app.logger.info(f"Resultado da verificação de pré-requisitos: {prereqs}")
+    return prereqs
+
+
 def run_docker_command(command, wait=True, ignore_errors=False):
     """Helper para executar comandos Docker Compose."""
     try:

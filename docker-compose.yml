@@ -99,8 +99,7 @@ services:
     container_name: cspmexa-vault-agent-collector
     volumes:
       - vault_secrets_collector:/vault/secrets
-    entrypoint: |
-      sh -c '
+    entrypoint: >
       vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
@@ -123,7 +122,6 @@ services:
         address = "http://vault:8200"
       }
       EOF
-      '
     depends_on:
       - vault-setup
 
@@ -188,8 +186,7 @@ services:
     container_name: cspmexa-vault-agent-notification
     volumes:
       - vault_secrets_notification:/vault/secrets
-    entrypoint: |
-      sh -c '
+    entrypoint: >
       vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
@@ -212,7 +209,6 @@ services:
         address = "http://vault:8200"
       }
       EOF
-      '
     depends_on:
       - vault-setup
 
@@ -228,6 +224,20 @@ services:
       - ./backend/audit_service/app:/app/app
     networks:
       - cspmexa_net
+
+  remediation_service:
+    profiles: ["app"]
+    build:
+      context: ./backend/remediation_service
+      dockerfile: Dockerfile
+    container_name: cspmexa-remediation-service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8006 --reload
+    volumes:
+      - ./backend/remediation_service/app:/app/app
+    networks:
+      - cspmexa_net
+
 
   api_gateway_service:
     profiles: ["app"]
@@ -266,8 +276,7 @@ services:
     container_name: cspmexa-vault-agent-api-gateway
     volumes:
       - vault_secrets_api_gateway:/vault/secrets
-    entrypoint: |
-      sh -c '
+    entrypoint: >
       vault agent -config=- <<EOF
       pid_file = "/tmp/pidfile"
       auto_auth {
@@ -291,7 +300,6 @@ services:
         address = "http://vault:8200"
       }
       EOF
-      '
     depends_on:
       - vault-setup
 
