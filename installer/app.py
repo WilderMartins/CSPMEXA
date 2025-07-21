@@ -85,94 +85,37 @@ def check_prerequisites():
     return prereqs
 
 
-def check_prerequisites():
-    """Verifica se todos os pré-requisitos para a instalação estão atendidos."""
-    app.logger.info("Iniciando verificação de pré-requisitos...")
-    prereqs = {
-        'docker_installed': False,
-        'docker_running': False,
-        'docker_permission': False,
-        'docker_compose_installed': False,
-    }
-
-    # 1. Docker está instalado?
-    if shutil.which("docker"):
-        prereqs['docker_installed'] = True
-        app.logger.info("Verificação 'docker_installed': SUCESSO")
-    else:
-        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado.")
-        return prereqs # Encerra se o Docker não estiver instalado
-
-    # 2. Docker está em execução e com permissões corretas?
-    try:
-        # Tenta executar um comando Docker que requer conexão com o daemon
-        subprocess.run(
-            ["docker", "info"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-            text=True
-        )
-        prereqs['docker_running'] = True
-        prereqs['docker_permission'] = True
-        app.logger.info("Verificação 'docker_running': SUCESSO")
-        app.logger.info("Verificação 'docker_permission': SUCESSO")
-    except subprocess.CalledProcessError as e:
-        if "permission denied" in e.stderr.lower():
-            prereqs['docker_running'] = True # O daemon está rodando, mas o usuário não tem permissão
-            app.logger.warning("Verificação 'docker_running': SUCESSO")
-            app.logger.error("Verificação 'docker_permission': FALHA - Permissão negada para acessar o Docker daemon.")
-        else:
-            app.logger.error(f"Verificação 'docker_running': FALHA - Docker daemon não parece estar em execução. Erro: {e.stderr}")
-    except FileNotFoundError:
-        # Este caso já é coberto por shutil.which, mas é uma boa prática mantê-lo
-        app.logger.error("Verificação 'docker_installed': FALHA - Comando 'docker' não encontrado ao tentar executar 'docker info'.")
-
-
-    # 3. Docker Compose está instalado?
-    # O Docker Compose V2 é um plugin, então `docker compose` (sem hífen) é o comando preferido.
-    try:
-        subprocess.run(
-            ["docker", "compose", "version"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            check=True,
-            text=True
-        )
-        prereqs['docker_compose_installed'] = True
-        app.logger.info("Verificação 'docker_compose_installed': SUCESSO")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        app.logger.error("Verificação 'docker_compose_installed': FALHA - 'docker compose' não funciona.")
-
-    app.logger.info(f"Resultado da verificação de pré-requisitos: {prereqs}")
-    return prereqs
-
-
-def run_docker_command(command, wait=True, ignore_errors=False):
+def run_docker_command(command, wait=True, ignore_errors=False, log_file_path=None):
     """Helper para executar comandos Docker Compose."""
     try:
-        # Usar Popen para controle não bloqueante
-        process = subprocess.Popen(
-            command,
-            cwd=DOCKER_COMPOSE_YML_PATH,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-
-        if not wait:
-            # Retorna o processo imediatamente para execução em segundo plano
-            return process, None, None
-
-        # Comportamento de espera padrão
-        stdout, stderr = process.communicate()
-
-        if process.returncode != 0 and not ignore_errors:
-            raise subprocess.CalledProcessError(
-                process.returncode, command, output=stdout, stderr=stderr
+        if not wait and log_file_path:
+            # Para execução em segundo plano com log, redirecionamos stdout/stderr para um arquivo.
+            log_file = open(log_file_path, 'w')
+            process = subprocess.Popen(
+                command,
+                cwd=DOCKER_COMPOSE_YML_PATH,
+                stdout=log_file,
+                stderr=log_file,
+                text=True
             )
+            # Não esperamos, apenas retornamos o processo. O arquivo de log capturará a saída.
+            return process, None, None
+        else:
+            # Comportamento de espera padrão
+            process = subprocess.Popen(
+                command,
+                cwd=DOCKER_COMPOSE_YML_PATH,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True
+            )
+            stdout, stderr = process.communicate()
 
-        return stdout, stderr
+            if process.returncode != 0 and not ignore_errors:
+                raise subprocess.CalledProcessError(
+                    process.returncode, command, output=stdout, stderr=stderr
+                )
+            return stdout, stderr
 
     except subprocess.CalledProcessError as e:
         error_message = f"Comando falhou: {' '.join(command)}\nStdout: {e.stdout}\nStderr: {e.stderr}"
@@ -265,9 +208,21 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 
         app.logger.info("Arquivo .env criado com sucesso!")
 
-        # Iniciar serviços em segundo plano
-        app.logger.info("Iniciando a instalação dos serviços em segundo plano...")
-        run_docker_command(["docker", "compose", "--profile", "app", "up", "-d", "--build"], wait=False)
+
+        # Iniciar serviços em segundo plano e registrar a saída
+        log_file_path = os.path.join(DOCKER_COMPOSE_YML_PATH, 'installation.log')
+        app.logger.info(f"Iniciando a instalação dos serviços em segundo plano... Log em: {log_file_path}")
+
+        # Limpa o log antigo, se existir
+        if os.path.exists(log_file_path):
+            os.remove(log_file_path)
+
+        run_docker_command(
+            ["docker", "compose", "--profile", "app", "up", "-d", "--build"],
+            wait=False,
+            log_file_path=log_file_path
+        )
+
 
         # Redirecionar para a página de status para acompanhar o progresso
         return redirect(url_for('status'))
@@ -330,6 +285,19 @@ def service_logs(service_name):
     except Exception as e:
         app.logger.error(f"Erro ao obter logs para o serviço {service_name}: {e}")
         return f"Erro ao carregar logs para {service_name}."
+
+@app.route('/installation-log')
+def installation_log():
+    """Exibe o log da instalação."""
+    log_file_path = os.path.join(DOCKER_COMPOSE_YML_PATH, 'installation.log')
+    try:
+        with open(log_file_path, 'r') as f:
+            log_content = f.read()
+        return f"<pre>{log_content}</pre>"
+    except FileNotFoundError:
+        return "<pre>Arquivo de log da instalação ainda não foi criado. Aguarde um momento e atualize a página.</pre>"
+    except Exception as e:
+        return f"<pre>Erro ao ler o arquivo de log: {e}</pre>"
 
 @app.route('/success')
 def success():
