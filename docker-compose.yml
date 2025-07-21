@@ -238,6 +238,7 @@ services:
     networks:
       - cspmexa_net
 
+
   api_gateway_service:
     profiles: ["app"]
     build:
