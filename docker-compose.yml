@@ -229,6 +229,20 @@ services:
     networks:
       - cspmexa_net
 
+  remediation_service:
+    profiles: ["app"]
+    build:
+      context: ./backend/remediation_service
+      dockerfile: Dockerfile
+    container_name: cspmexa-remediation-service
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8006 --reload
+    volumes:
+      - ./backend/remediation_service/app:/app/app
+    networks:
+      - cspmexa_net
+
+
   api_gateway_service:
     profiles: ["app"]
     build:
