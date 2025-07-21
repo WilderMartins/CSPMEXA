@@ -1,7 +1,7 @@
 FROM alpine:latest
 
-# Instalar curl, jq e bash
-RUN apk --no-cache add curl jq bash
+# Instalar curl, jq, bash e openssl
+RUN apk --no-cache add curl jq bash openssl
 
 # Copiar o script de setup
 COPY setup-vault.sh /usr/local/bin/setup-vault.sh

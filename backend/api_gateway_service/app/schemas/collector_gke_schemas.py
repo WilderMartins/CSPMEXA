@@ -123,3 +123,4 @@ class GKEClusterData(BaseModel): # Para o Gateway, este é o schema de resposta 
         extra = 'ignore'
         from_attributes = True # Pydantic V2, or orm_mode = True for V1
         arbitrary_types_allowed = True
+```

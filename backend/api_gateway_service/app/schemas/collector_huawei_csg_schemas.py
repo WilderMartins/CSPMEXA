@@ -45,3 +45,4 @@ class CSGRiskCollection(BaseModel):
     class Config:
         populate_by_name = True
         extra = 'ignore'
+```

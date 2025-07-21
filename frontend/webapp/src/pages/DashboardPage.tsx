@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Routes, Route, Navigate, Link } from 'react-router-dom';
-import { Title, Text, Container, Grid, Space, Button, Group } from '@mantine/core';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { Title, Text, Container, Grid, Space } from '@mantine/core';
 import { api } from '../services/api';
 
 // Importar componentes do Dashboard
@@ -15,8 +15,6 @@ import AzureDashboardPage from './Dashboard/AzureDashboardPage';
 import HuaweiDashboardPage from './Dashboard/HuaweiDashboardPage';
 import GwsDashboardPage from './Dashboard/GwsDashboardPage';
 import M365DashboardPage from './Dashboard/M365DashboardPage';
-import ConsolidatedDashboardPage from './Dashboard/ConsolidatedDashboardPage';
-
 
 interface SummaryData {
   total_alerts: number;
@@ -44,12 +42,7 @@ const DashboardHomePage = () => {
 
   return (
     <Container fluid>
-      <Group position="apart" mb="lg">
-        <Title order={1}>{t('dashboard.title', 'Visão Geral de Segurança')}</Title>
-        <Button component={Link} to="/dashboard/consolidated">
-          {t('dashboard.buttons.viewConsolidated', 'Visão Consolidada')}
-        </Button>
-      </Group>
+      <Title order={1} mb="lg">{t('dashboard.title', 'Visão Geral de Segurança')}</Title>
 
       {loading ? (
         <Text>Carregando dashboard...</Text>
@@ -75,7 +68,6 @@ const DashboardPage: React.FC = () => {
   return (
     <Routes>
       <Route path="/" element={<DashboardHomePage />} />
-      <Route path="consolidated" element={<ConsolidatedDashboardPage />} />
       <Route path="aws" element={<AwsDashboardPage />} />
       <Route path="gcp" element={<GcpDashboardPage />} />
       <Route path="azure" element={<AzureDashboardPage />} />
