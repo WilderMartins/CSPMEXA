@@ -375,7 +375,7 @@ async def _orchestrate_gcp_analysis(
     project_id: Optional[str],
     current_user: TokenData,
     additional_collector_params: Optional[Dict[str, Any]] = None # Para parâmetros extras como 'location' para GKE
-) -> List[policy_engine_alert_schema.Alert]: # Retorna AlertSchema do gateway
+) -> List[policy_engine_alert_schema.AlertSchema]: # Retorna AlertSchema do gateway
     downstream_headers = {}
 
     # 1. Chamar o Collector Service
@@ -442,7 +442,7 @@ async def _orchestrate_gcp_analysis(
         )
     return alerts
 
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/storage/buckets", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_storage_buckets")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/storage/buckets", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_storage_buckets")
 async def analyze_gcp_storage_buckets_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),

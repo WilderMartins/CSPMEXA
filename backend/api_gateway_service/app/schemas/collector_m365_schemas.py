@@ -53,3 +53,4 @@ class M365TenantSecurityInput(BaseModel):
     users_mfa_status: Optional[M365UserMFAStatusCollection] = None
     conditional_access_policies: Optional[M365ConditionalAccessPolicyCollection] = None
     # Adicionar outros tipos de dados M365 aqui conforme são implementados
+```

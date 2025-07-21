@@ -208,7 +208,6 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 
         app.logger.info("Arquivo .env criado com sucesso!")
 
-
         # Iniciar serviços em segundo plano e registrar a saída
         log_file_path = os.path.join(DOCKER_COMPOSE_YML_PATH, 'installation.log')
         app.logger.info(f"Iniciando a instalação dos serviços em segundo plano... Log em: {log_file_path}")
@@ -222,7 +221,6 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
             wait=False,
             log_file_path=log_file_path
         )
-
 
         # Redirecionar para a página de status para acompanhar o progresso
         return redirect(url_for('status'))

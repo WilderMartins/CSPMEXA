@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-pydantic
-requests
-boto3
-google-api-python-client
-azure-identity
-azure-mgmt-compute
-msal
