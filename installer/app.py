@@ -204,7 +204,7 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 
         # Iniciar serviços em segundo plano
         app.logger.info("Iniciando a instalação dos serviços em segundo plano...")
-        run_docker_command(["docker", "compose", "up", "-d", "--build"], wait=False)
+        run_docker_command(["docker", "compose", "--profile", "app", "up", "-d", "--build"], wait=False)
 
         # Redirecionar para a página de status para acompanhar o progresso
         return redirect(url_for('status'))
