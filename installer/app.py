@@ -19,8 +19,8 @@ app.logger.addHandler(handler)
 app.logger.setLevel(logging.INFO)
 
 # Caminhos
-ENV_FILE_PATH = os.path.join('/app', '.env')
-DOCKER_COMPOSE_YML_PATH = '/app'
+ENV_FILE_PATH = os.path.join('/app/config', '.env')
+DOCKER_COMPOSE_YML_PATH = '/app/config'
 
 def check_prerequisites():
     """Verifica se todos os pré-requisitos para a instalação estão atendidos."""
