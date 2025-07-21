@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 import logging
 
+from app.services.audit_service_client import audit_service_client
 from app.db.session import get_db
 from app.crud.crud_alert import alert_crud
 from app.engine.core_engine import policy_engine # Importa a instância do PolicyEngine
@@ -23,6 +24,14 @@ async def analyze_resources_and_persist_alerts(
     Recebe dados de configuração de recursos, aplica políticas para gerar dados de alerta,
     cria/atualiza alertas no banco de dados e retorna os alertas processados.
     """
+    actor = "system" # Pode ser alterado para o ID do usuário se o token for passado
+    resource = f"{analysis_request.provider}:{analysis_request.service}"
+    details = {"account_id": analysis_request.account_id}
+
+    await audit_service_client.create_event(
+        actor=actor, action="analysis_started", resource=resource, details=details
+    )
+
     logger.info(f"Received analysis request for provider: {analysis_request.provider}, service: {analysis_request.service}, account: {analysis_request.account_id or 'N/A'}")
 
     if not analysis_request.data:
@@ -53,10 +62,26 @@ async def analyze_resources_and_persist_alerts(
                 logger.error(f"Error processing, persisting, or notifying for one alert for {analysis_request.provider}/{analysis_request.service}: {e} - Data: {alert_data_dict}", exc_info=True)
 
         logger.info(f"Analysis, persistence, and notification triggering for {analysis_request.provider}/{analysis_request.service} (Account: {analysis_request.account_id or 'N/A'}) completed. Processed {len(persisted_alerts_schemas)} alerts.")
+
+        await audit_service_client.create_event(
+            actor=actor,
+            action="analysis_completed",
+            resource=resource,
+            details={**details, "alerts_found": len(persisted_alerts_schemas)},
+        )
+
         return persisted_alerts_schemas
 
     except Exception as e:
         logger.exception(f"Critical error during resource analysis, persistence or notification for service {analysis_request.service}")
+
+        await audit_service_client.create_event(
+            actor=actor,
+            action="analysis_failed",
+            resource=resource,
+            details={**details, "error": str(e)},
+        )
+
         raise HTTPException(
             status_code=500, detail=f"Error during resource analysis for {analysis_request.service}: {str(e)}"
         )

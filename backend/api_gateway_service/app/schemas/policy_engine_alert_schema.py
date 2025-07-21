@@ -19,7 +19,7 @@ class AlertStatusEnum(str, Enum):
 
 # This schema is used for responses from the gateway for GET /alerts and GET /alerts/{id}
 # It should mirror AlertSchema from the policy_engine_service
-class AlertSchema(BaseModel):
+class Alert(BaseModel):
     id: int # Matches the integer ID from the database model
     resource_id: str = Field(..., description="Identifier of the affected resource")
     resource_type: str = Field(..., description="Type of the affected resource")
@@ -75,7 +75,6 @@ alert_example = {
     "last_seen_at": "2023-11-15T10:00:00Z"
 }
 
-AlertSchema.Config.json_schema_extra = {"example": alert_example} # For Pydantic V2
 # For Pydantic V1, you might need a staticmethod for schema_extra as in the original file.
 # However, FastAPI typically handles examples well with `Field(example=...)` or response_model examples.
 # For simplicity, if using Pydantic V1 with FastAPI, you might rely on FastAPI's example generation

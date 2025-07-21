@@ -2,84 +2,204 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>Assistente de Instalação do CSPMEXA</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instalação do CSPMEXA</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f4f9; }
-        .container { max-width: 800px; margin-top: 30px; }
-        .card-header { background-color: #0056b3; color: white; }
-        .form-group label { font-weight: bold; }
-        .btn-install { background-color: #28a745; border-color: #28a745; }
-        .flashes { list-style: none; padding: 0; }
-        .flashes li { margin-bottom: 10px; }
+        body { background-color: #f8f9fa; }
+        .container { max-width: 900px; margin-top: 2rem; margin-bottom: 2rem; }
+        .card { padding: 2rem; }
+        .form-section { margin-bottom: 2.5rem; }
+        .form-section h3 {
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .form-text { font-size: 0.875em; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="card">
-            <h1 class="card-header text-center p-3">Assistente de Instalação do CSPMEXA</h1>
-            <div class="card-body">
-                <p class="lead">Bem-vindo! Este assistente irá guiá-lo na configuração do CSPMEXA. Preencha os campos abaixo. Para a maioria dos casos, os valores padrão são suficientes.</p>
+        <div class="card shadow-sm">
+            <h1 class="text-center mb-4">Configuração do Ambiente CSPMEXA</h1>
 
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        <ul class="flashes">
-                        {% for category, message in messages %}
-                            <li class="alert alert-{{ category }}">{{ message | safe }}</li>
-                        {% endfor %}
-                        </ul>
-                    {% endif %}
-                {% endwith %}
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
 
-                <form action="/install" method="POST">
-                    <hr>
-                    <h5>Configurações do Banco de Dados</h5>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="AUTH_DB_USER">Usuário do Banco</label>
-                            <input type="text" class="form-control" id="AUTH_DB_USER" name="AUTH_DB_USER" value="cspmexa_user">
-                        </div>
-                        <div class="form-group col-md-6">
-                            <label for="AUTH_DB_NAME">Nome do Banco</label>
-                            <input type="text" class="form-control" id="AUTH_DB_NAME" name="AUTH_DB_NAME" value="cspmexa_db">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="AUTH_DB_PASSWORD">Senha do Banco</label>
-                        <input type="password" class="form-control" id="AUTH_DB_PASSWORD" name="AUTH_DB_PASSWORD" placeholder="Deixe em branco para gerar uma senha segura">
-                        <small class="form-text text-muted">Recomendamos deixar em branco para que uma senha forte seja gerada automaticamente.</small>
-                    </div>
+            <form action="{{ url_for('perform_install') }}" method="post" class="mt-3">
 
-                    <hr>
-                    <h5>Configurações de Rede</h5>
-                    <div class="form-row">
-                        <div class="form-group col-md-6">
-                            <label for="FRONTEND_PORT">Porta do Frontend</label>
-                            <input type="number" class="form-control" id="FRONTEND_PORT" name="FRONTEND_PORT" value="3000">
+                <!-- Seção de Configurações Gerais -->
+                <div class="form-section">
+                    <h3><i class="bi bi-gear-fill"></i> Configurações Gerais</h3>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="FRONTEND_PORT" class="form-label">Porta do Frontend</label>
+                            <input type="number" class="form-control" id="FRONTEND_PORT" name="FRONTEND_PORT" value="3000" required>
                         </div>
-                        <div class="form-group col-md-6">
-                            <label for="API_GATEWAY_PORT">Porta do API Gateway</label>
-                            <input type="number" class="form-control" id="API_GATEWAY_PORT" name="API_GATEWAY_PORT" value="8050">
+                        <div class="col-md-6 mb-3">
+                            <label for="API_GATEWAY_PORT" class="form-label">Porta do API Gateway</label>
+                            <input type="number" class="form-control" id="API_GATEWAY_PORT" name="API_GATEWAY_PORT" value="8050" required>
                         </div>
                     </div>
+                </div>
 
-                    <hr>
-                    <h5>Configurações de Autenticação (Google OAuth)</h5>
-                    <p>Você precisará criar credenciais OAuth 2.0 no Google Cloud Console. <a href="https://developers.google.com/identity/protocols/oauth2/web-server#creatingcred" target="_blank">Instruções aqui.</a></p>
-                    <div class="form-group">
-                        <label for="GOOGLE_CLIENT_ID">Google Client ID</label>
-                        <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID" placeholder="Cole seu Client ID do Google aqui">
+                <!-- Seção do Banco de Dados -->
+                <div class="form-section">
+                    <h3><i class="bi bi-database-fill"></i> Banco de Dados (PostgreSQL)</h3>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="AUTH_DB_USER" class="form-label">Usuário</label>
+                            <input type="text" class="form-control" id="AUTH_DB_USER" name="AUTH_DB_USER" value="cspmexa_user" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="AUTH_DB_NAME" class="form-label">Nome do Banco</label>
+                            <input type="text" class="form-control" id="AUTH_DB_NAME" name="AUTH_DB_NAME" value="cspmexa_db" required>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="GOOGLE_CLIENT_SECRET">Google Client Secret</label>
-                        <input type="password" class="form-control" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET" placeholder="Cole seu Client Secret do Google aqui">
+                    <div class="mb-3">
+                        <label for="AUTH_DB_PASSWORD" class="form-label">Senha</label>
+                        <input type="password" class="form-control" id="AUTH_DB_PASSWORD" name="AUTH_DB_PASSWORD">
+                        <div class="form-text">Deixe em branco para gerar uma senha segura automaticamente.</div>
                     </div>
+                </div>
 
-                    <hr>
-                    <button type="submit" class="btn btn-install btn-lg btn-block">Iniciar Instalação</button>
-                </form>
-            </div>
+                <!-- Seção de Autenticação -->
+                <div class="form-section">
+                    <h3><i class="bi bi-key-fill"></i> Autenticação (Google OAuth)</h3>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="GOOGLE_CLIENT_ID" class="form-label">Google Client ID</label>
+                            <input type="text" class="form-control" id="GOOGLE_CLIENT_ID" name="GOOGLE_CLIENT_ID">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="GOOGLE_CLIENT_SECRET" class="form-label">Google Client Secret</label>
+                            <input type="password" class="form-control" id="GOOGLE_CLIENT_SECRET" name="GOOGLE_CLIENT_SECRET">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção de Notificações -->
+                <div class="form-section">
+                    <h3><i class="bi bi-bell-fill"></i> Configurações de Notificação</h3>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="EMAILS_FROM_EMAIL" class="form-label">E-mail do Remetente</label>
+                            <input type="email" class="form-control" id="EMAILS_FROM_EMAIL" name="EMAILS_FROM_EMAIL" placeholder="ex: noreply@suaempresa.com">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL" class="form-label">E-mail para Alertas Críticos</label>
+                            <input type="email" class="form-control" id="DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL" name="DEFAULT_CRITICAL_ALERT_RECIPIENT_EMAIL" placeholder="ex: security@suaempresa.com">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção de Credenciais de Nuvem (Opcional) -->
+                <div class="form-section">
+                    <h3><i class="bi bi-cloud-fill"></i> Credenciais de Nuvem (Opcional)</h3>
+                    <p class="form-text">Você pode adicionar as credenciais para os provedores de nuvem agora ou posteriormente através da interface da aplicação.</p>
+
+                    <div class="accordion" id="cloudCredentialsAccordion">
+                        <!-- AWS -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingAws">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAws" aria-expanded="false" aria-controls="collapseAws">
+                                    Amazon Web Services (AWS)
+                                </button>
+                            </h2>
+                            <div id="collapseAws" class="accordion-collapse collapse" aria-labelledby="headingAws">
+                                <div class="accordion-body">
+                                    <div class="mb-3">
+                                        <label for="AWS_ACCESS_KEY_ID" class="form-label">AWS Access Key ID</label>
+                                        <input type="text" class="form-control" id="AWS_ACCESS_KEY_ID" name="AWS_ACCESS_KEY_ID">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="AWS_SECRET_ACCESS_KEY" class="form-label">AWS Secret Access Key</label>
+                                        <input type="password" class="form-control" id="AWS_SECRET_ACCESS_KEY" name="AWS_SECRET_ACCESS_KEY">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Google Workspace -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingGWS">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseGWS" aria-expanded="false" aria-controls="collapseGWS">
+                                    Google Workspace
+                                </button>
+                            </h2>
+                            <div id="collapseGWS" class="accordion-collapse collapse" aria-labelledby="headingGWS">
+                                <div class="accordion-body">
+                                    <div class="mb-3">
+                                        <label for="GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL" class="form-label">E-mail do Administrador Delegado</label>
+                                        <input type="email" class="form-control" id="GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL" name="GOOGLE_WORKSPACE_DELEGATED_ADMIN_EMAIL">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Azure -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingAzure">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAzure" aria-expanded="false" aria-controls="collapseAzure">
+                                    Microsoft Azure
+                                </button>
+                            </h2>
+                            <div id="collapseAzure" class="accordion-collapse collapse" aria-labelledby="headingAzure">
+                                <div class="accordion-body">
+                                    <div class="mb-3"><label for="AZURE_SUBSCRIPTION_ID" class="form-label">Subscription ID</label><input type="text" class="form-control" id="AZURE_SUBSCRIPTION_ID" name="AZURE_SUBSCRIPTION_ID"></div>
+                                    <div class="mb-3"><label for="AZURE_TENANT_ID" class="form-label">Tenant ID</label><input type="text" class="form-control" id="AZURE_TENANT_ID" name="AZURE_TENANT_ID"></div>
+                                    <div class="mb-3"><label for="AZURE_CLIENT_ID" class="form-label">Client ID</label><input type="text" class="form-control" id="AZURE_CLIENT_ID" name="AZURE_CLIENT_ID"></div>
+                                    <div class="mb-3"><label for="AZURE_CLIENT_SECRET" class="form-label">Client Secret</label><input type="password" class="form-control" id="AZURE_CLIENT_SECRET" name="AZURE_CLIENT_SECRET"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Huawei Cloud -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingHuawei">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHuawei" aria-expanded="false" aria-controls="collapseHuawei">
+                                    Huawei Cloud
+                                </button>
+                            </h2>
+                            <div id="collapseHuawei" class="accordion-collapse collapse" aria-labelledby="headingHuawei">
+                                <div class="accordion-body">
+                                    <div class="mb-3"><label for="HUAWEICLOUD_SDK_AK" class="form-label">Access Key (AK)</label><input type="text" class="form-control" id="HUAWEICLOUD_SDK_AK" name="HUAWEICLOUD_SDK_AK"></div>
+                                    <div class="mb-3"><label for="HUAWEICLOUD_SDK_SK" class="form-label">Secret Key (SK)</label><input type="password" class="form-control" id="HUAWEICLOUD_SDK_SK" name="HUAWEICLOUD_SDK_SK"></div>
+                                    <div class="mb-3"><label for="HUAWEICLOUD_SDK_PROJECT_ID" class="form-label">Project ID</label><input type="text" class="form-control" id="HUAWEICLOUD_SDK_PROJECT_ID" name="HUAWEICLOUD_SDK_PROJECT_ID"></div>
+                                    <div class="mb-3"><label for="HUAWEICLOUD_SDK_DOMAIN_ID" class="form-label">Domain ID</label><input type="text" class="form-control" id="HUAWEICLOUD_SDK_DOMAIN_ID" name="HUAWEICLOUD_SDK_DOMAIN_ID"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Microsoft 365 -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="headingM365">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseM365" aria-expanded="false" aria-controls="collapseM365">
+                                    Microsoft 365
+                                </button>
+                            </h2>
+                            <div id="collapseM365" class="accordion-collapse collapse" aria-labelledby="headingM365">
+                                <div class="accordion-body">
+                                    <div class="mb-3"><label for="M365_TENANT_ID" class="form-label">Tenant ID</label><input type="text" class="form-control" id="M365_TENANT_ID" name="M365_TENANT_ID"></div>
+                                    <div class="mb-3"><label for="M365_CLIENT_ID" class="form-label">Client ID</label><input type="text" class="form-control" id="M365_CLIENT_ID" name="M365_CLIENT_ID"></div>
+                                    <div class="mb-3"><label for="M365_CLIENT_SECRET" class="form-label">Client Secret</label><input type="password" class="form-control" id="M365_CLIENT_SECRET" name="M365_CLIENT_SECRET"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">Iniciar Instalação</button>
+                </div>
+            </form>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
