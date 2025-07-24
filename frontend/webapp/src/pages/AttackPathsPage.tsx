@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Container, Title, Card, Text, SimpleGrid, Badge } from '@mantine/core';
-import { api } from '../services/api';
+import apiClient from '../services/api';
 
 interface AttackPath {
     id: number;
@@ -17,7 +17,7 @@ const AttackPathsPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        api.get<AttackPath[]>('/attack-paths')
+        apiClient.get<AttackPath[]>('/attack-paths')
             .then(response => {
                 setAttackPaths(response.data);
                 setLoading(false);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Title, Container, Pagination, Group, Text } from '@mantine/core';
-import { api } from '../services/api';
+import apiClient from '../services/api';
 
 interface Asset {
     id: number;
@@ -25,7 +25,7 @@ const InventoryPage: React.FC = () => {
     const fetchAssets = async (page: number) => {
         setLoading(true);
         try {
-            const response = await api.get<Asset[]>('/assets', {
+            const response = await apiClient.get<Asset[]>('/assets', {
                 params: {
                     skip: (page - 1) * ITEMS_PER_PAGE,
                     limit: ITEMS_PER_PAGE,

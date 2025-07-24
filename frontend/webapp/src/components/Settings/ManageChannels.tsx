@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Button, Modal, TextInput, Select, Group, Title, Stack } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 import { showNotification } from '@mantine/notifications';
 
 interface Channel {
@@ -31,7 +31,7 @@ const ManageChannels: React.FC = () => {
 
     const fetchChannels = async () => {
         try {
-            const response = await api.get<Channel[]>('/management/channels');
+            const response = await apiClient.get<Channel[]>('/management/channels');
             setChannels(response.data);
         } catch (error) {
             console.error("Erro ao buscar canais:", error);
@@ -49,7 +49,7 @@ const ManageChannels: React.FC = () => {
 
     const handleAddChannel = async (values: typeof form.values) => {
         try {
-            await api.post('/management/channels', values);
+            await apiClient.post('/management/channels', values);
             showNotification({
                 title: 'Sucesso!',
                 message: 'Canal de notificação adicionado com sucesso.',
@@ -70,7 +70,7 @@ const ManageChannels: React.FC = () => {
 
     const handleDeleteChannel = async (channelId: number) => {
         try {
-            await api.delete(`/management/channels/${channelId}`);
+            await apiClient.delete(`/management/channels/${channelId}`);
             showNotification({
                 title: 'Sucesso!',
                 message: 'Canal de notificação removido com sucesso.',
