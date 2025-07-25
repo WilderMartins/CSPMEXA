@@ -233,6 +233,9 @@ from flask import jsonify
 
 from flask import Response
 
+from flask import Response
+import json
+
 @app.route('/status')
 def status():
     """Retorna o status da instalação como um fluxo de eventos."""
@@ -242,6 +245,9 @@ def status():
             "collector_service", "policy_engine_service", "notification_service",
             "api_gateway_service", "frontend_build", "nginx"
         ]
+        total_services = len(services)
+        completed_services = 0
+
         for service in services:
             try:
                 stdout, _ = run_docker_command(
@@ -255,17 +261,27 @@ def status():
                 else:
                     if 'running' in status_text:
                         status_event = 'running'
+                        completed_services += 1
                     elif 'exited' in status_text:
                         status_event = 'exited'
                     else:
                         status_event = 'starting'
 
-                data = f"data: {{\"service\": \"{service}\", \"status\": \"{status_event}\"}}\n\n"
-                yield data
+                progress = int((completed_services / total_services) * 100)
+                data = {
+                    "service": service,
+                    "status": status_event,
+                    "progress": progress
+                }
+                yield f"data: {json.dumps(data)}\n\n"
                 time.sleep(1)
             except Exception as e:
-                data = f"data: {{\"service\": \"{service}\", \"status\": \"error\"}}\n\n"
-                yield data
+                data = {
+                    "service": service,
+                    "status": "error",
+                    "progress": int((completed_services / total_services) * 100)
+                }
+                yield f"data: {json.dumps(data)}\n\n"
                 app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
 
         # Sinaliza o fim do fluxo
