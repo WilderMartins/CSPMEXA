@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock, ANY
 from datetime import datetime
 
-from backend.collector_service.app.huawei.ecs_collector import ECSCollector
+from ...app.huawei.ecs_collector import ECSCollector
 from backend.collector_service.app.schemas.huawei.ecs import ECSVMData, ECSAddresses, ECSNetworkInterface, ECSSecurityGroup
 from backend.collector_service.app.core.config import settings
 

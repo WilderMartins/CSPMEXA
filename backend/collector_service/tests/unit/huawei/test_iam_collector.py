@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock, ANY
 from datetime import datetime
 
-from backend.collector_service.app.huawei.iam_collector import IAMCollector
+from ...app.huawei.iam_collector import IAMCollector
 from backend.collector_service.app.schemas.huawei.iam import IAMUserData, IAMGroupData, IAMAccessKeyData, MFADevice
 from backend.collector_service.app.core.config import settings
 

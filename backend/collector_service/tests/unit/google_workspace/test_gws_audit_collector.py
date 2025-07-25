@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import datetime
 
-from app.google_workspace.gws_audit_collector import get_gws_audit_logs, _convert_sdk_activity_to_schema
+from ...app.google_workspace.gws_audit_collector import get_gws_audit_logs, _convert_sdk_activity_to_schema
 from app.schemas.google_workspace.gws_audit_log_schemas import GWSAuditLogCollection, GWSAuditLogItem
 from app.core.config import settings # Para mockar as settings globais
 

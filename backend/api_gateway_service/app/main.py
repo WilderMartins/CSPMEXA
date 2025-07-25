@@ -3,16 +3,21 @@ from app.core.config import settings
 from app.api.v1 import auth_router, data_router, alerts_router, dashboard_router, users_router, audit_router, remediation_router
 from app.services import http_client # Import para fechar o cliente HTTP na saída
 from app.core.security import TokenData, get_current_user # Para o endpoint de teste de autenticação
+from app.core.logging_config import setup_logging
 import logging
 
-logging.basicConfig(level=logging.INFO)
+setup_logging()
 logger = logging.getLogger(__name__)
+
+from starlette_prometheus import metrics, PrometheusMiddleware
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     version="0.1.1", # Version bump
 )
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
 
 @app.on_event("startup")
 async def startup_event():

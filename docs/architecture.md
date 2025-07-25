@@ -13,7 +13,7 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   Login de usuários via Google OAuth 2.0.
         *   Emissão e validação de tokens JWT.
         *   (Estrutura para RBAC e MFA existe, mas não totalmente explorada na UI/fluxos).
-    *   **Tecnologia:** Python com FastAPI, Pydantic, SQLAlchemy, PostgreSQL.
+    *   **Tecnologia:** Python com FastAPI, Pydantic, SQLAlchemy, PostgreSQL, python-json-logger, starlette-prometheus.
     *   **Comunicação:** REST API.
     *   **Porta Dev Padrão:** `8000`
 
@@ -25,7 +25,7 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   **Azure:** Coleta de dados para Virtual Machines (VMs) e Storage Accounts.
         *   Conexão com APIs dos provedores de nuvem.
         *   Coleta de metadados de configuração.
-    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), huaweicloudsdkpython (Huawei), azure-sdk-for-python (Azure), google-api-python-client (Google Workspace), Pydantic.
+    *   **Tecnologia:** Python com FastAPI, Boto3 (AWS), google-cloud-python (GCP), huaweicloudsdkpython (Huawei), azure-sdk-for-python (Azure), google-api-python-client (Google Workspace), Pydantic, python-json-logger, starlette-prometheus.
     *   **Comunicação:** REST API. Os dados são retornados diretamente nas respostas da API.
     *   **Porta Dev Padrão:** `8001`
 
@@ -35,7 +35,7 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   **Análise de Políticas**: Aplicar um conjunto de regras e políticas de segurança contra os dados de configuração coletados para identificar más configurações.
         *   **Análise de Caminhos de Ataque**: Construir um grafo de ativos e suas relações para identificar sequências de vulnerabilidades que poderiam ser exploradas por um atacante.
         *   **Geração de Alertas**: Criar e persistir alertas para cada má configuração ou caminho de ataque encontrado.
-    *   **Tecnologia:** Python com FastAPI, Pydantic, SQLAlchemy, **NetworkX** (para análise de grafos).
+    *   **Tecnologia:** Python com FastAPI, Pydantic, SQLAlchemy, **NetworkX** (para análise de grafos), python-json-logger, starlette-prometheus.
     *   **Comunicação:** REST API.
     *   **Porta Dev Padrão:** `8002`
 
@@ -46,7 +46,7 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   Proxy para endpoints de coleta de dados AWS, GCP, Huawei Cloud, Azure e Google Workspace (Usuários, Drive) do `collector-service`.
         *   Endpoints de orquestração que chamam o `collector-service` e depois o `policy-engine-service` para recursos AWS, GCP, Huawei Cloud, Azure e Google Workspace.
         *   Validação de token JWT para endpoints protegidos.
-    *   **Tecnologia:** Python com FastAPI, Pydantic, HTTPX.
+    *   **Tecnologia:** Python com FastAPI, Pydantic, HTTPX, python-json-logger, starlette-prometheus.
     *   **Comunicação:** REST/HTTP com frontend e outros serviços.
     *   **Porta Dev Padrão:** `8050`
 
@@ -68,7 +68,7 @@ A arquitetura é projetada para ser modular, escalável e permitir o desenvolvim
         *   **Webhook:** Envio de payloads de alerta JSON para URLs de webhook genéricas.
         *   **Google Chat:** Envio de mensagens de alerta formatadas como cards para webhooks de espaços do Google Chat.
         *   Integrado com `policy-engine-service` para receber alertas críticos.
-    *   **Tecnologia:** Python com FastAPI, `httpx` (para webhooks), `boto3` (para SES). A biblioteca `emails` e `Jinja2` são usadas para formatação de e-mail HTML.
+    *   **Tecnologia:** Python com FastAPI, `httpx` (para webhooks), `boto3` (para SES), python-json-logger, starlette-prometheus. A biblioteca `emails` e `Jinja2` são usadas para formatação de e-mail HTML.
     *   **Comunicação:** REST API (recebe alertas do `policy-engine-service` ou diretamente via API).
     *   **Porta Dev Padrão:** `8003`
 
@@ -152,6 +152,11 @@ graph TD
         GoogleWorkspaceAPI[Google Workspace APIs]
     end
 
+    subgraph "Monitoramento"
+        Prometheus[Prometheus]
+        Grafana[Grafana]
+    end
+
     A <-->|Chamadas API /api/v1/*| B;
 
     B <-->|Login, Callback| C;
@@ -175,6 +180,12 @@ graph TD
     G --- DB_Notify;
     G -.->|Envia Notificações| ExternalSystems[Sistemas Externos];
 
+    C -->|Métricas| Prometheus;
+    D -->|Métricas| Prometheus;
+    E -->|Métricas| Prometheus;
+    G -->|Métricas| Prometheus;
+    B -->|Métricas| Prometheus;
+    Grafana -->|Visualiza| Prometheus;
 ```
 *Os dados de configuração da nuvem coletados são transitórios. Alertas SÃO persistidos no backend neste MVP Alpha.*
 

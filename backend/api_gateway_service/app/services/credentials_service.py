@@ -19,10 +19,10 @@ async def get_credentials_for_account(linked_account_id: int, auth_token: str) -
         # para uma conta específica. Vamos supor que seja /internal/credentials/{id}
         # e que seja protegido.
         response = await auth_service_client.get(
-            f"/internal/credentials/{linked_account_id}", headers=headers
+            f"/accounts/{linked_account_id}/credentials", headers=headers
         )
-        response.raise_for_status()
-        return response.json()
+        await response.raise_for_status()
+        return await response.json()
     except Exception as e:
         logger.error(f"Erro ao buscar credenciais para a conta ID {linked_account_id}: {e}")
         return None

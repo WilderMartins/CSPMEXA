@@ -58,6 +58,12 @@ class UserService:
         full_name: Optional[str] = None,
         profile_picture_url: Optional[str] = None
     ) -> User:
+        # Esta função lida com a lógica de encontrar ou criar um usuário durante o fluxo OAuth.
+        # A lógica é a seguinte:
+        # 1. Tenta encontrar o usuário pelo google_id. Se encontrar, atualiza os dados e retorna o usuário.
+        # 2. Se não encontrar pelo google_id, tenta encontrar pelo email.
+        # 3. Se encontrar pelo email, associa o google_id à conta (se já não tiver um) e atualiza os dados.
+        # 4. Se não encontrar por nenhum dos dois, cria um novo usuário.
         user = self.get_user_by_google_id(db, google_id=google_id)
         if user:
             logger.info(f"User found by google_id: {google_id}. Updating details if changed.")

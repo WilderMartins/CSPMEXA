@@ -58,11 +58,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Pytest for Auth Service
-        # Os testes estão no diretório tests/. `pytest` irá descobri-los automaticamente.
-        run: pytest tests
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/backend
+          coverage run -m pytest tests && coverage report
 
   test-collector-service:
     name: Test Collector Service (Python)
@@ -76,10 +84,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Pytest for Collector Service
-        run: pytest tests # Nossos testes estão em backend/collector_service/tests/
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/backend
+          coverage run -m pytest tests && coverage report
 
   test-policy-engine-service:
     name: Test Policy Engine Service (Python)
@@ -93,10 +110,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Pytest for Policy Engine Service
-        run: pytest tests # Nossos testes estão em backend/policy_engine_service/tests/
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/backend
+          coverage run -m pytest tests && coverage report
 
   test-api-gateway-service:
     name: Test API Gateway Service (Python Integration)
@@ -110,10 +136,19 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run Pytest for API Gateway Service
-        run: pytest tests # Nossos testes de integração estão em backend/api_gateway_service/tests/
+        run: |
+          export PYTHONPATH=$PYTHONPATH:$(pwd)/backend
+          coverage run -m pytest tests && coverage report
 
   # --- Testes de Frontend ---
   test-frontend:
@@ -154,3 +189,50 @@ jobs:
         run: npm ci
       - name: Build React App
         run: npm run build
+
+  build-and-push-docker-images:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    # Este job será executado apenas manualmente ou em um gatilho específico no futuro
+    if: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push auth-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/auth_service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/auth-service:latest
+      - name: Build and push api-gateway-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/api_gateway_service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/api-gateway-service:latest
+      - name: Build and push collector-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/collector_service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/collector-service:latest
+      - name: Build and push policy-engine-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/policy_engine_service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/policy-engine-service:latest
+      - name: Build and push notification-service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/notification_service
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/notification-service:latest

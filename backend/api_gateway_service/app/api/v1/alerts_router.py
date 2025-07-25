@@ -4,12 +4,14 @@ import datetime
 
 from app.services.http_client import policy_engine_service_client
 from app.core.security import (
-    TokenData, # Mantido
-    require_user, # Nova dependência de papel mínimo
-    require_technical_lead,
-    require_manager,
-    require_administrator
+    TokenData,
+    require_permission
 )
+
+require_user = require_permission("read:alert")
+require_technical_lead = require_permission("update:alert_status")
+require_manager = require_permission("update:alert_details")
+require_administrator = require_permission("delete:alert")
 from app.schemas.policy_engine_alert_schema import AlertSchema, AlertUpdate, AlertStatusEnum, AlertSeverityEnum
 
 import logging
@@ -140,8 +142,8 @@ async def update_alert_details_gateway(
 @router.patch("/{alert_id}/status", response_model=AlertSchema, name="alerts:update_alert_status")
 async def update_alert_status_gateway(
     alert_id: int,
-    new_status: AlertStatusEnum = Query(..., description="The new status for the alert"),
     request: Request,
+    new_status: AlertStatusEnum = Query(..., description="The new status for the alert"),
     current_user: TokenData = Depends(require_technical_lead), # Papel mínimo: TechnicalLead
 ):
     """

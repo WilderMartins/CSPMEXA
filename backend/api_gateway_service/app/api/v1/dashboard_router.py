@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from app.services.http_client import policy_engine_service_client
-from app.core.security import require_user, TokenData
+from app.core.security import require_permission, TokenData
+require_user = require_permission("read:dashboard")
 import logging
 
 logger = logging.getLogger(__name__)

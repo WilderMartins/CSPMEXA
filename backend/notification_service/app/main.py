@@ -9,12 +9,16 @@ from app.core.logging_config import setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+from starlette_prometheus import metrics, PrometheusMiddleware
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     version=settings.APP_VERSION,
     description=settings.APP_DESCRIPTION,
 )
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
 
 # Middleware de tratamento de erros
 @app.middleware("http")

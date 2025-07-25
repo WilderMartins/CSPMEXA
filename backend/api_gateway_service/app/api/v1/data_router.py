@@ -3,8 +3,11 @@ from typing import List, Dict, Any, Optional
 from app.services.http_client import (
     collector_service_client,
     policy_engine_service_client,
+    auth_service_client,
 )
-from app.core.security import TokenData, require_user # Alterado get_current_user para require_user
+from app.services.credentials_service import get_credentials_for_account
+from app.core.security import TokenData, require_permission
+require_run_analysis = require_permission("run:analysis")
 
 # Importar os schemas copiados/criados para o gateway
 from app.schemas import (
@@ -100,7 +103,7 @@ ROUTER_PREFIX = "/collect/aws" # Usado para os endpoints de proxy de coleta
 # Atualizando response_model para usar os schemas específicos
 @router.get(f"{ROUTER_PREFIX}/s3", response_model=List[collector_s3_schemas.S3BucketData], name="collector:get_s3_data")
 async def collect_s3_gateway(
-    request: Request, current_user: TokenData = Depends(require_user)
+    request: Request, current_user: TokenData = Depends(require_run_analysis)
 ):
     """
     **Coleta Dados de Buckets S3 (AWS)**
@@ -114,7 +117,7 @@ async def collect_s3_gateway(
 
 @router.get(f"{ROUTER_PREFIX}/ec2/instances", response_model=List[collector_ec2_schemas.Ec2InstanceData], name="collector:get_ec2_instances")
 async def collect_ec2_instances_gateway(
-    request: Request, current_user: TokenData = Depends(require_user)
+    request: Request, current_user: TokenData = Depends(require_run_analysis)
 ):
     """
     **Coleta Dados de Instâncias EC2 (AWS)**
@@ -127,7 +130,7 @@ async def collect_ec2_instances_gateway(
 
 @router.get(f"{ROUTER_PREFIX}/ec2/security-groups", response_model=List[collector_ec2_schemas.SecurityGroup], name="collector:get_ec2_security_groups")
 async def collect_ec2_security_groups_gateway(
-    request: Request, current_user: TokenData = Depends(require_user)
+    request: Request, current_user: TokenData = Depends(require_run_analysis)
 ):
     """
     **Coleta Dados de Security Groups (AWS)**
@@ -140,7 +143,7 @@ async def collect_ec2_security_groups_gateway(
 
 @router.get(f"{ROUTER_PREFIX}/iam/users", response_model=List[collector_iam_schemas.IAMUserData], name="collector:get_iam_users")
 async def collect_iam_users_gateway(
-    request: Request, current_user: TokenData = Depends(require_user)
+    request: Request, current_user: TokenData = Depends(require_run_analysis)
 ):
     """
     **Coleta Dados de Usuários IAM (AWS)**
@@ -153,7 +156,7 @@ async def collect_iam_users_gateway(
 
 @router.get(f"{ROUTER_PREFIX}/iam/roles", response_model=List[collector_iam_schemas.IAMRoleData], name="collector:get_iam_roles")
 async def collect_iam_roles_gateway(
-    request: Request, current_user: TokenData = Depends(require_user)
+    request: Request, current_user: TokenData = Depends(require_run_analysis)
 ):
     """
     **Coleta Dados de Roles IAM (AWS)**
@@ -168,7 +171,7 @@ async def collect_iam_roles_gateway(
 async def collect_iam_policies_gateway(
     request: Request,
     scope: str = Query("Local", enum=["All", "AWS", "Local"], description="Escopo das políticas a serem listadas."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """
     **Coleta Dados de Políticas IAM (AWS)**
@@ -192,11 +195,12 @@ async def _orchestrate_aws_analysis(
     service_name: str,
     collector_path: str,
     linked_account_id: int,
-    auth_token: str
+    request: Request,
 ) -> List[Dict[str, Any]]:
     """
     Função genérica para orquestrar a coleta e análise de serviços AWS.
     """
+    auth_token = request.headers.get("Authorization")
     # 1. Obter credenciais para a conta
     credentials = await get_credentials_for_account(linked_account_id, auth_token)
     if not credentials:
@@ -207,8 +211,8 @@ async def _orchestrate_aws_analysis(
     try:
         # O coletor agora espera um POST com as credenciais
         collector_response = await collector_service_client.post(collector_path, json={"credentials": credentials})
-        collector_response.raise_for_status()
-        collected_data = collector_response.json()
+        await collector_response.raise_for_status()
+        collected_data = await collector_response.json()
     except Exception as e:
         logger.exception(f"Erro ao coletar dados do serviço '{service_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao coletar dados do serviço '{service_name}'.")
@@ -221,8 +225,8 @@ async def _orchestrate_aws_analysis(
     alerts: List[Dict[str, Any]]
     try:
         engine_response = await policy_engine_service_client.post("/analyze", json=analysis_payload)
-        engine_response.raise_for_status()
-        alerts = engine_response.json()
+        await engine_response.raise_for_status()
+        alerts = await engine_response.json()
     except Exception as e:
         logger.exception(f"Erro ao analisar dados do serviço '{service_name}': {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao analisar dados do serviço '{service_name}'.")
@@ -231,82 +235,78 @@ async def _orchestrate_aws_analysis(
 
 
 @router.post(
-    "/analyze/aws/s3", response_model=List[policy_engine_alert_schema.Alert], name="orchestrator:analyze_s3"
+    "/analyze/aws/s3", response_model=List[policy_engine_alert_schema.AlertSchema], name="orchestrator:analyze_s3"
 )
 async def analyze_s3_data_orchestrated(
     request: Request,
     linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """
     **Orquestra a Análise de Segurança de Buckets S3 (AWS)**
     """
-    auth_token = request.headers.get("Authorization")
     return await _orchestrate_aws_analysis(
         service_name="s3",
         collector_path="/collect/aws/s3",
         linked_account_id=linked_account_id,
-        auth_token=auth_token
+        request=request
     )
 
 # --- EC2 Instances Analysis Orchestration ---
 @router.post(
-    "/analyze/aws/ec2/instances", response_model=List[policy_engine_alert_schema.Alert], name="orchestrator:analyze_ec2_instances"
+    "/analyze/aws/ec2/instances", response_model=List[policy_engine_alert_schema.AlertSchema], name="orchestrator:analyze_ec2_instances"
 )
 async def analyze_ec2_instances_data_orchestrated(
     request: Request,
     linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """
     Orquestra a coleta de dados de Instâncias EC2 e sua análise.
     """
-    auth_token = request.headers.get("Authorization")
     return await _orchestrate_aws_analysis(
         service_name="ec2_instances",
         collector_path="/collect/aws/ec2/instances",
         linked_account_id=linked_account_id,
-        auth_token=auth_token
+        request=request
     )
 
 # --- EC2 Security Groups Analysis Orchestration ---
 @router.post(
-    "/analyze/aws/ec2/security-groups", response_model=List[policy_engine_alert_schema.Alert], name="orchestrator:analyze_ec2_sgs"
+    "/analyze/aws/ec2/security-groups", response_model=List[policy_engine_alert_schema.AlertSchema], name="orchestrator:analyze_ec2_sgs"
 )
 async def analyze_ec2_sgs_data_orchestrated(
     request: Request,
     linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """
     Orquestra a coleta de dados de Security Groups EC2 e sua análise.
     """
-    auth_token = request.headers.get("Authorization")
     return await _orchestrate_aws_analysis(
         service_name="ec2_security_groups",
         collector_path="/collect/aws/ec2/security-groups",
         linked_account_id=linked_account_id,
-        auth_token=auth_token
+        request=request
     )
 
 # --- IAM Users Analysis Orchestration ---
 @router.post(
-    "/analyze/aws/iam/users", response_model=List[policy_engine_alert_schema.Alert], name="orchestrator:analyze_iam_users"
+    "/analyze/aws/iam/users", response_model=List[policy_engine_alert_schema.AlertSchema], name="orchestrator:analyze_iam_users"
 )
 async def analyze_iam_users_data_orchestrated(
     request: Request,
     linked_account_id: int = Query(..., description="ID da conta AWS vinculada a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """
     Orquestra a coleta de dados de Usuários IAM e sua análise.
     """
-    auth_token = request.headers.get("Authorization")
     return await _orchestrate_aws_analysis(
         service_name="iam_users",
         collector_path="/collect/aws/iam/users",
         linked_account_id=linked_account_id,
-        auth_token=auth_token
+        request=request
     )
 
 # --- Endpoints de Coleta GCP (Proxy para Collector Service) ---
@@ -316,7 +316,7 @@ GCP_COLLECT_ROUTER_PREFIX = "/collect/gcp"
 async def collect_gcp_storage_buckets_gateway(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Google Cloud Storage buckets."""
     # O collector_endpoint deve ser o path no collector service, não incluindo o prefixo do gateway.
@@ -327,7 +327,7 @@ async def collect_gcp_storage_buckets_gateway(
 async def collect_gcp_compute_instances_gateway(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de instâncias de VM do Google Compute Engine."""
     return await _proxy_collector_request("GET", "/collect/gcp/compute/instances", current_user, request, params={"project_id": project_id} if project_id else None)
@@ -336,7 +336,7 @@ async def collect_gcp_compute_instances_gateway(
 async def collect_gcp_compute_firewalls_gateway(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de regras de Firewall VPC do Google Cloud."""
     return await _proxy_collector_request("GET", "/collect/gcp/compute/firewalls", current_user, request, params={"project_id": project_id} if project_id else None)
@@ -345,7 +345,7 @@ async def collect_gcp_compute_firewalls_gateway(
 async def collect_gcp_project_iam_policy_gateway(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar a política IAM a nível de projeto do Google Cloud."""
     return await _proxy_collector_request("GET", "/collect/gcp/iam/project-policies", current_user, request, params={"project_id": project_id} if project_id else None)
@@ -356,7 +356,7 @@ async def collect_gke_clusters_gateway(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP."),
     location: str = Query("-", description="Location (região/zona ou '-') para listar clusters GKE."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de clusters GKE."""
     params = {"location": location}
@@ -446,7 +446,7 @@ async def _orchestrate_gcp_analysis(
 async def analyze_gcp_storage_buckets_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Google Cloud Storage buckets."""
     if not project_id:
@@ -457,11 +457,11 @@ async def analyze_gcp_storage_buckets_orchestrated(
         request=request, project_id=project_id, current_user=current_user
     )
 
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/instances", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_compute_instances")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/instances", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_compute_instances")
 async def analyze_gcp_compute_instances_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de instâncias de VM do Google Compute Engine."""
     if not project_id:
@@ -472,11 +472,11 @@ async def analyze_gcp_compute_instances_orchestrated(
         request=request, project_id=project_id, current_user=current_user
     )
 
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/firewalls", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_compute_firewalls")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/compute/firewalls", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_compute_firewalls")
 async def analyze_gcp_compute_firewalls_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de regras de Firewall VPC do Google Cloud."""
     if not project_id:
@@ -487,11 +487,11 @@ async def analyze_gcp_compute_firewalls_orchestrated(
         request=request, project_id=project_id, current_user=current_user
     )
 
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/iam/project-policies", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_project_iam_policy")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/iam/project-policies", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_project_iam_policy")
 async def analyze_gcp_project_iam_policy_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise da política IAM a nível de projeto do Google Cloud."""
     if not project_id:
@@ -507,7 +507,7 @@ async def analyze_gke_clusters_orchestrated(
     request: Request,
     project_id: Optional[str] = Query(None, description="ID do Projeto GCP a ser analisado."),
     location: str = Query("-", description="Location (região/zona ou '-') para GKE clusters."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Google Kubernetes Engine (GKE) clusters."""
     if not project_id:
@@ -530,7 +530,7 @@ async def collect_huawei_obs_buckets_gateway(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Huawei Cloud OBS buckets."""
     params = {"project_id": project_id, "region_id": region_id}
@@ -541,7 +541,7 @@ async def collect_huawei_ecs_instances_gateway(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de instâncias ECS (VMs) da Huawei Cloud."""
     params = {"project_id": project_id, "region_id": region_id}
@@ -552,7 +552,7 @@ async def collect_huawei_vpc_sgs_gateway(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Security Groups VPC da Huawei Cloud."""
     params = {"project_id": project_id, "region_id": region_id}
@@ -563,7 +563,7 @@ async def collect_huawei_iam_users_gateway(
     request: Request,
     region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM."),
     domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de usuários IAM da Huawei Cloud."""
     params = {"region_id": region_id}
@@ -583,7 +583,7 @@ async def _orchestrate_huawei_analysis(
     region_id: str, # Necessário para a maioria dos coletores Huawei
     current_user: TokenData,
     domain_id_for_iam: Optional[str] = None # Específico para IAM Users
-) -> List[policy_engine_alert_schema.Alert]:
+) -> List[policy_engine_alert_schema.AlertSchema]:
     downstream_headers = {}
 
     collected_data: Any
@@ -644,12 +644,12 @@ async def _orchestrate_huawei_analysis(
         )
     return alerts
 
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/obs/buckets", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_obs_buckets")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/obs/buckets", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_obs_buckets")
 async def analyze_huawei_obs_buckets_orchestrated(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud onde os buckets serão listados/verificados."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Huawei Cloud OBS buckets."""
     return await _orchestrate_huawei_analysis(
@@ -658,12 +658,12 @@ async def analyze_huawei_obs_buckets_orchestrated(
         request=request, project_id=project_id, region_id=region_id, current_user=current_user
     )
 
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/ecs/instances", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_ecs_instances")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/ecs/instances", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_ecs_instances")
 async def analyze_huawei_ecs_instances_orchestrated(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de instâncias ECS (VMs) da Huawei Cloud."""
     return await _orchestrate_huawei_analysis(
@@ -672,12 +672,12 @@ async def analyze_huawei_ecs_instances_orchestrated(
         request=request, project_id=project_id, region_id=region_id, current_user=current_user
     )
 
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/vpc/security-groups", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_vpc_sgs")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/vpc/security-groups", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_vpc_sgs")
 async def analyze_huawei_vpc_sgs_orchestrated(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Security Groups VPC da Huawei Cloud."""
     return await _orchestrate_huawei_analysis(
@@ -686,14 +686,14 @@ async def analyze_huawei_vpc_sgs_orchestrated(
         request=request, project_id=project_id, region_id=region_id, current_user=current_user
     )
 
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/iam/users", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_iam_users")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/iam/users", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_iam_users")
 async def analyze_huawei_iam_users_orchestrated(
     request: Request,
     region_id: str = Query(..., description="ID da Região Huawei Cloud para instanciar o cliente IAM (endpoint)."),
     domain_id: Optional[str] = Query(None, description="ID do Domínio (Conta) Huawei Cloud. Se não fornecido, o coletor tentará usar variáveis de ambiente ou o project_id das credenciais."),
     # O project_id da conta/credenciais principal é usado como 'account_id' para o policy engine se domain_id não for o foco.
     # Para IAM, o 'account_id' no payload do policy engine será o domain_id.
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de usuários IAM da Huawei Cloud."""
     # O `_orchestrate_huawei_analysis` espera `project_id` para o account_id geral.
@@ -732,7 +732,7 @@ AZURE_COLLECT_ROUTER_PREFIX = "/collect/azure"
 async def collect_azure_vms_gateway(
     request: Request,
     subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Azure Virtual Machines."""
     return await _proxy_collector_request("GET", "/collect/azure/virtualmachines", current_user, request, params={"subscription_id": subscription_id} if subscription_id else None)
@@ -741,7 +741,7 @@ async def collect_azure_vms_gateway(
 async def collect_azure_storage_accounts_gateway(
     request: Request,
     subscription_id: Optional[str] = Query(None, description="ID da Subscrição Azure."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Azure Storage Accounts."""
     return await _proxy_collector_request("GET", "/collect/azure/storageaccounts", current_user, request, params={"subscription_id": subscription_id} if subscription_id else None)
@@ -756,7 +756,7 @@ async def _orchestrate_azure_analysis(
     request: Request,
     subscription_id: Optional[str],
     current_user: TokenData # Já é o usuário validado por require_user nos endpoints que chamam esta helper
-) -> List[policy_engine_alert_schema.Alert]:
+) -> List[policy_engine_alert_schema.AlertSchema]:
     downstream_headers = {}
     if not subscription_id:
         raise HTTPException(status_code=400, detail="Azure Subscription ID is required for analysis.")
@@ -817,11 +817,11 @@ async def _orchestrate_azure_analysis(
         )
     return alerts
 
-@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/virtualmachines", response_model=List[policy_engine_alert_schema.Alert], name="azure_orchestrator:analyze_virtual_machines")
+@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/virtualmachines", response_model=List[policy_engine_alert_schema.AlertSchema], name="azure_orchestrator:analyze_virtual_machines")
 async def analyze_azure_vms_orchestrated(
     request: Request,
     subscription_id: str = Query(..., description="ID da Subscrição Azure a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Azure Virtual Machines."""
     return await _orchestrate_azure_analysis(
@@ -830,11 +830,11 @@ async def analyze_azure_vms_orchestrated(
         request=request, subscription_id=subscription_id, current_user=current_user
     )
 
-@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/storageaccounts", response_model=List[policy_engine_alert_schema.Alert], name="azure_orchestrator:analyze_storage_accounts")
+@router.post(f"{AZURE_ANALYZE_ROUTER_PREFIX}/storageaccounts", response_model=List[policy_engine_alert_schema.AlertSchema], name="azure_orchestrator:analyze_storage_accounts")
 async def analyze_azure_storage_accounts_orchestrated(
     request: Request,
     subscription_id: str = Query(..., description="ID da Subscrição Azure a ser analisada."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Azure Storage Accounts."""
     return await _orchestrate_azure_analysis(
@@ -851,7 +851,7 @@ async def collect_google_workspace_users_gateway(
     request: Request,
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace (e.g., 'my_customer' ou C0xxxxxxx)."),
     delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado para impersonação."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de usuários do Google Workspace."""
     params = {}
@@ -866,7 +866,7 @@ async def collect_gws_shared_drives_gateway(
     request: Request,
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
     delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Drives Compartilhados do Google Workspace."""
     params = {}
@@ -881,7 +881,7 @@ async def collect_gws_public_files_gateway(
     request: Request,
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
     delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de arquivos públicos/link-shared do Google Drive (MVP pode ser limitado)."""
     params = {}
@@ -903,7 +903,7 @@ async def _orchestrate_google_workspace_analysis(
     delegated_admin_email: Optional[str],
     current_user: TokenData,
     data_key_in_collection: str = "users" # Chave onde a lista de dados está no objeto de coleção (ex: "users" para UserCollection)
-) -> List[policy_engine_alert_schema.Alert]:
+) -> List[policy_engine_alert_schema.AlertSchema]:
     downstream_headers = {}
     account_id_for_engine = customer_id or settings.GOOGLE_WORKSPACE_CUSTOMER_ID # Usar settings para default
 
@@ -969,12 +969,12 @@ async def _orchestrate_google_workspace_analysis(
         raise HTTPException(status_code=500, detail=f"Gateway failed to analyze GWS {service_name_in_engine} data: {str(e)}")
     return alerts
 
-@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/users", response_model=List[policy_engine_alert_schema.Alert], name="google_workspace_orchestrator:analyze_users")
+@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/users", response_model=List[policy_engine_alert_schema.AlertSchema], name="google_workspace_orchestrator:analyze_users")
 async def analyze_google_workspace_users_orchestrated(
     request: Request,
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace. Default das settings se não fornecido."),
     delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado. Default das settings se não fornecido."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de usuários do Google Workspace."""
     return await _orchestrate_google_workspace_analysis(
@@ -987,12 +987,12 @@ async def analyze_google_workspace_users_orchestrated(
         data_key_in_collection="users" # Chave no GoogleWorkspaceUserCollection
     )
 
-@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/drive/shared-drives", response_model=List[policy_engine_alert_schema.Alert], name="google_workspace_orchestrator:analyze_shared_drives")
+@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/drive/shared-drives", response_model=List[policy_engine_alert_schema.AlertSchema], name="google_workspace_orchestrator:analyze_shared_drives")
 async def analyze_gws_shared_drives_orchestrated(
     request: Request,
     customer_id: Optional[str] = Query(None, description="ID do Cliente Google Workspace."),
     delegated_admin_email: Optional[str] = Query(None, description="E-mail do administrador delegado."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise de Drives Compartilhados do Google Workspace."""
     return await _orchestrate_google_workspace_analysis(
@@ -1011,13 +1011,13 @@ async def analyze_gws_shared_drives_orchestrated(
 # TODO: Adicionar endpoints para Gmail, etc. quando os coletores e políticas estiverem prontos.
 
 # --- Endpoint de Análise GCP SCC (Orquestração) ---
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/scc/findings", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_scc_findings")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/scc/findings", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_scc_findings")
 async def analyze_gcp_scc_findings_orchestrated(
     request: Request,
     parent_resource: str = Query(..., description="Recurso pai para consulta no SCC (ex: organizations/ORG_ID/sources/-)."),
     scc_filter: Optional[str] = Query(None, description="Filtro da API SCC."),
     max_total_results: int = Query(1000, description="Número máximo de findings a coletar."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de findings do GCP SCC e seu processamento/transformação em alertas."""
 
@@ -1080,7 +1080,7 @@ M365_COLLECT_ROUTER_PREFIX = "/collect/m365"
 @router.get(f"{M365_COLLECT_ROUTER_PREFIX}/users-mfa-status", response_model=collector_m365_schemas.M365UserMFAStatusCollection, name="m365_collector:get_users_mfa_status")
 async def collect_m365_users_mfa_status_gateway(
     request: Request,
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de status de MFA de usuários do Microsoft 365."""
     return await _proxy_collector_request("GET", "/collect/m365/users-mfa-status", current_user, request)
@@ -1088,7 +1088,7 @@ async def collect_m365_users_mfa_status_gateway(
 @router.get(f"{M365_COLLECT_ROUTER_PREFIX}/conditional-access-policies", response_model=collector_m365_schemas.M365ConditionalAccessPolicyCollection, name="m365_collector:get_ca_policies")
 async def collect_m365_ca_policies_gateway(
     request: Request,
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Proxy para coletar dados de Políticas de Acesso Condicional do Microsoft 365."""
     return await _proxy_collector_request("GET", "/collect/m365/conditional-access-policies", current_user, request)
@@ -1103,7 +1103,7 @@ async def _orchestrate_m365_analysis(
     request: Request,
     # tenant_id: Optional[str], # M365 Tenant ID é obtido das settings do collector_service
     current_user: TokenData
-) -> List[policy_engine_alert_schema.Alert]:
+) -> List[policy_engine_alert_schema.AlertSchema]:
     downstream_headers = {}
     # O tenant_id para M365 é configurado no collector_service e não passado como parâmetro de query aqui.
     # O account_id para o policy_engine será o tenant_id configurado.
@@ -1176,10 +1176,10 @@ async def _orchestrate_m365_analysis(
         )
     return alerts
 
-@router.post(f"{M365_ANALYZE_ROUTER_PREFIX}/users-mfa-status", response_model=List[policy_engine_alert_schema.Alert], name="m365_orchestrator:analyze_users_mfa_status")
+@router.post(f"{M365_ANALYZE_ROUTER_PREFIX}/users-mfa-status", response_model=List[policy_engine_alert_schema.AlertSchema], name="m365_orchestrator:analyze_users_mfa_status")
 async def analyze_m365_users_mfa_orchestrated(
     request: Request,
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise do status de MFA de usuários do M365."""
     return await _orchestrate_m365_analysis(
@@ -1189,10 +1189,10 @@ async def analyze_m365_users_mfa_orchestrated(
         current_user=current_user
     )
 
-@router.post(f"{M365_ANALYZE_ROUTER_PREFIX}/conditional-access-policies", response_model=List[policy_engine_alert_schema.Alert], name="m365_orchestrator:analyze_ca_policies")
+@router.post(f"{M365_ANALYZE_ROUTER_PREFIX}/conditional-access-policies", response_model=List[policy_engine_alert_schema.AlertSchema], name="m365_orchestrator:analyze_ca_policies")
 async def analyze_m365_ca_policies_orchestrated(
     request: Request,
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta e análise das Políticas de Acesso Condicional do M365."""
     return await _orchestrate_m365_analysis(
@@ -1206,14 +1206,14 @@ async def analyze_m365_ca_policies_orchestrated(
 # from app.schemas import collector_m365_schemas
 
 # --- Endpoint de Análise GCP Cloud Asset Inventory (Orquestração) ---
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/cai/assets", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_cai_assets")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/cai/assets", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_cai_assets")
 async def analyze_gcp_cai_assets_orchestrated(
     request: Request,
     scope: str = Query(..., description="Escopo da consulta CAI (ex: 'projects/PROJECT_ID')."),
     asset_types: Optional[List[str]] = Query(None, description="Lista de tipos de ativos a serem coletados."),
     content_type: str = Query("RESOURCE", description="Tipo de conteúdo a ser retornado (RESOURCE, IAM_POLICY)."),
     max_total_results: int = Query(1000, description="Número máximo de ativos a coletar."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de ativos do GCP CAI e sua análise."""
     # 1. Coletar Ativos do CAI
@@ -1266,13 +1266,13 @@ async def analyze_gcp_cai_assets_orchestrated(
     return alerts
 
 # --- Endpoint de Análise GCP Cloud Audit Logs (Orquestração) ---
-@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/auditlogs", response_model=List[policy_engine_alert_schema.Alert], name="gcp_orchestrator:analyze_audit_logs")
+@router.post(f"{GCP_ANALYZE_ROUTER_PREFIX}/auditlogs", response_model=List[policy_engine_alert_schema.AlertSchema], name="gcp_orchestrator:analyze_audit_logs")
 async def analyze_gcp_audit_logs_orchestrated(
     request: Request,
     project_ids: List[str] = Query(..., description="Lista de IDs de Projeto GCP para consulta."),
     log_filter: Optional[str] = Query(None),
     max_total_results: int = Query(1000),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de GCP Cloud Audit Logs e sua análise."""
     # 1. Coletar Logs
@@ -1327,7 +1327,7 @@ async def analyze_gcp_audit_logs_orchestrated(
 
 
 # --- Endpoint de Análise Huawei CTS (Orquestração) ---
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/cts/traces", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_cts_traces")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/cts/traces", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_cts_traces")
 async def analyze_huawei_cts_traces_orchestrated(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud para escopo de recursos."),
@@ -1335,7 +1335,7 @@ async def analyze_huawei_cts_traces_orchestrated(
     domain_id: Optional[str] = Query(None, description="ID do Domínio da conta Huawei Cloud para autenticação IAM."),
     tracker_name: str = Query("system", description="Nome do tracker CTS."),
     max_total_traces: int = Query(1000, description="Número máximo de traces a coletar."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de logs CTS da Huawei Cloud e sua (futura) análise."""
     # account_id para o policy engine será o project_id ou domain_id dependendo da lógica do coletor/política
@@ -1400,14 +1400,14 @@ async def analyze_huawei_cts_traces_orchestrated(
     return alerts
 
 # --- Endpoint de Análise Huawei CSG (Orquestração) ---
-@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/csg/risks", response_model=List[policy_engine_alert_schema.Alert], name="huawei_orchestrator:analyze_csg_risks")
+@router.post(f"{HUAWEI_ANALYZE_ROUTER_PREFIX}/csg/risks", response_model=List[policy_engine_alert_schema.AlertSchema], name="huawei_orchestrator:analyze_csg_risks")
 async def analyze_huawei_csg_risks_orchestrated(
     request: Request,
     project_id: str = Query(..., description="ID do Projeto Huawei Cloud."),
     region_id: str = Query(..., description="ID da Região Huawei Cloud."),
     domain_id: Optional[str] = Query(None, description="ID do Domínio Huawei Cloud (opcional)."),
     max_total_results: int = Query(1000, description="Número máximo de riscos a coletar."),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de riscos do Huawei CSG e sua análise."""
     # 1. Coletar Riscos CSG
@@ -1460,7 +1460,7 @@ async def analyze_huawei_csg_risks_orchestrated(
 
 
 # --- Endpoint de Análise GWS Audit Logs (Orquestração) ---
-@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/auditlogs", response_model=List[policy_engine_alert_schema.Alert], name="gws_orchestrator:analyze_audit_logs")
+@router.post(f"{GOOGLE_WORKSPACE_ANALYZE_ROUTER_PREFIX}/auditlogs", response_model=List[policy_engine_alert_schema.AlertSchema], name="gws_orchestrator:analyze_audit_logs")
 async def analyze_gws_audit_logs_orchestrated(
     request: Request,
     application_name: str = Query(..., description="Nome da aplicação GWS (login, drive, admin, etc.)."),
@@ -1469,7 +1469,7 @@ async def analyze_gws_audit_logs_orchestrated(
     max_total_results: int = Query(1000),
     start_time_iso: Optional[str] = Query(None),
     end_time_iso: Optional[str] = Query(None),
-    current_user: TokenData = Depends(require_user),
+    current_user: TokenData = Depends(require_run_analysis),
 ):
     """Orquestra a coleta de Audit Logs do Google Workspace e sua (futura) análise."""
 

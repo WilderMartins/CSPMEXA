@@ -5,3 +5,5 @@ pydantic-settings
 httpx
 python-jose[cryptography]
 hvac # Cliente Python para o Vault
+python-json-logger
+starlette-prometheus
