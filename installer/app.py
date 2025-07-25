@@ -216,6 +216,10 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
         if os.path.exists(log_file_path):
             os.remove(log_file_path)
 
+        # Garante que o ambiente esteja limpo antes de iniciar
+        app.logger.info("Executando 'docker compose down' para garantir um ambiente limpo...")
+        run_docker_command(["docker", "compose", "down", "-v", "--remove-orphans"], ignore_errors=True)
+
         run_docker_command(
             ["docker", "compose", "up", "-d", "--build"],
             wait=False,
