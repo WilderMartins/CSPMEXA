@@ -220,8 +220,10 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
         app.logger.info("Executando 'docker compose down' para garantir um ambiente limpo...")
         run_docker_command(["docker", "compose", "down", "-v", "--remove-orphans"], ignore_errors=True)
 
+        # Iniciar serviços em segundo plano e registrar a saída
+        app.logger.info(f"Iniciando a instalação dos serviços em segundo plano... Log em: {log_file_path}")
         run_docker_command(
-            ["docker", "compose", "up", "-d", "--build"],
+            ["docker", "compose", "up", "-d", "--build", "--scale", "installer=0"],
             wait=False,
             log_file_path=log_file_path
         )
