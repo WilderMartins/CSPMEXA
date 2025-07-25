@@ -97,47 +97,47 @@
                 return 'bi-arrow-repeat';
             }
 
-            async function fetchStatus() {
-                try {
-                    const response = await fetch("{{ url_for('status') }}");
-                    const data = await response.json();
+            function connectToStatusStream() {
+                const eventSource = new EventSource("{{ url_for('status') }}");
 
+                eventSource.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
                     loadingIndicator.classList.add('d-none');
-                    servicesStatusTable.innerHTML = '';
 
-                    for (const service in data.statuses) {
-                        const status = data.statuses[service];
-                        const statusClass = getStatusClass(status);
-                        const statusIcon = getStatusIcon(status);
-
-                        const row = `
-                            <tr>
-                                <td><strong>${service}</strong></td>
-                                <td class="text-center">
-                                    <i class="bi ${statusIcon} ${statusClass} status-icon"></i>
-                                    <span class="ms-2">${status}</span>
-                                </td>
-                                <td class="text-center">
-                                    <button class="btn btn-sm btn-outline-primary view-logs-btn" data-service="${service}">
-                                        Ver Logs
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                        servicesStatusTable.insertAdjacentHTML('beforeend', row);
+                    let row = document.getElementById(`service-row-${data.service}`);
+                    if (!row) {
+                        row = document.createElement('tr');
+                        row.id = `service-row-${data.service}`;
+                        servicesStatusTable.appendChild(row);
                     }
 
-                    if (data.done) {
-                        successAlert.classList.remove('d-none');
-                        return;
-                    }
+                    const statusClass = getStatusClass(data.status);
+                    const statusIcon = getStatusIcon(data.status);
 
-                } catch (error) {
-                    console.error('Erro ao buscar status:', error);
-                    servicesStatusTable.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Erro ao carregar o status dos serviços.</td></tr>';
-                }
+                    row.innerHTML = `
+                        <td><strong>${data.service}</strong></td>
+                        <td class="text-center">
+                            <i class="bi ${statusIcon} ${statusClass} status-icon"></i>
+                            <span class="ms-2">${data.status}</span>
+                        </td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary view-logs-btn" data-service="${data.service}">
+                                Ver Logs
+                            </button>
+                        </td>
+                    `;
+                };
 
-                setTimeout(fetchStatus, 5000);
+                eventSource.addEventListener('end', function(event) {
+                    successAlert.classList.remove('d-none');
+                    eventSource.close();
+                });
+
+                eventSource.onerror = function(err) {
+                    console.error('EventSource failed:', err);
+                    servicesStatusTable.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Erro ao conectar ao fluxo de status.</td></tr>';
+                    eventSource.close();
+                };
             }
 
             servicesStatusTable.addEventListener('click', async function(event) {
@@ -158,7 +158,7 @@
                 }
             });
 
-            fetchStatus();
+            connectToStatusStream();
         });
     </script>
 </body>

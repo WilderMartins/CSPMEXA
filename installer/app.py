@@ -231,44 +231,47 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 
 from flask import jsonify
 
+from flask import Response
+
 @app.route('/status')
 def status():
-    """Verifica e retorna o status da instalação como JSON."""
-    services = [
-        "postgres_auth_db", "vault", "vault-setup", "auth_service",
-        "collector_service", "policy_engine_service", "notification_service",
-        "api_gateway_service", "frontend_build", "nginx"
-    ]
-    statuses = {}
-    for service in services:
-        try:
-            stdout, _ = run_docker_command(
-                ["docker", "compose", "ps", "--format", "{{.State}}", service],
-                wait=True,
-                ignore_errors=True
-            )
-            status_text = stdout.strip()
-            if not status_text:
-                statuses[service] = "not_started"
-            else:
-                # Simplifica o status para facilitar a análise no frontend
-                if 'running' in status_text:
-                    statuses[service] = 'running'
-                elif 'exited' in status_text:
-                    statuses[service] = 'exited'
+    """Retorna o status da instalação como um fluxo de eventos."""
+    def generate():
+        services = [
+            "postgres_auth_db", "vault", "vault-setup", "auth_service",
+            "collector_service", "policy_engine_service", "notification_service",
+            "api_gateway_service", "frontend_build", "nginx"
+        ]
+        for service in services:
+            try:
+                stdout, _ = run_docker_command(
+                    ["docker", "compose", "ps", "--format", "{{.State}}", service],
+                    wait=True,
+                    ignore_errors=True
+                )
+                status_text = stdout.strip()
+                if not status_text:
+                    status_event = "not_started"
                 else:
-                    statuses[service] = 'starting'
-        except Exception as e:
-            statuses[service] = "error"
-            app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
+                    if 'running' in status_text:
+                        status_event = 'running'
+                    elif 'exited' in status_text:
+                        status_event = 'exited'
+                    else:
+                        status_event = 'starting'
 
-    essential_services = [
-        "api_gateway_service", "auth_service", "collector_service",
-        "notification_service", "policy_engine_service", "nginx"
-    ]
-    is_done = all(statuses.get(s) == 'running' for s in essential_services)
+                data = f"data: {{\"service\": \"{service}\", \"status\": \"{status_event}\"}}\n\n"
+                yield data
+                time.sleep(1)
+            except Exception as e:
+                data = f"data: {{\"service\": \"{service}\", \"status\": \"error\"}}\n\n"
+                yield data
+                app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
 
-    return jsonify(statuses=statuses, done=is_done)
+        # Sinaliza o fim do fluxo
+        yield "event: end\ndata: {}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/logs/<service_name>')
 def service_logs(service_name):
