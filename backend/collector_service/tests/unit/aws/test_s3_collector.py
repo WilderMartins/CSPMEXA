@@ -5,7 +5,7 @@ import json
 import inspect
 
 from app.aws import s3_collector
-from app.schemas.s3 import (
+from app.schemas.aws.s3_schemas import (
     S3BucketData, S3BucketACLDetails, S3BucketACLGrant, S3BucketACLGrantee,
     S3BucketVersioning, S3BucketPublicAccessBlock, S3BucketLogging
 )

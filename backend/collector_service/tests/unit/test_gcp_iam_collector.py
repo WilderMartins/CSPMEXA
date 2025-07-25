@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from typing import List, Optional, Any
 from datetime import datetime, timezone
 
-from app.gcp import gcp_iam_collector
+from ..app.gcp import gcp_iam_collector
 from app.schemas.gcp_iam import GCPProjectIAMPolicyData, GCPIAMPolicy, GCPIAMBinding
 from app.core.config import Settings
 from googleapiclient.errors import HttpError # Para simular erros da API

@@ -2,18 +2,9 @@ import pytest
 from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
 from app.main import app
+from app.core.security import TokenData, require_permission
 
 client = TestClient(app)
-
-
-import pytest
-from unittest.mock import patch, AsyncMock
-from fastapi.testclient import TestClient
-from app.main import app
-
-client = TestClient(app)
-
-from backend.api_gateway_service.app.core.security import TokenData
 
 @pytest.mark.asyncio
 @patch("app.services.http_client.auth_service_client.get")
@@ -47,12 +38,37 @@ async def test_s3_analysis_end_to_end_flow(
     mock_policy_engine_response = AsyncMock()
     mock_policy_engine_response.status_code = 200
     mock_policy_engine_response.json.return_value = [
-        {"title": "Bucket S3 com ACL pública", "severity": "CRITICAL"}
+            {
+                "id": 1,
+                "resource_id": "public-bucket",
+                "resource_type": "S3Bucket",
+                "account_id": "123456789012",
+                "region": "us-east-1",
+                "provider": "aws",
+                "severity": "CRITICAL",
+                "title": "Bucket S3 com ACL pública",
+                "description": "A política do bucket S3 permite acesso público.",
+                "policy_id": "S3_Public_Policy_V2",
+                "status": "OPEN",
+                "details": {"bucket_name": "public-bucket"},
+                "recommendation": "Revise a política do bucket.",
+                "created_at": "2023-11-15T10:00:00Z",
+                "updated_at": "2023-11-15T10:00:00Z",
+                "first_seen_at": "2023-11-15T10:00:00Z",
+                "last_seen_at": "2023-11-15T10:00:00Z",
+            }
     ]
     mock_policy_engine_post.return_value = mock_policy_engine_response
 
     # 5. Chamar o endpoint de análise no API Gateway
-    response = client.post("/api/v1/analyze/aws/s3?linked_account_id=1")
+    app.dependency_overrides[require_permission("run:analysis")] = lambda: mock_get_current_user.return_value
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    headers = {"Authorization": "Bearer testtoken"}
+    with patch("app.core.security.jwt.decode") as mock_decode:
+        mock_decode.return_value = {"sub": "1", "email": "test@test.com", "permissions": ["run:analysis"]}
+        response = client.post("/api/v1/analyze/aws/s3?linked_account_id=1", headers=headers)
+    app.dependency_overrides = {}
 
     # 6. Verificações
     assert response.status_code == 200

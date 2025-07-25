@@ -3,9 +3,9 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 
-from app.google_workspace.drive_collector import (
-    get_google_drive_shared_drives_data,
-    get_google_drive_public_files_data, # Embora MVP seja informativo, testar a chamada
+from ..app.google_workspace.drive_collector import (
+    get_shared_drives_data,
+    get_public_files_in_shared_drives,
     _get_file_permissions,
     _analyze_file_sharing
 )
@@ -156,7 +156,7 @@ async def test_get_gws_shared_drives_success(mock_collector_settings, mock_get_p
     }
     mock_drive_service_shared_drives.files().list().execute.return_value = mock_file_response
 
-    result = await get_google_drive_shared_drives_data(customer_id="test_customer")
+    result = await get_shared_drives_data(customer_id="test_customer")
 
     assert len(result) == 2
     drive1 = result[0]
@@ -198,7 +198,7 @@ async def test_get_gws_public_files_mvp_info_message(mock_collector_settings, mo
     mock_collector_settings.GOOGLE_WORKSPACE_CUSTOMER_ID = mock_gws_drive_settings.GOOGLE_WORKSPACE_CUSTOMER_ID
     mock_get_ws_service.return_value = mock_drive_service_shared_drives # Mock do serviço, embora não seja muito usado
 
-    result = await get_google_drive_public_files_data()
+    result = await get_public_files_in_shared_drives()
     assert len(result) == 1
     assert result[0].id == "INFO_DOMAIN_WIDE_PUBLIC_FILES"
     assert "Coleta de todos os arquivos públicos do domínio não implementada otimamente no MVP" in result[0].error_details

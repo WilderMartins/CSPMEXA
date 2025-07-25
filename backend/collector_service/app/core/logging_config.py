@@ -22,9 +22,17 @@ def setup_logging():
     # Adicionar um handler para logar em JSON no stdout
     logHandler = logging.StreamHandler(sys.stdout)
     formatter = jsonlogger.JsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
+        '%(asctime)s %(service)s %(name)s %(levelname)s %(message)s %(pathname)s %(lineno)d'
     )
     logHandler.setFormatter(formatter)
+
+    # Adicionar um filtro para injetar o nome do serviço
+    class ServiceNameFilter(logging.Filter):
+        def filter(self, record):
+            record.service = "collector_service"
+            return True
+
+    logger.addFilter(ServiceNameFilter())
     logger.addHandler(logHandler)
 
     logging.info("Logging configurado para formato JSON.")

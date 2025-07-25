@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock, PropertyMock
 import datetime
 
 # Importar a função a ser testada e os schemas
-from app.gcp.gcp_scc_collector import get_gcp_scc_findings, _convert_sdk_finding_to_schema
+from ...app.gcp.gcp_scc_collector import get_gcp_scc_findings, _convert_sdk_finding_to_schema
 from app.schemas.gcp.gcp_scc_schemas import GCPSCCFindingCollection, GCPFinding
 
 # Mock para google.auth.default() e o cliente SecurityCenterClient

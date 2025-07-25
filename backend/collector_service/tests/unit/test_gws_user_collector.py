@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 
-from app.google_workspace.user_collector import get_google_workspace_users_data, _parse_iso_datetime
+from ..app.google_workspace.user_collector import get_google_workspace_users_data, _parse_iso_datetime
 from app.schemas.google_workspace.google_workspace_user import GoogleWorkspaceUserCollection, GoogleWorkspaceUserData
 from app.core.config import Settings
 
