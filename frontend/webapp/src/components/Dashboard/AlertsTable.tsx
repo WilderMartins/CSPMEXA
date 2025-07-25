@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, keys, Stack, Box } from '@mantine/core';
+import { Table, Button, Modal, Pagination, Group, Text, UnstyledButton, Center, rem, Stack, Box, Select } from '@mantine/core';
 import { IconSelector, IconChevronDown, IconChevronUp } from '@tabler/icons-react'; // Ícones para ordenação
-
-// REMOVER SIMULAÇÕES DE COMPONENTES UI (Button, Select, Modal) - eles virão da Mantine
+import ReactMarkdown from 'react-markdown';
+import AlertsTableFilters from './AlertsTableFilters';
 
 // Componente para o cabeçalho da tabela ordenável
 interface ThProps {
@@ -32,24 +32,12 @@ function Th({ children, reversed, sorted, onSort, width }: ThProps) {
   );
 }
 
-/**
- * Representa a estrutura de um objeto de Alerta.
- * Esta interface é usada tanto pelo `AlertsTable` quanto pelo `DashboardPage`.
- */
-import ReactMarkdown from 'react-markdown';
-
 export interface Alert {
-  /** Identificador numérico único do alerta. */
   id: number;
-  /** Identificador textual do recurso ao qual o alerta se refere (ex: nome do bucket S3, ID da instância EC2). */
   resource_id: string;
-  /** Tipo do recurso (ex: S3Bucket, EC2Instance). */
   resource_type: string;
-  /** ID da conta do provedor de nuvem onde o recurso está localizado, se aplicável. */
   account_id?: string;
-  /** Região onde o recurso está localizado, se aplicável. */
   region?: string;
-  /** Provedor de nuvem ou serviço (ex: aws, gcp, azure, googleworkspace). */
   provider: string;
   severity: string;
   title: string;
@@ -65,52 +53,30 @@ export interface Alert {
   last_seen_at: string;
 }
 
-/**
- * Define as colunas que podem ser usadas para ordenação na tabela de alertas.
- */
 type SortableColumn = 'id' | 'provider' | 'severity' | 'status' | 'first_seen_at' | 'last_seen_at';
 
-/**
- * Props para o componente {@link AlertsTable}.
- */
 interface AlertsTableProps {
-  /** Uma lista de objetos de Alerta a serem exibidos na tabela. */
   alerts: Alert[];
-  /** O título a ser exibido acima da tabela de alertas. */
   title: string;
-  /** Função chamada quando o status de um alerta precisa ser atualizado. */
   onUpdateStatus: (alertId: number, newStatus: string) => Promise<void>;
-  /** Booleano que indica se o usuário atual tem permissão para atualizar o status dos alertas. */
   canUpdateStatus: boolean;
-  /** Função chamada para acionar a remediação de um alerta. */
   onRemediate?: (alert: Alert) => Promise<void>;
 }
 
 const ITEMS_PER_PAGE = 10;
 
-/**
- * `AlertsTable` é um componente React que renderiza uma tabela de alertas
- * com funcionalidades de filtragem, ordenação e paginação.
- * Também inclui um modal para visualização detalhada de cada alerta.
- *
- * @component
- * @example
- * const myAlerts = [{id: 1, ...}, {id: 2, ...}];
- * return <AlertsTable alerts={myAlerts} title="Meus Alertas Atuais" onUpdateStatus={async (id, status) => console.log(id, status)} canUpdateStatus={true} />
- */
-const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus, canUpdateStatus }) => {
+const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus, canUpdateStatus, onRemediate }) => {
   const { t } = useTranslation();
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<SortableColumn>('last_seen_at');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
-  const [filterSeverity, setFilterSeverity] = useState<string>('');
-  const [filterProvider, setFilterProvider] = useState<string>('');
-  const [filterStatus, setFilterStatus] = useState<string | null>(null); // Mantine Select usa null para 'sem valor'
+  const [filterSeverity, setFilterSeverity] = useState<string | null>('');
+  const [filterProvider, setFilterProvider] = useState<string | null>('');
+  const [filterStatus, setFilterStatus] = useState<string | null>(null);
 
   const [selectedAlert, setSelectedAlert] = useState<Alert | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
 
   const uniqueSeverities = useMemo(() => Array.from(new Set(alerts.map(a => a.severity))), [alerts]);
   const uniqueProviders = useMemo(() => Array.from(new Set(alerts.map(a => a.provider))), [alerts]);
@@ -150,7 +116,6 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     });
   }, [filteredAlerts, sortColumn, sortDirection]);
 
-
   const paginatedAlerts = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return sortedData.slice(startIndex, startIndex + ITEMS_PER_PAGE);
@@ -158,11 +123,6 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
 
   const totalPages = Math.ceil(sortedData.length / ITEMS_PER_PAGE);
 
-  /**
-   * Manipulador para cliques nos cabeçalhos de coluna ordenáveis.
-   * Define a coluna de ordenação e a direção.
-   * @param {SortableColumn} column - A coluna pela qual ordenar.
-   */
   const handleSort = (column: SortableColumn) => {
     if (sortColumn === column) {
       setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
@@ -172,13 +132,8 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     }
   };
 
-  /**
-   * Retorna estilos CSS para a célula de severidade com base no valor da severidade.
-   * @param {string} severity - O nível de severidade do alerta.
-   * @returns {React.CSSProperties} Um objeto de estilo para a célula.
-   */
   const getSeverityStyle = (severity: string): React.CSSProperties => {
-    let color = 'var(--mantine-color-text)'; // Usa cor do tema Mantine
+    let color = 'var(--mantine-color-text)';
     let finalFontWeight: 'normal' | 'bold' = 'normal';
 
     switch (severity.toLowerCase()) {
@@ -191,24 +146,17 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     return { color, fontWeight: finalFontWeight };
   };
 
-  /**
-   * Manipulador para cliques em uma linha da tabela.
-   * Define o alerta selecionado e abre o modal de detalhes.
-   * @param {Alert} alert - O objeto de alerta da linha clicada.
-   */
   const handleRowClick = (alert: Alert) => {
     setSelectedAlert(alert);
     setIsModalOpen(true);
   };
 
-  if (!alerts) { // alerts pode ser undefined se a prop não for passada, ou null.
+  if (!alerts) {
     return <Text>{t('dashboardPage.noAlertsToDisplay', 'No alerts to display.')}</Text>;
   }
   if (alerts.length === 0 && !filterSeverity && !filterProvider && !filterStatus) {
-     // Se não há filtros aplicados e a lista original de alertas está vazia.
     return <Text>{t('dashboardPage.noAlertsToDisplay', 'No alerts to display.')}</Text>;
   }
-
 
   const rows = paginatedAlerts.map((alert) => (
     <Table.Tr key={alert.id} onClick={() => handleRowClick(alert)} style={{cursor: 'pointer'}}>
@@ -224,15 +172,13 @@ const AlertsTable: React.FC<AlertsTableProps> = ({ alerts, title, onUpdateStatus
     </Table.Tr>
   ));
 
-import AlertsTableFilters from './AlertsTableFilters';
-
-  const handleFilterChange = (setter) => (value) => {
+  const handleFilterChange = (setter: (value: string | null) => void) => (value: string | null) => {
     setter(value);
     setCurrentPage(1);
   };
 
   return (
-    <div style={{ marginTop: rem(32) }}> {/* rem(32) é xl na Mantine */}
+    <div style={{ marginTop: rem(32) }}>
       <Text component="h3" size="lg" fw={600} mb="md">{title}</Text>
 
       <AlertsTableFilters
@@ -255,9 +201,9 @@ import AlertsTableFilters from './AlertsTableFilters';
                 <Th sorted={sortColumn === 'id'} reversed={sortDirection === 'desc'} onSort={() => handleSort('id')} width="5%">{t('alertItem.id')}</Th>
                 <Th sorted={sortColumn === 'provider'} reversed={sortDirection === 'desc'} onSort={() => handleSort('provider')} width="10%">{t('alertItem.provider')}</Th>
                 <Th sorted={sortColumn === 'severity'} reversed={sortDirection === 'desc'} onSort={() => handleSort('severity')} width="10%">{t('alertItem.severity')}</Th>
-                <Table.Th>{t('alertItem.title')}</Table.Th> {/* Não ordenável */}
-                <Table.Th>{t('alertItem.resource')}</Table.Th> {/* Não ordenável */}
-                <Table.Th>{t('alertItem.resourceType')}</Table.Th> {/* Não ordenável */}
+                <Table.Th>{t('alertItem.title')}</Table.Th>
+                <Table.Th>{t('alertItem.resource')}</Table.Th>
+                <Table.Th>{t('alertItem.resourceType')}</Table.Th>
                 <Th sorted={sortColumn === 'status'} reversed={sortDirection === 'desc'} onSort={() => handleSort('status')} width="10%">{t('alertItem.status')}</Th>
                 <Th sorted={sortColumn === 'first_seen_at'} reversed={sortDirection === 'desc'} onSort={() => handleSort('first_seen_at')} width="15%">{t('alertItem.firstSeen')}</Th>
                 <Th sorted={sortColumn === 'last_seen_at'} reversed={sortDirection === 'desc'} onSort={() => handleSort('last_seen_at')} width="15%">{t('alertItem.lastSeen')}</Th>
@@ -269,7 +215,6 @@ import AlertsTableFilters from './AlertsTableFilters';
       ) : (
         <Text mt="md">{t('alertsTable.noMatchingAlerts', 'No alerts match the current filters.')}</Text>
       )}
-
 
       {totalPages > 1 && (
         <Group justify="flex-end" mt="md">
@@ -288,7 +233,7 @@ import AlertsTableFilters from './AlertsTableFilters';
         }}
       >
         {selectedAlert && (
-          <Stack gap="sm"> {/* Aumentado o gap para 'sm' para melhor espaçamento */}
+          <Stack gap="sm">
             <Text><strong>{t('alertItem.id')}:</strong> {selectedAlert.id}</Text>
             <Text><strong>{t('alertItem.title')}:</strong> {selectedAlert.title}</Text>
             <Text><strong>{t('alertItem.provider')}:</strong> {selectedAlert.provider.toUpperCase()}</Text>
@@ -303,8 +248,6 @@ import AlertsTableFilters from './AlertsTableFilters';
                 onChange={async (newStatus) => {
                   if (newStatus && newStatus !== selectedAlert.status) {
                     await onUpdateStatus(selectedAlert.id, newStatus);
-                    // Atualiza o status no selectedAlert localmente para refletir a mudança imediatamente na UI do modal
-                    // A lista principal será atualizada pela função onUpdateStatus no DashboardPage
                     setSelectedAlert(prev => prev ? { ...prev, status: newStatus } : null);
                   }
                 }}
@@ -315,7 +258,7 @@ import AlertsTableFilters from './AlertsTableFilters';
                   { value: 'IGNORED', label: t('alertStatus.IGNORED', 'Ignored') },
                 ]}
                 disabled={!canUpdateStatus}
-                mb="sm" // Adiciona margem inferior
+                mb="sm"
               />
             ) : (
               <Text><strong>{t('alertItem.status')}:</strong> {selectedAlert.status}</Text>

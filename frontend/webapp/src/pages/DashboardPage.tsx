@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Title, Text, Container, Grid, Space } from '@mantine/core';
-import { api } from '../services/api';
+import apiClient from '../services/api';
 
 // Importar componentes do Dashboard
 import SummaryCards from '../components/Dashboard/SummaryCards';
@@ -29,7 +29,7 @@ const DashboardHomePage = () => {
 
   useEffect(() => {
     setLoading(true);
-    api.get<SummaryData>('/dashboard/summary')
+    apiClient.get<SummaryData>('/dashboard/summary')
       .then(response => {
         setSummary(response.data);
         setLoading(false);

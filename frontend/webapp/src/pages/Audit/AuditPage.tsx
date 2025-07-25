@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 
 const AuditPage: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
@@ -10,7 +10,7 @@ const AuditPage: React.FC = () => {
   useEffect(() => {
     const fetchEvents = async () => {
       try {
-        const response = await api.get('/audit/events', { params: filters });
+        const response = await apiClient.get('/audit/events', { params: filters });
         setEvents(response.data);
       } catch (err) {
         setError('Failed to fetch audit events.');

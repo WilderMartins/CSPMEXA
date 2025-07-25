@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Button, Modal, Select, Group, Title, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 import { showNotification } from '@mantine/notifications';
 
 interface Channel {
@@ -42,8 +42,8 @@ const ManageRules: React.FC = () => {
     const fetchRulesAndChannels = async () => {
         try {
             const [rulesResponse, channelsResponse] = await Promise.all([
-                api.get<Rule[]>('/management/rules'),
-                api.get<Channel[]>('/management/channels'),
+                apiClient.get<Rule[]>('/management/rules'),
+                apiClient.get<Channel[]>('/management/channels'),
             ]);
             setRules(rulesResponse.data);
             setChannels(channelsResponse.data);
@@ -63,7 +63,7 @@ const ManageRules: React.FC = () => {
 
     const handleAddRule = async (values: typeof form.values) => {
         try {
-            await api.post('/management/rules', {
+            await apiClient.post('/management/rules', {
                 ...values,
                 channel_id: parseInt(values.channel_id, 10),
             });
@@ -87,7 +87,7 @@ const ManageRules: React.FC = () => {
 
     const handleDeleteRule = async (ruleId: number) => {
         try {
-            await api.delete(`/management/rules/${ruleId}`);
+            await apiClient.delete(`/management/rules/${ruleId}`);
             showNotification({
                 title: 'Sucesso!',
                 message: 'Regra de notificação removida com sucesso.',

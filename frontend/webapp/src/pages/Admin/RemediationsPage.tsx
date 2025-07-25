@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Button, Group, Title, Container, Text, Badge } from '@mantine/core';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 import { showNotification } from '@mantine/notifications';
 
 interface RemediationRequest {
@@ -24,7 +24,7 @@ const RemediationsPage: React.FC = () => {
         setLoading(true);
         try {
             // A API precisaria de um endpoint para buscar solicitações pendentes
-            const response = await api.get<RemediationRequest[]>('/remediations?status=PENDING');
+            const response = await apiClient.get<RemediationRequest[]>('/remediations?status=PENDING');
             setRequests(response.data);
         } catch (error) {
             console.error("Erro ao buscar solicitações de remediação:", error);
@@ -39,7 +39,7 @@ const RemediationsPage: React.FC = () => {
 
     const handleApprove = async (id: number) => {
         try {
-            await api.post(`/remediations/${id}/approve`);
+            await apiClient.post(`/remediations/${id}/approve`);
             showNotification({ title: 'Sucesso', message: 'Remediação aprovada e agendada.', color: 'green' });
             fetchRequests();
         } catch (error) {

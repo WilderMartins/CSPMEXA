@@ -61,7 +61,8 @@ const OAuthCallbackPage = () => {
 };
 
 
-import { api } from './services/api';
+import { Select } from '@mantine/core';
+import apiClient from './services/api';
 
 function App() {
   const [opened, { toggle }] = useDisclosure(false); // Para o Navbar mobile
@@ -69,10 +70,10 @@ function App() {
   const { selectedAccountId, setSelectedAccountId } = useAppStore();
   // A lógica para buscar as contas agora precisa ser movida para dentro do App
   // ou para um hook personalizado. Por simplicidade, vamos movê-la para cá.
-  const [accounts, setAccounts] = React.useState([]);
+  const [accounts, setAccounts] = React.useState<{ id: number; name: string }[]>([]);
   React.useEffect(() => {
     if (auth.isAuthenticated) {
-      api.get('/accounts').then(response => setAccounts(response.data));
+      apiClient.get('/accounts').then(response => setAccounts(response.data));
     }
   }, [auth.isAuthenticated]);
   const { t, i18n } = useTranslation();

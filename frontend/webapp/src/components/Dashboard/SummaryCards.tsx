@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Text, Group, SimpleGrid, ThemeIcon } from '@mantine/core';
 import { IconAlertTriangle, IconCircleCheck, IconCircleX } from '@tabler/icons-react';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 
 interface SummaryData {
   total_alerts: number;
@@ -14,7 +14,7 @@ const SummaryCards: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<SummaryData>('/dashboard/summary')
+    apiClient.get<SummaryData>('/dashboard/summary')
       .then(response => {
         setSummary(response.data);
         setLoading(false);

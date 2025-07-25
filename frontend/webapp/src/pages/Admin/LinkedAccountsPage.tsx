@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Button, Modal, TextInput, Select, Group, Title, Stack, JsonInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
-import { api } from '../../services/api';
+import apiClient from '../../services/api';
 import { showNotification } from '@mantine/notifications';
 
 interface LinkedAccount {
@@ -40,7 +40,7 @@ const LinkedAccountsPage: React.FC = () => {
 
     const fetchAccounts = async () => {
         try {
-            const response = await api.get<LinkedAccount[]>('/accounts');
+            const response = await apiClient.get<LinkedAccount[]>('/accounts');
             setAccounts(response.data);
         } catch (error) {
             console.error("Erro ao buscar contas vinculadas:", error);
@@ -58,7 +58,7 @@ const LinkedAccountsPage: React.FC = () => {
 
     const handleAddAccount = async (values: typeof form.values) => {
         try {
-            await api.post('/accounts', {
+            await apiClient.post('/accounts', {
                 ...values,
                 credentials: JSON.parse(values.credentials),
             });
@@ -82,7 +82,7 @@ const LinkedAccountsPage: React.FC = () => {
 
     const handleDeleteAccount = async (accountId: number) => {
         try {
-            await api.delete(`/accounts/${accountId}`);
+            await apiClient.delete(`/accounts/${accountId}`);
             showNotification({
                 title: 'Sucesso!',
                 message: 'Conta vinculada removida com sucesso.',
