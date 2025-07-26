@@ -216,8 +216,19 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
         if os.path.exists(log_file_path):
             os.remove(log_file_path)
 
+        # Garante que o ambiente esteja limpo antes de iniciar
+        app.logger.info("Executando 'docker compose down' para garantir um ambiente limpo...")
+        run_docker_command(["docker", "compose", "down", "-v", "--remove-orphans"], ignore_errors=True)
+
+        # Iniciar serviços em segundo plano e registrar a saída
+        app.logger.info(f"Iniciando a instalação dos serviços em segundo plano... Log em: {log_file_path}")
         run_docker_command(
-            ["docker", "compose", "up", "-d", "--build"],
+            ["docker", "compose", "build", "--no-cache"],
+            wait=True,
+            ignore_errors=True
+        )
+        run_docker_command(
+            ["docker", "compose", "up", "-d", "--scale", "installer=0"],
             wait=False,
             log_file_path=log_file_path
         )
@@ -231,44 +242,71 @@ M365_TENANT_ID={form_data.get('M365_TENANT_ID', '')}
 
 from flask import jsonify
 
+from flask import Response
+
+from flask import Response
+import json
+
 @app.route('/status')
 def status():
-    """Verifica e retorna o status da instalação como JSON."""
-    services = [
-        "postgres_auth_db", "vault", "vault-setup", "auth_service",
-        "collector_service", "policy_engine_service", "notification_service",
-        "api_gateway_service", "frontend_build", "nginx"
-    ]
-    statuses = {}
-    for service in services:
-        try:
-            stdout, _ = run_docker_command(
-                ["docker", "compose", "ps", "--format", "{{.State}}", service],
-                wait=True,
-                ignore_errors=True
-            )
-            status_text = stdout.strip()
-            if not status_text:
-                statuses[service] = "not_started"
-            else:
-                # Simplifica o status para facilitar a análise no frontend
-                if 'running' in status_text:
-                    statuses[service] = 'running'
-                elif 'exited' in status_text:
-                    statuses[service] = 'exited'
-                else:
-                    statuses[service] = 'starting'
-        except Exception as e:
-            statuses[service] = "error"
-            app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
+    """Retorna o status da instalação como um fluxo de eventos."""
+    def generate():
+        total_steps = 3  # build, create, running
+        current_step = 0
 
-    essential_services = [
-        "api_gateway_service", "auth_service", "collector_service",
-        "notification_service", "policy_engine_service", "nginx"
-    ]
-    is_done = all(statuses.get(s) == 'running' for s in essential_services)
+        # Etapa 1: Build
+        yield f"data: {json.dumps({'progress': 0, 'message': 'Iniciando o build das imagens...'})}\n\n"
+        _, _, stderr = run_docker_command(["docker", "compose", "build", "--no-cache"], wait=True, ignore_errors=True)
+        if "error" in stderr.lower():
+            yield f"data: {json.dumps({'progress': -1, 'message': f'Erro durante o build: {stderr}'})}\n\n"
+            return
 
-    return jsonify(statuses=statuses, done=is_done)
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Build das imagens concluído.'})}\n\n"
+        time.sleep(1)
+
+        # Etapa 2: Criação dos contêineres
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Criando os contêineres...'})}\n\n"
+        _, _, stderr = run_docker_command(["docker", "compose", "up", "-d", "--no-build", "--scale", "installer=0"], wait=True, ignore_errors=True)
+        if "error" in stderr.lower():
+            yield f"data: {json.dumps({'progress': -1, 'message': f'Erro ao criar os contêineres: {stderr}'})}\n\n"
+            return
+
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Contêineres criados com sucesso.'})}\n\n"
+        time.sleep(1)
+
+        # Etapa 3: Verificação do status dos serviços
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Verificando o status dos serviços...'})}\n\n"
+        services = [
+            "postgres_auth_db", "vault", "vault-setup", "auth_service",
+            "collector_service", "policy_engine_service", "notification_service",
+            "api_gateway_service", "frontend_build", "nginx"
+        ]
+        all_running = False
+        while not all_running:
+            all_running = True
+            for service in services:
+                stdout, _ = run_docker_command(
+                    ["docker", "compose", "ps", "--format", "{{.State}}", service],
+                    wait=True,
+                    ignore_errors=True
+                )
+                if 'running' not in stdout:
+                    all_running = False
+                    break
+            time.sleep(2)
+
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Todos os serviços estão em execução.'})}\n\n"
+
+        # Sinaliza o fim do fluxo
+        yield "event: end\ndata: {}\n\n"
+
+    return Response(generate(), mimetype='text/event-stream')
 
 @app.route('/logs/<service_name>')
 def service_logs(service_name):

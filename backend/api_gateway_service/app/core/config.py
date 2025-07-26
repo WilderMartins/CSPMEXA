@@ -5,6 +5,9 @@ from functools import lru_cache
 from typing import Optional, Dict, Any
 
 # --- Configurações não-secretas ---
+import os
+from pydantic_settings import BaseSettings
+
 class BaseAppSettings(BaseSettings):
     PROJECT_NAME: str = "APIGatewayService"
     API_V1_STR: str = "/api/v1"
@@ -59,6 +62,9 @@ class AppSettings(BaseAppSettings):
 
 @lru_cache()
 def get_settings() -> AppSettings:
+    if os.getenv("TESTING"):
+        return AppSettings(_env_file=".env.test")
+
     settings = AppSettings()
     vault_client = get_vault_client()
     if vault_client:

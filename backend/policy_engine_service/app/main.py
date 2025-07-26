@@ -14,10 +14,14 @@ logger = logging.getLogger(__name__)
 # Criar tabelas
 alert_model.Base.metadata.create_all(bind=engine)
 
+from starlette_prometheus import metrics, PrometheusMiddleware
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
 
 # Middleware de tratamento de erros
 @app.middleware("http")

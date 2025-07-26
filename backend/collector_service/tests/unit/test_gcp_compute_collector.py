@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from typing import List, Optional, Any, Coroutine, Dict # Adicionado Dict
 from datetime import datetime, timezone, timedelta
 
-from app.gcp import gcp_compute_collector
+from ..app.gcp import gcp_compute_collector
 from app.schemas.gcp_compute import GCPComputeInstanceData, GCPFirewallData, GCPComputeNetworkInterface, GCPComputeNetworkInterfaceAccessConfig, GCPComputeServiceAccount, GCPComputeScheduling, GCPComputeAttachedDisk, GCPFirewallAllowedRule, GCPFirewallLogConfig
 from app.core.config import Settings
 from google.cloud.exceptions import Forbidden, NotFound, GoogleCloudError

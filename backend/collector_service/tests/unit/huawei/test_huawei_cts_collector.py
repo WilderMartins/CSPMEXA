@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 import datetime
 
-from app.huawei.huawei_cts_collector import get_huawei_cts_traces, _convert_sdk_trace_to_schema
+from ...app.huawei.huawei_cts_collector import get_huawei_cts_traces, _convert_sdk_trace_to_schema
 from app.schemas.huawei.huawei_cts_schemas import CTSTraceCollection, CTSTrace, CTSUserIdentity
 from app.core.config import settings # Para mockar as settings globais
 

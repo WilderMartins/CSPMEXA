@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from backend.collector_service.app.huawei.huawei_client_manager import HuaweiClientManager
+from ...app.huawei.huawei_client_manager import HuaweiClientManager
 from backend.collector_service.app.core.config import settings
 
 # Mockear settings antes de sua importação por outros módulos testados

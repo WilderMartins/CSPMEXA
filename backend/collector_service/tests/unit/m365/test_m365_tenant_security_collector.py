@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, AsyncMock, MagicMock # Adicionado AsyncMock
 import httpx # Para simular respostas HTTPStatusError
 
-from app.m365.m365_tenant_security_collector import get_m365_users_mfa_status, get_m365_conditional_access_policies
+from ...app.m365.m365_tenant_security_collector import get_m365_users_mfa_status, get_m365_conditional_access_policies
 from app.schemas.m365.m365_security_schemas import M365UserMFAStatusCollection, M365ConditionalAccessPolicyCollection
 
 # Mock para o m365_client_manager e seu método get_graph_client
