@@ -10,5 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./app /app
 
 EXPOSE 8002
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
 # CMD definido no docker-compose.yml
 # CMD ["python", "/app/app/main.py"]
