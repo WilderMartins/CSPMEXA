@@ -124,6 +124,7 @@
 
                 eventSource.onerror = function(err) {
                     console.error('EventSource failed:', err);
+
                     statusMessage.innerText = 'Erro ao conectar ao fluxo de status.';
                     progressBar.classList.add('bg-danger');
                     eventSource.close();
