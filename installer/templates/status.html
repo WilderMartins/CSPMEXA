@@ -98,9 +98,7 @@
 
             function connectToStatusStream() {
                 const progressBar = document.getElementById('progress-bar');
-              
                 const statusMessage = document.getElementById('status-message');
-
                 const eventSource = new EventSource("{{ url_for('status') }}");
 
                 eventSource.onmessage = function(event) {
@@ -115,7 +113,6 @@
                     }
 
                     statusMessage.innerText = data.message;
-
                 };
 
                 eventSource.addEventListener('end', function(event) {
