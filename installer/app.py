@@ -251,49 +251,59 @@ import json
 def status():
     """Retorna o status da instalação como um fluxo de eventos."""
     def generate():
+        total_steps = 3  # build, create, running
+        current_step = 0
+
+        # Etapa 1: Build
+        yield f"data: {json.dumps({'progress': 0, 'message': 'Iniciando o build das imagens...'})}\n\n"
+        _, _, stderr = run_docker_command(["docker", "compose", "build", "--no-cache"], wait=True, ignore_errors=True)
+        if "error" in stderr.lower():
+            yield f"data: {json.dumps({'progress': -1, 'message': f'Erro durante o build: {stderr}'})}\n\n"
+            return
+
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Build das imagens concluído.'})}\n\n"
+        time.sleep(1)
+
+        # Etapa 2: Criação dos contêineres
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Criando os contêineres...'})}\n\n"
+        _, _, stderr = run_docker_command(["docker", "compose", "up", "-d", "--no-build", "--scale", "installer=0"], wait=True, ignore_errors=True)
+        if "error" in stderr.lower():
+            yield f"data: {json.dumps({'progress': -1, 'message': f'Erro ao criar os contêineres: {stderr}'})}\n\n"
+            return
+
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Contêineres criados com sucesso.'})}\n\n"
+        time.sleep(1)
+
+        # Etapa 3: Verificação do status dos serviços
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Verificando o status dos serviços...'})}\n\n"
+
         services = [
             "postgres_auth_db", "vault", "vault-setup", "auth_service",
             "collector_service", "policy_engine_service", "notification_service",
             "api_gateway_service", "frontend_build", "nginx"
         ]
-        total_services = len(services)
-        completed_services = 0
 
-        for service in services:
-            try:
+        all_running = False
+        while not all_running:
+            all_running = True
+            for service in services:
                 stdout, _ = run_docker_command(
                     ["docker", "compose", "ps", "--format", "{{.State}}", service],
                     wait=True,
                     ignore_errors=True
                 )
-                status_text = stdout.strip()
-                if not status_text:
-                    status_event = "not_started"
-                else:
-                    if 'running' in status_text:
-                        status_event = 'running'
-                        completed_services += 1
-                    elif 'exited' in status_text:
-                        status_event = 'exited'
-                    else:
-                        status_event = 'starting'
+                if 'running' not in stdout:
+                    all_running = False
+                    break
+            time.sleep(2)
 
-                progress = int((completed_services / total_services) * 100)
-                data = {
-                    "service": service,
-                    "status": status_event,
-                    "progress": progress
-                }
-                yield f"data: {json.dumps(data)}\n\n"
-                time.sleep(1)
-            except Exception as e:
-                data = {
-                    "service": service,
-                    "status": "error",
-                    "progress": int((completed_services / total_services) * 100)
-                }
-                yield f"data: {json.dumps(data)}\n\n"
-                app.logger.error(f"Erro ao obter status do serviço {service}: {e}")
+        current_step += 1
+        progress = int((current_step / total_steps) * 100)
+        yield f"data: {json.dumps({'progress': progress, 'message': 'Todos os serviços estão em execução.'})}\n\n"
 
         # Sinaliza o fim do fluxo
         yield "event: end\ndata: {}\n\n"
