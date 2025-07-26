@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import os
 
 # Importar o módulo a ser testado
-from app.google_workspace.google_workspace_client_manager import get_workspace_service, DEFAULT_SCOPES
+from ..app.google_workspace.google_workspace_client_manager import get_workspace_service, DEFAULT_SCOPES
 from app.core.config import Settings # Para mockar settings
 
 # Simular as settings

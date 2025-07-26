@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch, MagicMock, ANY
 from datetime import datetime
 
-from backend.collector_service.app.huawei.obs_collector import OBSCollector
+from ...app.huawei.obs_collector import OBSCollector
 from backend.collector_service.app.schemas.huawei.obs import OBSBucketData, OBSBucketPolicyStatement, OBSBucketVersioningConfiguration
 from backend.collector_service.app.core.config import settings
 

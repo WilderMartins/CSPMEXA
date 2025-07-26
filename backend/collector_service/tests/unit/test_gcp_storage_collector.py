@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from typing import List, Optional, Any
 from datetime import datetime, timezone
 
-from app.gcp import gcp_storage_collector
+from ..app.gcp import gcp_storage_collector
 from app.schemas.gcp_storage import GCPStorageBucketData, GCPBucketIAMPolicy, GCPBucketIAMBinding, GCPBucketVersioning, GCPBucketLogging
 from app.core.config import Settings # Para mockar settings se necessário (ex: default project_id)
 from google.cloud.exceptions import Forbidden, NotFound, GoogleCloudError

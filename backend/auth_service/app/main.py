@@ -17,12 +17,15 @@ logger = logging.getLogger(__name__)
 user_model.Base.metadata.create_all(bind=engine)
 
 from app.core.rate_limiter import limiter
+from starlette_prometheus import metrics, PrometheusMiddleware
 
 # Configuração do Rate Limiter
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json"
 )
+app.add_middleware(PrometheusMiddleware)
+app.add_route("/metrics", metrics)
 
 # Registrar o limiter no app
 app.state.limiter = limiter

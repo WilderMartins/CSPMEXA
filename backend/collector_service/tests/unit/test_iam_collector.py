@@ -1,7 +1,7 @@
 import pytest
 import boto3
 from moto import mock_aws
-from app.aws import iam_collector
+from ..app.aws import iam_collector
 import asyncio
 import json
 

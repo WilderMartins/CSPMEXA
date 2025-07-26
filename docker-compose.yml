@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile
     container_name: cspmexa-auth-service
     restart: unless-stopped
-    command: python /app/app/main.py
+    command: sh -c "alembic upgrade head && python /app/app/main.py"
     environment:
       - DATABASE_URL=postgresql://${AUTH_DB_USER:-cspmexa_user}:${AUTH_DB_PASSWORD:-changeme}@postgres_auth_db:5432/${AUTH_DB_NAME:-cspmexa_db}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?err_jwt_secret_missing}

@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.services.http_client import collector_service_client
-from app.core.security import get_current_user, require_role, TokenData
-from app.models.user_model import UserRole
+from app.core.security import require_permission, TokenData
+
+require_remediate_s3 = require_permission("remediate:s3")
 
 router = APIRouter()
 
 @router.post("/remediate/aws/s3/public-acl", name="remediate:aws-s3-public-acl")
 async def remediate_s3_public_acl(
     request: Request,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.ANALYST]))
+    current_user: TokenData = Depends(require_remediate_s3)
 ):
     """
     Aciona a remediação para um bucket S3 com ACL pública.

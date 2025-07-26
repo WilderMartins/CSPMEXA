@@ -1,14 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
-from app.services.http_client import audit_service_client
-from app.core.security import get_current_user, require_role, TokenData
-from app.models.user_model import UserRole
+from app.services.http_client import policy_engine_service_client as audit_service_client
+from app.core.security import require_permission, TokenData
+
+require_read_audit = require_permission("read:audit")
 
 router = APIRouter()
 
 @router.get("/audit/events", name="audit:list-events")
 async def list_audit_events(
     request: Request,
-    current_user: TokenData = Depends(require_role([UserRole.ADMIN, UserRole.AUDITOR]))
+    current_user: TokenData = Depends(require_read_audit),
 ):
     """
     Lista todos os eventos de auditoria. Requer perfil de Administrador ou Auditor.

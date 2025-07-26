@@ -30,12 +30,11 @@
                 <h1 class="text-center mb-3">Andamento da Instalação</h1>
                 <p class="text-center text-muted">Aguarde enquanto os serviços são iniciados. A página será atualizada automaticamente.</p>
 
-                <div id="loading-indicator" class="text-center my-4">
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-2">Verificando status dos serviços...</p>
+                <div class="progress my-4" style="height: 25px;">
+                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
                 </div>
+
+                <div id="status-message" class="text-center text-muted my-2"></div>
 
                 <div id="success-alert" class="alert alert-success d-none" role="alert">
                     <h4 class="alert-heading">Instalação Concluída!</h4>
@@ -44,7 +43,7 @@
                     <a href="/" class="btn btn-success">Ir para a Aplicação</a>
                 </div>
 
-                <table class="table table-hover align-middle">
+                <table class="table table-hover align-middle d-none">
                     <thead>
                         <tr>
                             <th>Serviço</th>
@@ -97,47 +96,38 @@
                 return 'bi-arrow-repeat';
             }
 
-            async function fetchStatus() {
-                try {
-                    const response = await fetch("{{ url_for('status') }}");
-                    const data = await response.json();
+            function connectToStatusStream() {
+                const progressBar = document.getElementById('progress-bar');
+                const statusMessage = document.getElementById('status-message');
+                const eventSource = new EventSource("{{ url_for('status') }}");
 
-                    loadingIndicator.classList.add('d-none');
-                    servicesStatusTable.innerHTML = '';
+                eventSource.onmessage = function(event) {
+                    const data = JSON.parse(event.data);
 
-                    for (const service in data.statuses) {
-                        const status = data.statuses[service];
-                        const statusClass = getStatusClass(status);
-                        const statusIcon = getStatusIcon(status);
-
-                        const row = `
-                            <tr>
-                                <td><strong>${service}</strong></td>
-                                <td class="text-center">
-                                    <i class="bi ${statusIcon} ${statusClass} status-icon"></i>
-                                    <span class="ms-2">${status}</span>
-                                </td>
-                                <td class="text-center">
-                                    <button class="btn btn-sm btn-outline-primary view-logs-btn" data-service="${service}">
-                                        Ver Logs
-                                    </button>
-                                </td>
-                            </tr>
-                        `;
-                        servicesStatusTable.insertAdjacentHTML('beforeend', row);
+                    if (data.progress >= 0) {
+                        progressBar.style.width = data.progress + '%';
+                        progressBar.innerText = data.progress + '%';
+                        progressBar.setAttribute('aria-valuenow', data.progress);
+                    } else {
+                        progressBar.classList.add('bg-danger');
                     }
 
-                    if (data.done) {
-                        successAlert.classList.remove('d-none');
-                        return;
-                    }
+                    statusMessage.innerText = data.message;
+                };
 
-                } catch (error) {
-                    console.error('Erro ao buscar status:', error);
-                    servicesStatusTable.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Erro ao carregar o status dos serviços.</td></tr>';
-                }
+                eventSource.addEventListener('end', function(event) {
+                    progressBar.classList.remove('progress-bar-animated');
+                    progressBar.classList.add('bg-success');
+                    successAlert.classList.remove('d-none');
+                    eventSource.close();
+                });
 
-                setTimeout(fetchStatus, 5000);
+                eventSource.onerror = function(err) {
+                    console.error('EventSource failed:', err);
+                    statusMessage.innerText = 'Erro ao conectar ao fluxo de status.';
+                    progressBar.classList.add('bg-danger');
+                    eventSource.close();
+                };
             }
 
             servicesStatusTable.addEventListener('click', async function(event) {
@@ -158,7 +148,7 @@
                 }
             });
 
-            fetchStatus();
+            connectToStatusStream();
         });
     </script>
 </body>

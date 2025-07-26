@@ -29,7 +29,7 @@ def setup_logging():
     # Adicionar um filtro para injetar o nome do serviço
     class ServiceNameFilter(logging.Filter):
         def filter(self, record):
-            record.service = "auth_service"
+            record.service = "api_gateway_service"
             return True
 
     logger.addFilter(ServiceNameFilter())
