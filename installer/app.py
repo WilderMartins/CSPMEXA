@@ -280,13 +280,11 @@ def status():
 
         # Etapa 3: Verificação do status dos serviços
         yield f"data: {json.dumps({'progress': progress, 'message': 'Verificando o status dos serviços...'})}\n\n"
-
         services = [
             "postgres_auth_db", "vault", "vault-setup", "auth_service",
             "collector_service", "policy_engine_service", "notification_service",
             "api_gateway_service", "frontend_build", "nginx"
         ]
-
         all_running = False
         while not all_running:
             all_running = True
